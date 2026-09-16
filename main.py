@@ -76,18 +76,26 @@ async def start_bot():
             logging.warning(f"Bot info olishda ogohlantirish: {e}")
 
         await set_bot_commands(bot)
-        if config.WEB_APP_URL.startswith("https://"):
-            try:
-                from aiogram.types import MenuButtonWebApp, WebAppInfo
-                await bot.set_chat_menu_button(
-                    menu_button=MenuButtonWebApp(
-                        text="Stellar App ⭐",
-                        web_app=WebAppInfo(url=config.WEB_APP_URL)
-                    )
-                )
-                logging.info("✅ Telegram Chat Menu Button muvaffaqiyatli o'rnatildi!")
-            except Exception as e:
-                logging.warning(f"Chat menu button o'rnatishda xatolik: {e}")
+        async def update_menu_button_worker():
+            last_url = ""
+            while True:
+                try:
+                    current_url = config.get_web_app_url() if hasattr(config, "get_web_app_url") else config.WEB_APP_URL
+                    if current_url.startswith("https://") and current_url != last_url:
+                        from aiogram.types import MenuButtonWebApp, WebAppInfo
+                        await bot.set_chat_menu_button(
+                            menu_button=MenuButtonWebApp(
+                                text="Stellar App ⭐",
+                                web_app=WebAppInfo(url=current_url)
+                            )
+                        )
+                        last_url = current_url
+                        logging.info(f"✅ Telegram Chat Menu Button o'rnatildi/yangilandi: {current_url}")
+                except Exception as err:
+                    logging.warning(f"Chat menu button yangilashda ogohlantirish: {err}")
+                await asyncio.sleep(8)
+
+        asyncio.create_task(update_menu_button_worker())
 
         await notify_admins(bot)
         await bot.delete_webhook(drop_pending_updates=True)

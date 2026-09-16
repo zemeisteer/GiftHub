@@ -16,6 +16,22 @@ ADMIN_APP_URL = env.str("ADMIN_APP_URL")
 WEB_HOST = env.str("WEB_HOST")
 WEB_PORT = env.int("WEB_PORT")
 
+def get_web_app_url() -> str:
+    try:
+        fresh_env = Env()
+        fresh_env.read_env(override=True)
+        return fresh_env.str("WEB_APP_URL", WEB_APP_URL)
+    except Exception:
+        return WEB_APP_URL
+
+def get_admin_app_url() -> str:
+    try:
+        fresh_env = Env()
+        fresh_env.read_env(override=True)
+        return fresh_env.str("ADMIN_APP_URL", ADMIN_APP_URL)
+    except Exception:
+        return ADMIN_APP_URL
+
 # Qo'llab-quvvatlash va Kanal sozlamalari
 SUPPORT_URL = env.str("SUPPORT_URL")
 NEWS_CHANNEL_URL = env.str("NEWS_CHANNEL_URL")
