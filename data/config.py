@@ -4,8 +4,8 @@ import os
 env = Env()
 env.read_env()
 
-BOT_TOKEN = env.str("BOT_TOKEN", default="8998979405:AAFRLe-OXIDgsG0byEz0GKumfKYh8xdH7GA")
-ADMINS = env.list("ADMINS", default=["7195359577"])
+BOT_TOKEN = env.str("BOT_TOKEN", default="")
+ADMINS = env.list("ADMINS", default=[])
 IP = env.str("IP", default="127.0.0.1")
 PORT = env.int("PORT", default=8000)
 
