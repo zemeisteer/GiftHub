@@ -90,6 +90,12 @@ class ChannelRequirement(Base):
     req_type = Column(String(32), default="ordinary") # ordinary, join_request, external
     is_active = Column(Boolean, default=True)
     is_detected = Column(Boolean, default=False) # True if auto-detected via my_chat_member but not yet approved
+class UserJoinRequest(Base):
+    __tablename__ = "user_join_requests"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, nullable=False, index=True)
+    chat_id = Column(BigInteger, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

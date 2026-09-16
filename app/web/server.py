@@ -214,6 +214,18 @@ async def check_gate_channels(user: User = Depends(get_current_user)):
             if ch.req_type == "external":
                 # External links cannot be checked by bot API; marked as soft requirement
                 is_member = True
+            elif ch.req_type == "join_request":
+                # Check if user sent join request or is already a member
+                has_req = False
+                if ch.chat_id:
+                    has_req = await queries.has_user_join_request(session, user.id, ch.chat_id)
+                if not has_req and bot_instance and ch.chat_id:
+                    try:
+                        chat_member = await bot_instance.get_chat_member(chat_id=ch.chat_id, user_id=user.id)
+                        has_req = chat_member.status in ["creator", "administrator", "member", "restricted"]
+                    except Exception:
+                        pass
+                is_member = has_req
             elif bot_instance and ch.chat_id:
                 try:
                     chat_member = await bot_instance.get_chat_member(chat_id=ch.chat_id, user_id=user.id)
@@ -1003,11 +1015,19 @@ async def create_channel_endpoint(
         elif not title:
             title = link
 
+        # Smart detection of req_type if left as default ordinary
+        final_req_type = req.req_type
+        if final_req_type == "ordinary":
+            if "/+" in link or "joinchat" in link or link.startswith("+"):
+                final_req_type = "join_request"
+            elif link.startswith("http") and not ("t.me/" in link or "telegram.me/" in link):
+                final_req_type = "external"
+
         ch = await queries.add_or_update_channel(
             session=session,
             username_or_link=link,
             title=title,
-            req_type=req.req_type,
+            req_type=final_req_type,
             is_detected=req.is_detected
         )
         await queries.log_admin_action(
@@ -1015,9 +1035,9 @@ async def create_channel_endpoint(
             admin_id=admin.id,
             admin_username=admin.username,
             action="Majburiy kanal qo'shdi/yangiladi",
-            details=f"{title} ({link}, {req.req_type})"
+            details=f"{title} ({link}, {final_req_type})"
         )
-        return {"success": True, "channel_id": ch.id, "title": title}
+        return {"success": True, "channel_id": ch.id, "title": title, "req_type": ch.req_type}
 
 @app.delete("/api/admin/channels/{channel_id}")
 async def delete_channel_endpoint(
@@ -1072,6 +1092,28 @@ async def confirm_channel_endpoint(
             admin_username=admin.username,
             action=f"Aniqlangan kanalni tasdiqladi va faollashtirdi: ID {channel_id}",
             details=f"{ch.title} ({ch.username_or_link}, {req.req_type})"
+        )
+        return {"success": True, "channel": {"id": ch.id, "title": ch.title, "req_type": ch.req_type}}
+ 
+class ChannelTypeUpdateRequest(BaseModel):
+    req_type: str
+
+@app.post("/api/admin/channels/{channel_id}/type")
+async def update_channel_type_endpoint(
+    channel_id: int,
+    req: ChannelTypeUpdateRequest,
+    admin: User = Depends(get_current_admin)
+):
+    async with AsyncSessionLocal() as session:
+        ch = await queries.update_channel_type(session, channel_id, req.req_type)
+        if not ch:
+            raise HTTPException(status_code=404, detail="Kanal topilmadi")
+        await queries.log_admin_action(
+            session=session,
+            admin_id=admin.id,
+            admin_username=admin.username,
+            action=f"Kanal shart turini o'zgartirdi: ID {channel_id}",
+            details=f"{ch.title} ({ch.username_or_link}) -> {req.req_type}"
         )
         return {"success": True, "channel": {"id": ch.id, "title": ch.title, "req_type": ch.req_type}}
 

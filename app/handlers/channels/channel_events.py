@@ -30,13 +30,17 @@ async def on_bot_chat_member_updated(event: ChatMemberUpdated):
             except Exception:
                 pass
 
+        is_join_req = ("+" in invite_link) or ("joinchat" in invite_link)
+        is_group = chat.type in ["group", "supergroup"]
+        default_req_type = "join_request" if is_join_req else ("group" if is_group else "ordinary")
+
         async with AsyncSessionLocal() as session:
             # Register as newly detected channel awaiting admin confirmation
             await queries.add_or_update_channel(
                 session=session,
                 username_or_link=invite_link,
                 title=title,
-                req_type="ordinary",
+                req_type=default_req_type,
                 chat_id=chat.id,
                 is_detected=True,
                 is_active=False
@@ -52,7 +56,8 @@ async def on_bot_chat_member_updated(event: ChatMemberUpdated):
                         f"📣 <b>Bot yangi kanal yoki guruhga admin qilindi!</b>\n\n"
                         f"Nomi: <b>{title}</b>\n"
                         f"Havola: {invite_link}\n"
-                        f"Chat ID: <code>{chat.id}</code>\n\n"
+                        f"Chat ID: <code>{chat.id}</code>\n"
+                        f"Shart turi: <b>{default_req_type}</b>\n\n"
                         f"⚙️ <i>Admin paneldan majburiy a'zolik turini tanlab, 'Tayyor' tugmasini bosing!</i>"
                     )
                 )
@@ -65,5 +70,12 @@ async def on_chat_join_request(event: ChatJoinRequest):
     Handles join requests for private channels with join-request requirements.
     Fulfills TZ requirement 3.4 (So'rov orqali qo'shilish).
     """
-    # User sent a request to join, can be logged or auto-approved
-    pass
+    try:
+        async with AsyncSessionLocal() as session:
+            await queries.record_user_join_request(
+                session=session,
+                user_id=event.from_user.id,
+                chat_id=event.chat.id
+            )
+    except Exception:
+        pass

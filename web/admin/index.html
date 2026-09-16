@@ -1166,19 +1166,20 @@
         <div class="form-grid">
           <div class="field-group">
             <label class="field-label">Kanal @username yoki to'liq havola</label>
-            <input id="inpNewChannelLink" class="custom-input" placeholder="@kanal_nomi yoki https://t.me/...">
+            <input id="inpNewChannelLink" class="custom-input" placeholder="@kanal_nomi yoki https://t.me/..." oninput="autoDetectChannelType()">
           </div>
           <div class="field-group">
             <label class="field-label">Ko'rsatiladigan nom (Title)</label>
             <input id="inpNewChannelTitle" class="custom-input" placeholder="Masalan: Rasmiy Kanalimiz (ixtiyoriy — Telegramdan avtomatik olinadi)">
           </div>
           <div class="field-group">
-            <label class="field-label">Shart turi</label>
+            <label class="field-label">Shart turi <span id="autoTypeBadge" style="font-size:11px;color:var(--primary);font-weight:600;display:none;margin-left:6px;"></span></label>
             <!-- Custom Styled Select Dropdown -->
             <select id="inpNewChannelType" class="custom-select">
-              <option value="ordinary">Telegram kanal (Oddiy a'zolik)</option>
-              <option value="join_request">Telegram kanal (Zayavka / So'rov)</option>
-              <option value="external">Tashqi havola (Instagram / YouTube / Sayt)</option>
+              <option value="ordinary">📢 Telegram kanal (Oddiy a'zolik)</option>
+              <option value="join_request">📩 Telegram kanal / guruh (Zayavka / So'rov)</option>
+              <option value="group">👥 Telegram guruh (Guruhga a'zolik)</option>
+              <option value="external">🔗 Tashqi havola (Instagram / YouTube / Sayt)</option>
             </select>
           </div>
         </div>
@@ -2344,9 +2345,10 @@
               <div style="flex:1;min-width:220px;">
                 <label style="font-size:11.5px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600;">Qanday majburiy a'zolik qilmoqchisiz?</label>
                 <select id="selReqType_${c.id}" class="custom-select" style="width:100%;">
-                  <option value="ordinary" ${c.req_type === 'ordinary' ? 'selected' : ''}>Telegram kanal (Oddiy a'zolik)</option>
-                  <option value="group" ${c.req_type === 'group' ? 'selected' : ''}>Telegram guruh (Guruhga a'zolik)</option>
-                  <option value="join_request" ${c.req_type === 'join_request' ? 'selected' : ''}>So'rov orqali qo'shilish (Join Request)</option>
+                  <option value="ordinary" ${c.req_type === 'ordinary' ? 'selected' : ''}>📢 Telegram kanal (Oddiy a'zolik)</option>
+                  <option value="join_request" ${c.req_type === 'join_request' ? 'selected' : ''}>📩 Zayavka / So'rov (Join Request)</option>
+                  <option value="group" ${c.req_type === 'group' ? 'selected' : ''}>👥 Telegram guruh (Guruhga a'zolik)</option>
+                  <option value="external" ${c.req_type === 'external' ? 'selected' : ''}>🔗 Tashqi havola (Instagram / YouTube / Sayt)</option>
                 </select>
               </div>
               <div style="display:flex;gap:8px;align-items:flex-end;padding-top:16px;">
@@ -2372,7 +2374,14 @@
       <tr>
         <td><b>${c.title}</b></td>
         <td><code style="font-family:var(--font-mono);font-size:12px;">${c.username_or_link}</code></td>
-        <td><span class="badge-status done">${c.req_type}</span></td>
+        <td>
+          <select class="custom-select" style="padding:6px 28px 6px 10px;font-size:12px;font-weight:600;min-width:145px;" onchange="changeChannelType(${c.id}, this.value)">
+            <option value="ordinary" ${c.req_type === 'ordinary' ? 'selected' : ''}>📢 Oddiy kanal</option>
+            <option value="join_request" ${c.req_type === 'join_request' ? 'selected' : ''}>📩 Zayavka (So'rov)</option>
+            <option value="group" ${c.req_type === 'group' ? 'selected' : ''}>👥 Guruh</option>
+            <option value="external" ${c.req_type === 'external' ? 'selected' : ''}>🔗 Tashqi havola</option>
+          </select>
+        </td>
         <td>
           <div class="switch-toggle ${c.is_active ? 'on' : ''}" onclick="toggleChannelActive(${c.id}, this)"></div>
         </td>
@@ -2381,6 +2390,60 @@
         </td>
       </tr>
     `).join('');
+  }
+
+  async function changeChannelType(id, newType) {
+    try {
+      const res = await fetch(`/api/admin/channels/${id}/type`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: JSON.stringify({ req_type: newType })
+      });
+      if(res.ok) {
+        showToast("✓ Shart turi yangilandi!");
+        loadChannelsSilently();
+      } else {
+        const err = await res.json();
+        alert(err.detail || "O'zgartirib bo'lmadi");
+        loadChannels();
+      }
+    } catch(e) {
+      showToast("Tarmoq xatosi!");
+    }
+  }
+
+  function autoDetectChannelType() {
+    const link = (document.getElementById('inpNewChannelLink').value || '').trim();
+    const typeSelect = document.getElementById('inpNewChannelType');
+    const badge = document.getElementById('autoTypeBadge');
+    if(!link) {
+      if(badge) badge.style.display = 'none';
+      return;
+    }
+
+    let detected = null;
+    let label = '';
+    if(link.includes('/+') || link.includes('joinchat') || link.startsWith('+')) {
+      detected = 'join_request';
+      label = 'Zayavka 📩';
+    } else if(link.startsWith('http') && !link.includes('t.me/') && !link.includes('telegram.me/')) {
+      detected = 'external';
+      label = 'Tashqi havola 🔗';
+    } else if(link.includes('/c/') || link.toLowerCase().includes('group') || link.toLowerCase().includes('guruh')) {
+      detected = 'group';
+      label = 'Guruh 👥';
+    } else if(link.startsWith('@') || link.includes('t.me/')) {
+      detected = 'ordinary';
+      label = 'Oddiy kanal 📢';
+    }
+
+    if(detected && typeSelect) {
+      typeSelect.value = detected;
+      if(badge) {
+        badge.style.display = 'inline';
+        badge.innerText = `(Avto: ${label})`;
+      }
+    }
   }
 
   async function confirmDetectedChannel(id) {
@@ -2420,6 +2483,8 @@
       showToast(`Kanal qo'shildi: ${data.title || link}`);
       document.getElementById('inpNewChannelLink').value = '';
       document.getElementById('inpNewChannelTitle').value = '';
+      const badge = document.getElementById('autoTypeBadge');
+      if(badge) badge.style.display = 'none';
       loadChannels();
     } else {
       const err = await res.json();

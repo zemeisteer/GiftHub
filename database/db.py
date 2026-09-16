@@ -3,7 +3,7 @@ from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from data import config
 from database.models import (
-    Base, PricingSetting, ReferralSetting, PaymentSetting, ChannelRequirement, User, PromoCode, FragmentSetting
+    Base, PricingSetting, ReferralSetting, PaymentSetting, ChannelRequirement, User, PromoCode, FragmentSetting, UserJoinRequest
 )
 
 # SQLite path check if relative

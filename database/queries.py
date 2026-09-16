@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.models import (
     User, PricingSetting, Order, Transaction, ChannelRequirement,
     AdminAuditLog, ReferralSetting, PaymentSetting, BroadcastDraft,
-    PromoCode, PromoCodeUsage, FragmentSetting
+    PromoCode, PromoCodeUsage, FragmentSetting, UserJoinRequest
 )
 
 # ================= USER QUERIES ================= #
@@ -348,6 +348,35 @@ async def delete_channel(session: AsyncSession, channel_id: int):
     if ch:
         await session.delete(ch)
         await session.commit()
+
+async def update_channel_type(session: AsyncSession, channel_id: int, req_type: str) -> Optional[ChannelRequirement]:
+    ch = await session.get(ChannelRequirement, channel_id)
+    if ch:
+        ch.req_type = req_type
+        await session.commit()
+        await session.refresh(ch)
+    return ch
+
+async def record_user_join_request(session: AsyncSession, user_id: int, chat_id: int):
+    res = await session.execute(
+        select(UserJoinRequest).where(
+            UserJoinRequest.user_id == user_id,
+            UserJoinRequest.chat_id == chat_id
+        )
+    )
+    if not res.scalars().first():
+        req = UserJoinRequest(user_id=user_id, chat_id=chat_id)
+        session.add(req)
+        await session.commit()
+
+async def has_user_join_request(session: AsyncSession, user_id: int, chat_id: int) -> bool:
+    res = await session.execute(
+        select(UserJoinRequest).where(
+            UserJoinRequest.user_id == user_id,
+            UserJoinRequest.chat_id == chat_id
+        )
+    )
+    return res.scalars().first() is not None
 
 # ================= ADMINS & AUDIT LOGS ================= #
 
