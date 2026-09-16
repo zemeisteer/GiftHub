@@ -27,7 +27,7 @@ function startCloudflareTunnel() {
         binPath = 'cloudflared';
     }
 
-    activeProcess = spawn(binPath, ['tunnel', '--url', 'http://127.0.0.1:8000'], {
+    activeProcess = spawn(binPath, ['tunnel', '--url', 'http://127.0.0.1:8008'], {
         windowsHide: true
     });
 
