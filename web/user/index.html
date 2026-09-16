@@ -132,11 +132,20 @@
     background:linear-gradient(90deg,rgba(18,232,139,.14),rgba(18,232,139,.04));
     border:1px solid rgba(18,232,139,.35);
     border-radius:var(--radius-md);
-    padding:11px 13px;margin-bottom:12px;font-size:12.5px;color:var(--mint);
+    padding:12px 14px;margin-bottom:12px;font-size:12.5px;color:var(--mint);
   }
-  .join-banner b{color:var(--text);font-weight:600;}
+  .join-banner b{color:var(--text);font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .join-banner span.dot{width:6px;height:6px;border-radius:50%;background:var(--green-1);flex-shrink:0;}
-  .join-banner a{margin-left:auto;color:var(--bg);background:var(--green-1);padding:6px 11px;border-radius:8px;font-weight:700;font-size:11.5px;text-decoration:none;white-space:nowrap;}
+  .join-banner a, .join-banner .gate-btn{
+    margin-left:auto;color:var(--bg);background:var(--green-1);
+    border:none;padding:7px 12px;border-radius:8px;font-weight:700;
+    font-size:11.5px;text-decoration:none;white-space:nowrap;cursor:pointer;
+    font-family:'Inter',sans-serif;transition:transform 0.15s ease, opacity 0.15s ease;
+  }
+  .join-banner a:active, .join-banner .gate-btn:active{transform:scale(0.96);}
+  .join-banner .gate-btn.joined{
+    background:rgba(18,232,139,.18);color:var(--green-1);border:1px solid rgba(18,232,139,.35);
+  }
 
   .balance-card{
     background:radial-gradient(120% 160% at 0% 0%, #14332480 0%, transparent 60%), linear-gradient(135deg, #0F211A 0%, #0B1512 100%);
@@ -285,6 +294,10 @@
     padding:10px 6px calc(12px + env(safe-area-inset-bottom));
     background:#0B120F;border-top:1px solid var(--line);
     margin-top:auto;
+  }
+  body.gate-blocked .bottom-nav,
+  body.gate-blocked #bottomNav {
+    display: none !important;
   }
   .nav-item{
     display:flex;flex-direction:column;align-items:center;gap:3px;
@@ -1142,7 +1155,7 @@
   </div>
 
   <!-- BOTTOM NAV -->
-  <div class="bottom-nav">
+  <div class="bottom-nav" id="bottomNav">
     <button class="nav-item active" data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Bosh sahifa</button>
     <button class="nav-item" data-tab="wallet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>Hamyon</button>
     <button class="nav-item" data-tab="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>Tarix</button>
@@ -1293,11 +1306,34 @@
   }
 
   function openLink(url) {
-    if(tg && tg.openTelegramLink && url.includes('t.me/')) {
-      tg.openTelegramLink(url);
-    } else {
-      window.open(url, '_blank');
+    if(tg && tg.openTelegramLink && (url.includes('t.me/') || url.startsWith('tg://'))) {
+      try { tg.openTelegramLink(url); return; } catch(e){}
+    } else if(tg && tg.openLink && url.startsWith('http')) {
+      try { tg.openLink(url); return; } catch(e){}
     }
+    window.open(url, '_blank');
+  }
+
+  function openChannelLink(url) {
+    if(!url) return;
+    try {
+      if(window.Telegram && window.Telegram.WebApp) {
+        if(url.includes('t.me/') || url.startsWith('tg://')) {
+          if(typeof window.Telegram.WebApp.openTelegramLink === 'function') {
+            window.Telegram.WebApp.openTelegramLink(url);
+            return;
+          }
+        } else {
+          if(typeof window.Telegram.WebApp.openLink === 'function') {
+            window.Telegram.WebApp.openLink(url);
+            return;
+          }
+        }
+      }
+    } catch(err) {
+      console.warn("Failed to open channel via WebApp SDK:", err);
+    }
+    window.open(url, '_blank');
   }
 
   // Load User Me
@@ -1388,48 +1424,53 @@
   }
 
   // Check Gate
+  let isGateBlocked = false;
+
   async function checkGate() {
     try {
       const res = await fetch('/api/gate/check', { headers: authHeaders() });
       if(res.ok) {
         const data = await res.json();
         if(!data.all_passed && data.channels && data.channels.length > 0) {
+          isGateBlocked = true;
+          document.body.classList.add('gate-blocked');
           renderGateChannels(data.channels);
           document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
           const gateEl = document.getElementById('gate');
           if(gateEl) gateEl.classList.add('active');
           const nav = document.getElementById('bottomNav');
-          if(nav) nav.style.display = 'none';
+          if(nav) nav.style.setProperty('display', 'none', 'important');
         } else {
+          isGateBlocked = false;
+          document.body.classList.remove('gate-blocked');
           const gateEl = document.getElementById('gate');
           if(gateEl) gateEl.classList.remove('active');
           const nav = document.getElementById('bottomNav');
-          if(nav) nav.style.display = 'flex';
-          if(!document.querySelector('.screen.active')) {
+          if(nav) nav.style.setProperty('display', 'flex', 'important');
+          if(!document.querySelector('.screen.active') || (gateEl && gateEl.classList.contains('active'))) {
             const homeEl = document.getElementById('home');
             if(homeEl) homeEl.classList.add('active');
           }
         }
       }
     } catch(e) {
-      console.warn("Gate check bypass on network error:", e);
-      const gateEl = document.getElementById('gate');
-      if(gateEl) gateEl.classList.remove('active');
-      const homeEl = document.getElementById('home');
-      if(homeEl) homeEl.classList.add('active');
+      console.warn("Gate check error:", e);
     }
   }
 
   function renderGateChannels(channels) {
     const list = document.getElementById('gateChannelsList');
     if(!list) return;
-    list.innerHTML = channels.map(c => `
-      <div class="join-banner">
-        <span class="dot"></span>
-        <b>${c.display_name}</b>
-        <a href="${c.link}" target="_blank">A'zo bo'lish</a>
-      </div>
-    `).join('');
+    list.innerHTML = channels.map(c => {
+      const title = c.title || c.display_name || 'Kanal';
+      return `
+        <div class="join-banner">
+          <span class="dot" style="${c.passed ? 'background:var(--green-1);box-shadow:0 0 8px var(--green-1);' : ''}"></span>
+          <b title="${title}">${title}</b>
+          <button type="button" class="gate-btn ${c.passed ? 'joined' : ''}" onclick="openChannelLink('${c.link}')">${c.passed ? '✓ A\'zo' : 'A\'zo bo\'lish'}</button>
+        </div>
+      `;
+    }).join('');
   }
 
   // Load Products & Fragment Live Pricing
@@ -1863,6 +1904,7 @@
 
   // Navigation
   function switchTab(tabId) {
+    if(isGateBlocked) return;
     document.querySelectorAll('.nav-item').forEach(b => {
       b.classList.toggle('active', b.dataset.tab === tabId);
     });
@@ -1882,7 +1924,27 @@
     btn.addEventListener('click', ()=> switchTab(btn.dataset.tab));
   });
 
-  document.getElementById('checkGateBtn').addEventListener('click', checkGate);
+  const checkGateBtnEl = document.getElementById('checkGateBtn');
+  if(checkGateBtnEl) {
+    checkGateBtnEl.addEventListener('click', async () => {
+      const origText = checkGateBtnEl.innerText;
+      checkGateBtnEl.innerText = "Tekshirilmoqda...";
+      checkGateBtnEl.disabled = true;
+      try {
+        await checkGate();
+        if(isGateBlocked) {
+          showToast("❌ Barcha kanallarga a'zo bo'lmadingiz!");
+        } else {
+          showToast("✅ A'zolik muvaffaqiyatli tasdiqlandi!");
+        }
+      } catch(err) {
+        showToast("Tekshirishda xatolik yuz berdi");
+      } finally {
+        checkGateBtnEl.innerText = origText;
+        checkGateBtnEl.disabled = false;
+      }
+    });
+  }
 
   function copyRefLink() {
     const text = document.getElementById('refLinkText').innerText;

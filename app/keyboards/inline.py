@@ -64,15 +64,25 @@ def get_admin_keyboard() -> InlineKeyboardMarkup:
 def get_gate_keyboard(channels: list) -> InlineKeyboardMarkup:
     buttons = []
     for ch in channels:
+        if isinstance(ch, dict):
+            title = ch.get("title") or ch.get("display_name") or ch.get("username_or_link") or "Kanalga a'zo bo'lish"
+            link = ch.get("link") or ch.get("username_or_link") or "https://t.me"
+        else:
+            title = getattr(ch, "title", None) or getattr(ch, "username_or_link", None) or "Kanalga a'zo bo'lish"
+            link = getattr(ch, "username_or_link", "https://t.me")
+
+        if link and not str(link).startswith("http"):
+            link = f"https://t.me/{str(link).lstrip('@')}"
+
         buttons.append([
             InlineKeyboardButton(
-                text=f"➕ {ch.get('title', ch.get('username_or_link'))}",
-                url=ch.get("link", "https://t.me")
+                text=f"➕ {title}",
+                url=str(link)
             )
         ])
     buttons.append([
         InlineKeyboardButton(
-            text="✅ A'zolikni tekshirish",
+            text="✅ Tekshirish",
             callback_data="check_subscription"
         )
     ])

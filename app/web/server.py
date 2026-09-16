@@ -205,17 +205,27 @@ async def check_gate_channels(user: User = Depends(get_current_user)):
     Supports: ordinary, join_request, external.
     """
     async with AsyncSessionLocal() as session:
+        # Admins bypass gate screen
+        if str(user.id) in config.ADMINS or (user.role and user.role != "user"):
+            return {
+                "all_passed": True,
+                "channels": []
+            }
+
         channels = await queries.list_channels(session, active_only=True)
         results = []
         all_passed = True
 
         for ch in channels:
-            is_member = True
+            if ch.is_detected:
+                continue
+
+            is_member = False
             if ch.req_type == "external":
                 # External links cannot be checked by bot API; marked as soft requirement
                 is_member = True
             elif ch.req_type == "join_request":
-                # Check if user sent join request or is already a member
+                # Check if user sent join request or is already an accepted member
                 has_req = False
                 if ch.chat_id:
                     has_req = await queries.has_user_join_request(session, user.id, ch.chat_id)
@@ -224,30 +234,43 @@ async def check_gate_channels(user: User = Depends(get_current_user)):
                         chat_member = await bot_instance.get_chat_member(chat_id=ch.chat_id, user_id=user.id)
                         has_req = chat_member.status in ["creator", "administrator", "member", "restricted"]
                     except Exception:
-                        pass
+                        has_req = False
                 is_member = has_req
-            elif bot_instance and ch.chat_id:
-                try:
-                    chat_member = await bot_instance.get_chat_member(chat_id=ch.chat_id, user_id=user.id)
-                    is_member = chat_member.status in ["creator", "administrator", "member", "restricted"]
-                except Exception:
-                    # In dev/mock, pass through
-                    is_member = True
-            elif bot_instance and ch.username_or_link.startswith("@"):
-                try:
-                    chat_member = await bot_instance.get_chat_member(chat_id=ch.username_or_link, user_id=user.id)
-                    is_member = chat_member.status in ["creator", "administrator", "member", "restricted"]
-                except Exception:
+            else:
+                # Ordinary / Group channel
+                target = ch.chat_id
+                if not target and ch.username_or_link:
+                    val = ch.username_or_link.strip()
+                    if val.startswith("@"):
+                        target = val
+                    elif "t.me/" in val:
+                        part = val.rstrip("/").split("/")[-1]
+                        if not part.startswith("+"):
+                            target = f"@{part}"
+
+                if bot_instance and target:
+                    try:
+                        chat_member = await bot_instance.get_chat_member(chat_id=target, user_id=user.id)
+                        is_member = chat_member.status in ["creator", "administrator", "member", "restricted"]
+                    except Exception:
+                        is_member = False
+                else:
                     is_member = True
 
             if not is_member:
                 all_passed = False
 
+            channel_title = ch.title if (ch.title and ch.title.strip()) else ch.username_or_link
+            ch_link = ch.username_or_link
+            if not ch_link.startswith("http"):
+                ch_link = f"https://t.me/{ch_link.lstrip('@')}"
+
             results.append({
                 "id": ch.id,
-                "title": ch.title,
-                "link": ch.username_or_link if ch.username_or_link.startswith("http") else f"https://t.me/{ch.username_or_link.lstrip('@')}",
-                "display_name": ch.username_or_link,
+                "title": channel_title,
+                "link": ch_link,
+                "display_name": channel_title,
+                "username": ch.username_or_link,
                 "type": ch.req_type,
                 "passed": is_member
             })
