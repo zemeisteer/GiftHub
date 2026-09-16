@@ -15,8 +15,44 @@ from app.utils.notify_admins import notify_admins
 from app.utils.set_bot_commands import set_bot_commands
 from app.utils.misc.logging import setup_logger
 from app.web.server import app as fastapi_app, set_bot
+import socket
+from aiohttp.resolver import DefaultResolver
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.client.telegram import TelegramAPIServer
 
-bot = Bot(token=config.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+# Direct reliable IP addresses for Telegram Bot API (bypasses ISP timeout / IPv6 unreachability)
+TELEGRAM_FAST_IPS = ["149.154.167.99", "149.154.167.222", "149.154.166.120"]
+
+class DirectTelegramResolver(DefaultResolver):
+    async def resolve(self, host: str, port: int = 0, family: int = socket.AF_INET):
+        if host == "api.telegram.org":
+            return [
+                {"hostname": host, "host": ip, "port": port, "family": socket.AF_INET, "proto": 0, "flags": 0}
+                for ip in TELEGRAM_FAST_IPS
+            ]
+        return await super().resolve(host, port, family)
+
+class DirectTelegramSession(AiohttpSession):
+    async def create_session(self):
+        if "resolver" not in self._connector_init:
+            self._connector_init["resolver"] = DirectTelegramResolver()
+            self._connector_init["family"] = socket.AF_INET
+        return await super().create_session()
+
+bot_session = None
+if config.TELEGRAM_API_SERVER:
+    api_server = TelegramAPIServer.from_base(config.TELEGRAM_API_SERVER)
+    bot_session = AiohttpSession(api=api_server)
+elif config.TELEGRAM_PROXY:
+    bot_session = AiohttpSession(proxy=config.TELEGRAM_PROXY)
+else:
+    bot_session = DirectTelegramSession()
+
+bot = Bot(
+    token=config.BOT_TOKEN,
+    session=bot_session,
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 

@@ -8,6 +8,8 @@ BOT_TOKEN = env.str("BOT_TOKEN")
 ADMINS = env.list("ADMINS")
 IP = env.str("IP")
 PORT = env.int("PORT")
+TELEGRAM_API_SERVER = env.str("TELEGRAM_API_SERVER")
+TELEGRAM_PROXY = env.str("TELEGRAM_PROXY")
 
 WEB_APP_URL = env.str("WEB_APP_URL")
 ADMIN_APP_URL = env.str("ADMIN_APP_URL")
