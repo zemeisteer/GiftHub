@@ -659,3 +659,41 @@ async def update_order_fulfillment(
     await session.commit()
     return order
 
+
+# ================= PAYMENT SETTINGS ================= #
+
+async def get_payment_settings(session: AsyncSession) -> PaymentSetting:
+    setting = await session.get(PaymentSetting, 1)
+    if not setting:
+        setting = PaymentSetting(id=1)
+        session.add(setting)
+        await session.commit()
+        await session.refresh(setting)
+    return setting
+
+async def update_payment_settings(
+    session: AsyncSession,
+    click_active: Optional[bool] = None,
+    payme_active: Optional[bool] = None,
+    card_active: Optional[bool] = None,
+    card_number: Optional[str] = None,
+    card_holder: Optional[str] = None,
+    bank_name: Optional[str] = None
+) -> PaymentSetting:
+    setting = await get_payment_settings(session)
+    if click_active is not None:
+        setting.click_active = click_active
+    if payme_active is not None:
+        setting.payme_active = payme_active
+    if card_active is not None:
+        setting.card_active = card_active
+    if card_number is not None:
+        setting.card_number = card_number.strip()
+    if card_holder is not None:
+        setting.card_holder = card_holder.strip().upper()
+    if bank_name is not None:
+        setting.bank_name = bank_name.strip()
+    await session.commit()
+    await session.refresh(setting)
+    return setting
+

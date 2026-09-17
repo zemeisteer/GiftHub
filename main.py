@@ -76,38 +76,26 @@ async def start_bot():
             logging.warning(f"Bot info olishda ogohlantirish: {e}")
 
         await set_bot_commands(bot)
-        async def update_menu_button_worker():
-            last_url = ""
-            while True:
-                try:
-                    current_url = config.get_web_app_url() if hasattr(config, "get_web_app_url") else config.WEB_APP_URL
-                    if current_url.startswith("https://") and current_url != last_url:
-                        from aiogram.types import MenuButtonWebApp, WebAppInfo
-                        await bot.set_chat_menu_button(
-                            menu_button=MenuButtonWebApp(
-                                text="Stellar App ⭐",
-                                web_app=WebAppInfo(url=current_url)
-                            )
-                        )
-                        last_url = current_url
-                        logging.info(f"✅ Telegram Chat Menu Button o'rnatildi/yangilandi: {current_url}")
-                except Exception as err:
-                    logging.warning(f"Chat menu button yangilashda ogohlantirish: {err}")
-                await asyncio.sleep(8)
-
-        asyncio.create_task(update_menu_button_worker())
+        
+        # Standart Telegram buyruqlar menyusini o'rnatish
+        try:
+            from aiogram.types import MenuButtonCommands
+            await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+            logging.info("✅ Telegram Chat Menu Button standart buyruqlar menyusiga sozlandi.")
+        except Exception as err:
+            logging.warning(f"Chat menu button sozlashda ogohlantirish: {err}")
 
         await notify_admins(bot)
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     except TelegramUnauthorizedError:
-        logging.warning("⚠️ BOT_TOKEN yaroqsiz yoki test tokeni kiritilgan. Bot polling to'xtatildi, lekin Web App va Admin Panel serveri ishlashda davom etadi!")
+        logging.warning("⚠️ BOT_TOKEN yaroqsiz yoki test tokeni kiritilgan. Bot polling to'xtatildi, lekin API serveri ishlashda davom etadi!")
     except Exception as e:
         logging.error(f"Bot polling xatosi: {e}")
 
 async def main():
     setup_logger()
-    logging.info("🚀 Stellar Bot va Web App serveri tayyorlanmoqda...")
+    logging.info("🚀 GiftHub (Stellar) Bot to'liq Inline rejimida tayyorlanmoqda...")
 
     # Initialize Database
     await init_db()
