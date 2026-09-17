@@ -2,7 +2,7 @@ import json
 import logging
 from typing import Optional
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 
 from database.db import AsyncSessionLocal
@@ -12,6 +12,7 @@ from app.keyboards.shop_keyboards import (
     get_shop_main_menu,
     get_stars_keyboard,
     get_recipient_keyboard,
+    get_user_request_keyboard,
     get_confirm_purchase_keyboard,
     get_premium_keyboard,
     get_gifts_keyboard,
@@ -290,25 +291,105 @@ async def cb_recipient_self(callback: CallbackQuery, state: FSMContext):
 async def cb_recipient_other(callback: CallbackQuery, state: FSMContext):
     await state.set_state(StarsPurchaseState.entering_recipient)
     text = (
-        "✍️ <b>Qabul qiluvchining Telegram username'ini kiriting:</b>\n\n"
-        "Masalan: <code>@username</code> yoki <code>username</code>\n\n"
-        "<i>Eslatma: Foydalanuvchi Telegram sozlamalarida maxfiylikni to'liq yopmagan bo'lishi lozim.</i>"
+        "👥 <b>Qabul qiluvchi do'stingizni tanlang:</b>\n\n"
+        "Quyidagi <b>«👥 Do'stni tanlash»</b> tugmasini bosing — Telegram kontaktlaringiz va chatlaringiz ro'yxati chiqadi, "
+        "o'sha yerdan do'stingizni tanlashingiz mumkin.\n\n"
+        "<i>(Username yoki ID yozish shart emas! Agar xohlasangiz, @username tarzida xabar yuborishingiz ham mumkin)</i>"
     )
     try:
-        await callback.message.edit_text(text, reply_markup=get_back_to_main_keyboard())
+        await callback.message.delete()
     except Exception:
-        await callback.message.answer(text, reply_markup=get_back_to_main_keyboard())
+        pass
+
+    await callback.message.answer(text, reply_markup=get_user_request_keyboard())
     await callback.answer()
 
 
-@router.message(StarsPurchaseState.entering_recipient)
-async def process_recipient_text(message: Message, state: FSMContext):
-    txt = (message.text or "").strip().lstrip("@")
-    if len(txt) < 4:
-        await message.answer("⚠️ Yaroqsiz username! Kamida 4 ta belgidan iborat bo'lishi kerak. Qaytadan kiriting:")
+@router.message(StarsPurchaseState.entering_recipient, F.users_shared)
+async def process_recipient_users_shared(message: Message, state: FSMContext):
+    users = message.users_shared.users
+    if not users:
+        await message.answer("⚠️ Hech kim tanlanmadi. Iltimos, qaytadan urinib ko'ring:")
         return
 
-    await state.update_data(recipient=txt)
+    shared = users[0]
+    username = (shared.username or "").lstrip("@")
+    first_name = shared.first_name or ""
+    last_name = shared.last_name or ""
+    full_name = f"{first_name} {last_name}".strip()
+    recipient = username if username else str(shared.user_id)
+
+    await state.update_data(
+        recipient=recipient,
+        recipient_name=full_name,
+        recipient_id=shared.user_id
+    )
+
+    try:
+        rm = await message.answer("✅ Qabul qiluvchi tanlandi!", reply_markup=ReplyKeyboardRemove())
+        await rm.delete()
+    except Exception:
+        pass
+
+    await show_order_confirmation(message, state, recipient)
+
+
+@router.message(StarsPurchaseState.entering_recipient, F.user_shared)
+async def process_recipient_single_shared(message: Message, state: FSMContext):
+    user_id = message.user_shared.user_id
+    recipient = str(user_id)
+    await state.update_data(recipient=recipient, recipient_id=user_id)
+    try:
+        rm = await message.answer("✅ Qabul qiluvchi tanlandi!", reply_markup=ReplyKeyboardRemove())
+        await rm.delete()
+    except Exception:
+        pass
+    await show_order_confirmation(message, state, recipient)
+
+
+@router.message(StarsPurchaseState.entering_recipient, F.text.in_(["❌ Bekor qilish", "Bekor qilish", "/cancel"]))
+async def cancel_recipient_selection(message: Message, state: FSMContext):
+    await state.clear()
+    user_id = message.from_user.id
+    first_name = message.from_user.first_name or "Foydalanuvchi"
+    async with AsyncSessionLocal() as session:
+        user = await queries.get_user_by_id(session, user_id)
+        balance = user.balance if user else 0.0
+        from app.handlers.users.start import check_admin_status, build_main_menu_text
+        is_admin = await check_admin_status(user_id, session)
+
+    try:
+        rm = await message.answer("❌ Bekor qilindi.", reply_markup=ReplyKeyboardRemove())
+        await rm.delete()
+    except Exception:
+        pass
+
+    await message.answer(
+        text=build_main_menu_text(first_name, balance, user_id),
+        reply_markup=get_shop_main_menu(is_admin=is_admin)
+    )
+
+
+@router.message(StarsPurchaseState.entering_recipient, F.text)
+async def process_recipient_text(message: Message, state: FSMContext):
+    raw = (message.text or "").strip()
+    if raw.lower() in ["❌ bekor qilish", "bekor qilish", "/cancel"]:
+        return await cancel_recipient_selection(message, state)
+
+    txt = raw.lstrip("@")
+    if len(txt) < 3:
+        await message.answer(
+            "⚠️ Yaroqsiz username! Kamida 3 ta belgidan iborat bo'lishi kerak. Qaytadan kiriting yoki «👥 Do'stni tanlash» tugmasidan foydalaning:",
+            reply_markup=get_user_request_keyboard()
+        )
+        return
+
+    await state.update_data(recipient=txt, recipient_name="", recipient_id=None)
+    try:
+        rm = await message.answer("⏳ Qabul qiluvchi saqlandi...", reply_markup=ReplyKeyboardRemove())
+        await rm.delete()
+    except Exception:
+        pass
     await show_order_confirmation(message, state, txt)
 
 
@@ -316,6 +397,14 @@ async def show_order_confirmation(target_event, state: FSMContext, recipient: st
     data = await state.get_data()
     item_title = data.get("item_title", "Mahsulot")
     total_price = data.get("total_price", 0.0)
+    recip_name = data.get("recipient_name")
+
+    if recipient.isdigit():
+        recip_display = f"{recip_name} (ID: {recipient})" if recip_name else f"ID: {recipient}"
+    else:
+        recip_display = f"@{recipient.lstrip('@')}"
+        if recip_name:
+            recip_display += f" ({recip_name})"
 
     user_id = target_event.from_user.id
     async with AsyncSessionLocal() as session:
@@ -325,7 +414,7 @@ async def show_order_confirmation(target_event, state: FSMContext, recipient: st
     text = (
         "🛒 <b>Buyurtmani tasdiqlash</b>\n\n"
         f"📦 Mahsulot: <b>{item_title}</b>\n"
-        f"👤 Qabul qiluvchi: <b>@{recipient}</b>\n"
+        f"👤 Qabul qiluvchi: <b>{recip_display}</b>\n"
         f"💰 Xarid summasi: <b>{total_price:,.0f} so'm</b>\n"
         "────────────────────\n"
         f"💳 Sizning balansingiz: <b>{current_balance:,.0f} so'm</b>\n"
@@ -365,6 +454,14 @@ async def cb_execute_purchase(callback: CallbackQuery, state: FSMContext):
     total_price = float(data.get("total_price", 0.0))
     cost_price = float(data.get("cost_price", 0.0))
     recipient = data.get("recipient", callback.from_user.username or "")
+    recip_name = data.get("recipient_name")
+
+    if recipient.isdigit():
+        recip_display = f"{recip_name} (ID: {recipient})" if recip_name else f"ID: {recipient}"
+    else:
+        recip_display = f"@{recipient.lstrip('@')}"
+        if recip_name:
+            recip_display += f" ({recip_name})"
 
     async with AsyncSessionLocal() as session:
         user = await queries.get_user_by_id(session, user_id)
@@ -395,7 +492,7 @@ async def cb_execute_purchase(callback: CallbackQuery, state: FSMContext):
         "🎉 <b>Xaridingiz muvaffaqiyatli qabul qilindi!</b>\n\n"
         f"🔖 Buyurtma raqami: <code>{order.order_code}</code>\n"
         f"📦 Mahsulot: <b>{item_title}</b>\n"
-        f"👤 Qabul qiluvchi: <b>@{recipient}</b>\n"
+        f"👤 Qabul qiluvchi: <b>{recip_display}</b>\n"
         f"💵 To'langan summa: <b>{total_price:,.0f} so'm</b>\n"
         f"💳 Qolgan balansingiz: <b>{new_balance:,.0f} so'm</b>\n\n"
         "⚡ <i>Telegram Stars / Premium tez orada profilingizga yetkazib beriladi!</i>"

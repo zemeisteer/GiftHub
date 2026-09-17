@@ -1,6 +1,13 @@
 import urllib.parse
 from typing import List, Dict, Any, Optional
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import (
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    WebAppInfo,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    KeyboardButtonRequestUsers
+)
 from data import config
 
 def get_shop_main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
@@ -100,12 +107,36 @@ def get_recipient_keyboard(my_username: Optional[str] = None) -> InlineKeyboardM
             )
         ])
     buttons.append([
-        InlineKeyboardButton(text="✍️ Boshqa do'stimga (@username)", callback_data="recipient:other")
+        InlineKeyboardButton(text="👥 Boshqa do'stimga", callback_data="recipient:other")
     ])
     buttons.append([
         InlineKeyboardButton(text="🔙 Bekor qilish", callback_data="menu:main")
     ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_user_request_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(
+                    text="👥 Do'stni tanlash",
+                    request_users=KeyboardButtonRequestUsers(
+                        request_id=101,
+                        user_is_bot=False,
+                        max_quantity=1,
+                        request_name=True,
+                        request_username=True
+                    )
+                )
+            ],
+            [
+                KeyboardButton(text="❌ Bekor qilish")
+            ]
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
 
 
 def get_confirm_purchase_keyboard(confirm_data: str) -> InlineKeyboardMarkup:
