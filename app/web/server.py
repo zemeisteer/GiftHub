@@ -1002,7 +1002,7 @@ async def get_admin_channels(admin: User = Depends(get_current_admin)):
                 "req_type": c.req_type,
                 "is_active": c.is_active,
                 "is_detected": c.is_detected,
-                "created_at": c.created_at.strftime("%d %b, %H:%M") if c.created_at else ""
+                "created_at": getattr(c, "created_at", None).strftime("%d %b, %H:%M") if getattr(c, "created_at", None) else ""
             }
             for c in channels
         ]
@@ -1288,6 +1288,91 @@ async def update_payment_settings_endpoint(
             details=f"Click: {p.click_active}, Payme: {p.payme_active}, Karta: {p.card_active} ({p.card_number})"
         )
         return {"success": True}
+
+# ================= PAYMENT CARDS API ================= #
+
+class PaymentCardCreate(BaseModel):
+    card_number: str
+    card_holder: str
+    bank_name: str
+    card_type: str = "UZCARD"
+    is_active: bool = True
+
+class PaymentCardUpdate(BaseModel):
+    card_number: Optional[str] = None
+    card_holder: Optional[str] = None
+    bank_name: Optional[str] = None
+    card_type: Optional[str] = None
+    is_active: Optional[bool] = None
+
+@app.get("/api/admin/cards")
+async def get_admin_cards_endpoint(admin: User = Depends(get_current_admin)):
+    async with AsyncSessionLocal() as session:
+        cards = await queries.list_payment_cards(session)
+        return [
+            {
+                "id": c.id,
+                "card_number": c.card_number,
+                "card_holder": c.card_holder,
+                "bank_name": c.bank_name,
+                "card_type": c.card_type,
+                "is_active": c.is_active,
+                "created_at": c.created_at.strftime("%Y-%m-%d %H:%M") if c.created_at else ""
+            }
+            for c in cards
+        ]
+
+@app.post("/api/admin/cards")
+async def create_admin_card_endpoint(req: PaymentCardCreate, admin: User = Depends(get_current_admin)):
+    async with AsyncSessionLocal() as session:
+        c = await queries.create_payment_card(
+            session=session,
+            card_number=req.card_number,
+            card_holder=req.card_holder,
+            bank_name=req.bank_name,
+            card_type=req.card_type,
+            is_active=req.is_active
+        )
+        await queries.log_admin_action(
+            session=session,
+            admin_id=admin.id,
+            admin_username=admin.username,
+            action="Yangi bank kartasi qo'shdi",
+            details=f"Karta: {c.bank_name} ({c.card_number}) - {c.card_holder}"
+        )
+        return {"success": True, "id": c.id}
+
+@app.put("/api/admin/cards/{card_id}")
+async def update_admin_card_endpoint(card_id: int, req: PaymentCardUpdate, admin: User = Depends(get_current_admin)):
+    async with AsyncSessionLocal() as session:
+        c = await queries.update_payment_card(
+            session=session,
+            card_id=card_id,
+            card_number=req.card_number,
+            card_holder=req.card_holder,
+            bank_name=req.bank_name,
+            card_type=req.card_type,
+            is_active=req.is_active
+        )
+        if not c:
+            raise HTTPException(status_code=404, detail="Karta topilmadi")
+        return {"success": True}
+
+@app.delete("/api/admin/cards/{card_id}")
+async def delete_admin_card_endpoint(card_id: int, admin: User = Depends(get_current_admin)):
+    async with AsyncSessionLocal() as session:
+        ok = await queries.delete_payment_card(session, card_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Karta topilmadi")
+        await queries.log_admin_action(
+            session=session,
+            admin_id=admin.id,
+            admin_username=admin.username,
+            action="Bank kartasini o'chirdi",
+            details=f"ID: {card_id}"
+        )
+        return {"success": True}
+
 
 @app.get("/api/admin/referral")
 async def get_referral_settings_endpoint(admin: User = Depends(get_current_admin)):

@@ -142,19 +142,37 @@ async def cb_pay_card(callback: CallbackQuery, state: FSMContext):
     await state.update_data(topup_amount=amount)
 
     async with AsyncSessionLocal() as session:
-        pay_setting = await queries.get_payment_settings(session)
-        card_num = pay_setting.card_number if pay_setting else "8600 1234 5678 9012"
-        card_holder = pay_setting.card_holder if pay_setting else "ANVAR S."
-        bank_name = pay_setting.bank_name if pay_setting else "Bank"
+        cards = await queries.list_active_payment_cards(session)
+
+    if len(cards) <= 1:
+        c = cards[0] if cards else None
+        c_num = c.card_number if c else "8600 1234 5678 9012"
+        c_holder = c.card_holder if c else "ANVAR S."
+        c_bank = c.bank_name if c else "Bank"
+        c_type = f" ({c.card_type})" if c and getattr(c, "card_type", None) else ""
+        cards_block = (
+            f"💳 Karta raqami: <code>{c_num}</code>\n"
+            f"👤 Qabul qiluvchi: <b>{c_holder}</b>\n"
+            f"🏦 Bank: <b>{c_bank}</b>{c_type}\n\n"
+        )
+        instruction_card = "Ko'rsatilgan kartaga"
+    else:
+        cards_block = "Quyidagi kartalardan biriga to'lov qilishingiz mumkin:\n\n"
+        for i, c in enumerate(cards, 1):
+            c_type = f" — {c.card_type}" if getattr(c, "card_type", None) else ""
+            cards_block += (
+                f"💳 <b>{i}-Karta: {c.bank_name}{c_type}</b>\n"
+                f"Raqam: <code>{c.card_number}</code>\n"
+                f"Egasi: <b>{c.card_holder}</b>\n\n"
+            )
+        instruction_card = "Ushbu kartalardan biriga"
 
     text = (
         "💳 <b>Karta orqali to'lov (P2P):</b>\n\n"
         f"To'lov summasi: <b>{amount:,.0f} so'm</b>\n\n"
-        f"💳 Karta raqami: <code>{card_num}</code>\n"
-        f"👤 Qabul qiluvchi: <b>{card_holder}</b>\n"
-        f"🏦 Bank: <b>{bank_name}</b>\n\n"
+        f"{cards_block}"
         "⚠️ <b>Muhim ko'rsatma:</b>\n"
-        f"1. Ko'rsatilgan kartaga aynan <b>{amount:,.0f} so'm</b> o'tkazing.\n"
+        f"1. {instruction_card} aynan <b>{amount:,.0f} so'm</b> o'tkazing.\n"
         "2. To'lov amalga oshirilgach, to'lov cheki (skrinshot yoki rasmi)ni <b>shu botga rasm sifatida yuboring</b>.\n\n"
         "<i>Chek yuborilgach, adminlarimiz uni 1-5 daqiqada tasdiqlab, balansingizni to'ldirishadi.</i>"
     )

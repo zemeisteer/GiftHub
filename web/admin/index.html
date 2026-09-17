@@ -1192,7 +1192,7 @@
       </div>
 
       <!-- Channels List Table -->
-      <div class="card" style="padding:0;overflow:hidden;">
+      <div class="card" id="channelsListCard" style="padding:0;overflow:hidden;display:none;">
         <div style="padding:16px 20px 10px;display:flex;justify-content:space-between;align-items:center;">
           <h3 class="card-title">Faol majburiy kanallar</h3>
           <span style="font-size:12px;color:var(--text-faint);" id="channelsCountText">0 ta kanal</span>
@@ -1260,57 +1260,31 @@
 
       <!-- Bank Card P2P Configuration Card -->
       <div class="card" style="margin-bottom:18px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
           <div>
             <h3 class="card-title" style="margin:0 0 4px;">💳 Bank Karta orqali to'lov (P2P)</h3>
-            <div class="card-sub">Foydalanuvchi hamyonni to'ldirishi uchun to'g'ridan-to'g'ri o'zbek kartasi ma'lumotlari</div>
+            <div class="card-sub">Foydalanuvchi hamyonni to'ldirishi uchun bank kartalari</div>
           </div>
-          <div class="switch-toggle on" id="togCard"></div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <button class="btn btn-primary btn-sm" onclick="openAddCardModal()">＋ Yangi karta qo'shish</button>
+            <div class="switch-toggle on" id="togCard" title="Karta orqali to'lovni yoqish/o'chirish"></div>
+          </div>
         </div>
 
-        <div class="grid-2" style="margin-top:14px;align-items:start;">
-          <div>
-            <div class="field-group" style="margin-bottom:12px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                <label class="field-label" style="margin:0;">Karta raqami (16 ta raqam)</label>
-                <div style="display:flex;align-items:center;gap:6px;">
-                  <span class="badge-tag up" id="cardBrandBadge" style="font-size:10px;">UZCARD</span>
-                  <span id="cardValidIndicator" style="font-size:11px;"></span>
-                </div>
-              </div>
-              <input id="inpCardNumber" class="custom-input" placeholder="8600 0000 0000 0000" maxlength="19" oninput="formatCardNumberInput(this)">
-            </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:12px;margin-bottom:12px;">
+          <span style="font-size:13px;font-weight:700;color:var(--text);">Mavjud kartalar ro'yxati:</span>
+          <span style="font-size:12px;color:var(--text-muted);"><b id="cardsCount" style="color:var(--primary);">0</b> ta karta</span>
+        </div>
 
-            <div class="field-group" style="margin-bottom:12px;">
-              <label class="field-label">Karta egasi (Ism va Familiya)</label>
-              <input id="inpCardHolder" class="custom-input" placeholder="MASALAN: ANVAR S." oninput="updateCardHolderPreview(this)">
-            </div>
+        <!-- Cards Grid -->
+        <div id="cardsGrid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(290px, 1fr));gap:14px;"></div>
 
-            <div class="field-group">
-              <label class="field-label">Bank nomi</label>
-              <input id="inpBankName" class="custom-input" placeholder="Masalan: TBC Bank, Agrobank, Kapitalbank..." oninput="updateCardBankPreview(this)">
-            </div>
-          </div>
-
-          <!-- Mini Live Card Preview -->
-          <div>
-            <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px;font-weight:700;">👁️ Foydalanuvchi ko'radigan karta ko'rinishi:</div>
-            <div style="background:linear-gradient(135deg,#0e271c 0%,#091510 60%,rgba(0,230,118,0.2) 100%);border:1px solid rgba(0,230,118,0.35);border-radius:16px;padding:16px 18px;color:#fff;box-shadow:0 10px 25px rgba(0,0,0,0.35);">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-                <span style="font-size:13px;font-weight:800;" id="prevCardBank">TBC Bank</span>
-                <span style="font-size:10px;font-weight:800;background:rgba(255,255,255,0.2);padding:2px 7px;border-radius:5px;" id="prevCardBrand">UZCARD</span>
-              </div>
-              <div style="width:30px;height:22px;background:linear-gradient(135deg,#eab308,#ca8a04);border-radius:4px;margin-bottom:12px;"></div>
-              <div style="font-family:var(--font-mono);font-size:15px;font-weight:700;letter-spacing:2px;margin-bottom:12px;" id="prevCardNumber">8600 1234 5678 9012</div>
-              <div style="display:flex;justify-content:space-between;align-items:flex-end;">
-                <div>
-                  <div style="font-size:8.5px;opacity:0.7;">KARTA EGASI</div>
-                  <div style="font-size:12px;font-weight:700;" id="prevCardHolder">ANVAR S.</div>
-                </div>
-                <div style="font-size:11px;color:var(--primary);font-weight:700;">P2P To'lov</div>
-              </div>
-            </div>
-          </div>
+        <!-- Cards Empty State -->
+        <div id="cardsEmpty" style="display:none;text-align:center;padding:36px 20px;background:var(--surface);border-radius:var(--radius-md);border:1px dashed var(--line);">
+          <div style="font-size:32px;margin-bottom:8px;">💳</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;">Hozircha birorta ham bank kartasi qo'shilmagan</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">Foydalanuvchilar to'lov qilishi uchun bank kartangizni qo'shing.</div>
+          <button class="btn btn-primary btn-sm" onclick="openAddCardModal()">＋ Birinchi kartani qo'shish</button>
         </div>
       </div>
 
@@ -1483,6 +1457,70 @@
       </div>
     </section>
   </main>
+<!-- Card Modal -->
+<div class="modal-backdrop" id="cardModal">
+  <div class="modal-card" style="max-width:480px;">
+    <h3 style="margin:0 0 16px;font-size:17px;" id="cardModalTitle">＋ Yangi karta qo'shish</h3>
+    <input type="hidden" id="cardEditId" value="">
+
+    <!-- Mini Live Card Preview in Modal -->
+    <div style="margin-bottom:16px;">
+      <div id="modalCardVisual" style="background:linear-gradient(135deg,#0e271c 0%,#091510 60%,rgba(0,230,118,0.2) 100%);border:1px solid rgba(0,230,118,0.35);border-radius:14px;padding:14px 16px;color:#fff;box-shadow:0 8px 20px rgba(0,0,0,0.35);transition:var(--transition);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <span style="font-size:13px;font-weight:800;" id="modalPrevBank">Bank nomi</span>
+          <span style="font-size:10px;font-weight:800;background:rgba(255,255,255,0.2);padding:2px 7px;border-radius:5px;" id="modalPrevBrand">UZCARD</span>
+        </div>
+        <div style="width:28px;height:20px;background:linear-gradient(135deg,#eab308,#ca8a04);border-radius:4px;margin-bottom:10px;"></div>
+        <div style="font-family:var(--font-mono);font-size:15px;font-weight:700;letter-spacing:2px;margin-bottom:10px;" id="modalPrevNum">8600 0000 0000 0000</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;">
+          <div>
+            <div style="font-size:8px;opacity:0.75;">KARTA EGASI</div>
+            <div style="font-size:12px;font-weight:700;" id="modalPrevHolder">ISM FAMILIYA</div>
+          </div>
+          <div style="font-size:10.5px;color:var(--primary);font-weight:700;">P2P To'lov</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="field-group" style="margin-bottom:12px;">
+      <label class="field-label">Karta raqami (16 ta raqam)</label>
+      <input id="crdNumber" class="custom-input" placeholder="8600 0000 0000 0000" maxlength="19" oninput="formatModalCardNumber(this)">
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div class="field-group">
+        <label class="field-label">Bank nomi</label>
+        <input id="crdBank" class="custom-input" placeholder="AgroBank, Kapital..." oninput="updateModalCardPreview()">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Karta turi</label>
+        <select id="crdType" class="custom-select" onchange="updateModalCardPreview()">
+          <option value="UZCARD">UZCARD</option>
+          <option value="HUMO">HUMO</option>
+          <option value="VISA">VISA</option>
+          <option value="MASTERCARD">MASTERCARD</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field-group" style="margin-bottom:12px;">
+      <label class="field-label">Karta egasi (Ism va Familiya)</label>
+      <input id="crdHolder" class="custom-input" placeholder="ANVAR SOBIROV" oninput="updateModalCardPreview()">
+    </div>
+
+    <div class="toggle-row" style="margin-bottom:18px;background:var(--surface);padding:10px 14px;border-radius:var(--radius-sm);border:1px solid var(--line);">
+      <span style="font-size:13px;font-weight:600;">Karta holati (Faol)</span>
+      <label class="switch">
+        <input type="checkbox" id="crdIsActive" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:10px;">
+      <button class="btn btn-secondary" onclick="closeCardModal()">Bekor qilish</button>
+      <button class="btn btn-primary" onclick="saveCard()">Saqlash</button>
+    </div>
+  </div>
 </div>
 
 <!-- Service Modal -->
@@ -2440,12 +2478,17 @@
       }
     }
 
-    document.getElementById('channelsCountText').innerText = `${activeList.length} ta kanal`;
-    const tbody = document.getElementById('channelsTableBody');
-    if(activeList.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-faint);padding:30px;">Hozircha faol majburiy kanallar yo'q. Yuqoridagi tugma orqali botni kanal yoki guruhingizga admin qiling.</td></tr>`;
+    const channelsCard = document.getElementById('channelsListCard');
+    const channelsCount = document.getElementById('channelsCountText');
+    if(channelsCount) channelsCount.innerText = `${activeList.length} ta kanal`;
+
+    if(!activeList || activeList.length === 0) {
+      if(channelsCard) channelsCard.style.display = 'none';
       return;
     }
+    if(channelsCard) channelsCard.style.display = 'block';
+
+    const tbody = document.getElementById('channelsTableBody');
 
     tbody.innerHTML = activeList.map(c => `
       <tr>
@@ -2727,6 +2770,8 @@
     if(prevBank) prevBank.innerText = el.value || 'TBC Bank';
   }
 
+  let cachedCards = [];
+
   async function loadPayments() {
     try {
       const res = await fetch('/api/admin/payments', { headers: adminHeaders() });
@@ -2736,60 +2781,267 @@
       paymeActive = data.payme_active;
       cardActive = data.card_active !== false;
 
-      document.getElementById('togClick').classList.toggle('on', clickActive);
-      document.getElementById('togPayme').classList.toggle('on', paymeActive);
-      const tc = document.getElementById('togCard');
-      if(tc) tc.classList.toggle('on', cardActive);
+      const tc = document.getElementById('togClick');
+      if(tc) tc.classList.toggle('on', clickActive);
+      const tp = document.getElementById('togPayme');
+      if(tp) tp.classList.toggle('on', paymeActive);
+      const tcard = document.getElementById('togCard');
+      if(tcard) tcard.classList.toggle('on', cardActive);
 
-      const cardInp = document.getElementById('inpCardNumber');
-      if(cardInp) {
-        cardInp.value = data.card_number || '8600 1234 5678 9012';
-        formatCardNumberInput(cardInp);
-      }
-      const holderInp = document.getElementById('inpCardHolder');
-      if(holderInp) {
-        holderInp.value = data.card_holder || 'ANVAR S.';
-        updateCardHolderPreview(holderInp);
-      }
-      const bankInp = document.getElementById('inpBankName');
-      if(bankInp) {
-        bankInp.value = data.bank_name || 'TBC Bank';
-        updateCardBankPreview(bankInp);
-      }
+      await loadCards();
     } catch(e){ console.error(e); }
   }
 
-  async function savePaymentSettings() {
-    const cardNum = document.getElementById('inpCardNumber')?.value.trim() || '8600 1234 5678 9012';
-    const cardHolder = document.getElementById('inpCardHolder')?.value.trim() || 'ANVAR S.';
-    const bankName = document.getElementById('inpBankName')?.value.trim() || 'TBC Bank';
+  // Master switch for Card payments
+  const cardSwitch = document.getElementById('togCard');
+  if(cardSwitch) {
+    cardSwitch.onclick = async function() {
+      cardActive = !cardActive;
+      this.classList.toggle('on', cardActive);
+      try {
+        await fetch('/api/admin/payments', {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify({
+            click_active: clickActive,
+            payme_active: paymeActive,
+            card_active: cardActive
+          })
+        });
+        showToast(cardActive ? "Karta orqali to'lovlar yoqildi!" : "Karta to'lovlari o'chirildi!");
+      } catch(e) { console.error(e); }
+    };
+  }
 
-    const cleanNum = cardNum.replace(/\s+/g, '');
-    if(cleanNum.length < 16) {
-      alert("Karta raqami kamida 16 ta sondan iborat bo'lishi shart!");
+  // ================= PAYMENT CARDS MANAGEMENT ================= //
+
+  async function loadCards() {
+    try {
+      const res = await fetch('/api/admin/cards', { headers: adminHeaders() });
+      if(!res.ok) return;
+      cachedCards = await res.json();
+      renderCards(cachedCards);
+    } catch(e) { console.error(e); }
+  }
+
+  function renderCards(cards) {
+    const grid = document.getElementById('cardsGrid');
+    const empty = document.getElementById('cardsEmpty');
+    const countEl = document.getElementById('cardsCount');
+    if(countEl) countEl.innerText = cards ? cards.length : 0;
+
+    if(!cards || cards.length === 0) {
+      if(grid) grid.style.display = 'none';
+      if(empty) empty.style.display = 'block';
+      return;
+    }
+    if(grid) grid.style.display = 'grid';
+    if(empty) empty.style.display = 'none';
+
+    grid.innerHTML = cards.map(c => {
+      let grad = 'linear-gradient(135deg, #0e271c 0%, #091510 60%, rgba(0, 230, 118, 0.25) 100%)';
+      let borderCol = 'rgba(0, 230, 118, 0.35)';
+      const type = (c.card_type || 'UZCARD').toUpperCase();
+      if(type === 'HUMO') {
+        grad = 'linear-gradient(135deg, #0d2238 0%, #081524 60%, rgba(0, 176, 255, 0.25) 100%)';
+        borderCol = 'rgba(0, 176, 255, 0.35)';
+      } else if(type === 'VISA' || type === 'MASTERCARD') {
+        grad = 'linear-gradient(135deg, #241607 0%, #150d04 60%, rgba(245, 158, 11, 0.25) 100%)';
+        borderCol = 'rgba(245, 158, 11, 0.35)';
+      }
+
+      const activeBadge = c.is_active 
+        ? `<span class="badge-status done" style="font-size:10.5px;">● Faol</span>` 
+        : `<span class="badge-status cancel" style="font-size:10.5px;">○ Nofaol</span>`;
+
+      return `
+        <div style="background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-md);overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 4px 15px rgba(0,0,0,0.2);">
+          <div style="background:${grad};border-bottom:1px solid ${borderCol};padding:14px 16px;color:#fff;position:relative;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <span style="font-size:13px;font-weight:800;letter-spacing:0.5px;">${c.bank_name}</span>
+              <span style="font-size:9.5px;font-weight:800;background:rgba(255,255,255,0.22);padding:2px 7px;border-radius:5px;">${type}</span>
+            </div>
+            <div style="width:28px;height:20px;background:linear-gradient(135deg,#eab308,#ca8a04);border-radius:4px;margin-bottom:10px;"></div>
+            <div style="font-family:var(--font-mono);font-size:14.5px;font-weight:700;letter-spacing:2px;margin-bottom:10px;text-shadow:0 1px 2px rgba(0,0,0,0.5);">
+              ${c.card_number}
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;">
+              <div>
+                <div style="font-size:8px;opacity:0.75;letter-spacing:0.5px;">KARTA EGASI</div>
+                <div style="font-size:11.5px;font-weight:700;">${c.card_holder}</div>
+              </div>
+              <div>${activeBadge}</div>
+            </div>
+          </div>
+
+          <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;background:var(--surface);">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label class="switch" style="transform:scale(0.85);margin:0;" title="Faollik">
+                <input type="checkbox" ${c.is_active ? 'checked' : ''} onchange="toggleCardActive(${c.id}, this.checked)">
+                <span class="slider"></span>
+              </label>
+              <span style="font-size:11px;color:var(--text-muted);">${c.is_active ? 'Qabul qilinmoqda' : 'O\'chirilgan'}</span>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-secondary btn-sm" onclick="openEditCardModal(${c.id})">✏️</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteCard(${c.id})">🗑</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function openAddCardModal() {
+    document.getElementById('cardEditId').value = '';
+    document.getElementById('cardModalTitle').innerText = '＋ Yangi karta qo\'shish';
+    document.getElementById('crdNumber').value = '';
+    document.getElementById('crdHolder').value = '';
+    document.getElementById('crdBank').value = '';
+    document.getElementById('crdType').value = 'UZCARD';
+    document.getElementById('crdIsActive').checked = true;
+    updateModalCardPreview();
+    document.getElementById('cardModal').style.display = 'flex';
+  }
+
+  function openEditCardModal(id) {
+    const c = cachedCards.find(x => x.id === id);
+    if(!c) return;
+    document.getElementById('cardEditId').value = c.id;
+    document.getElementById('cardModalTitle').innerText = '✏️ Kartani tahrirlash';
+    document.getElementById('crdNumber').value = c.card_number || '';
+    document.getElementById('crdHolder').value = c.card_holder || '';
+    document.getElementById('crdBank').value = c.bank_name || '';
+    document.getElementById('crdType').value = c.card_type || 'UZCARD';
+    document.getElementById('crdIsActive').checked = !!c.is_active;
+    updateModalCardPreview();
+    document.getElementById('cardModal').style.display = 'flex';
+  }
+
+  function closeCardModal() {
+    document.getElementById('cardModal').style.display = 'none';
+  }
+
+  function formatModalCardNumber(input) {
+    let v = input.value.replace(/\D/g, '').slice(0, 16);
+    let parts = [];
+    for(let i=0; i<v.length; i+=4) {
+      parts.push(v.slice(i, i+4));
+    }
+    input.value = parts.join(' ');
+
+    const typeSelect = document.getElementById('crdType');
+    if(v.startsWith('8600')) typeSelect.value = 'UZCARD';
+    else if(v.startsWith('9860')) typeSelect.value = 'HUMO';
+    else if(v.startsWith('4')) typeSelect.value = 'VISA';
+    else if(v.startsWith('5')) typeSelect.value = 'MASTERCARD';
+
+    updateModalCardPreview();
+  }
+
+  function updateModalCardPreview() {
+    const num = document.getElementById('crdNumber').value.trim() || '8600 0000 0000 0000';
+    const holder = (document.getElementById('crdHolder').value.trim() || 'ISM FAMILIYA').toUpperCase();
+    const bank = document.getElementById('crdBank').value.trim() || 'Bank nomi';
+    const type = document.getElementById('crdType').value || 'UZCARD';
+
+    document.getElementById('modalPrevBank').innerText = bank;
+    document.getElementById('modalPrevBrand').innerText = type;
+    document.getElementById('modalPrevNum').innerText = num;
+    document.getElementById('modalPrevHolder').innerText = holder;
+
+    const cardBox = document.getElementById('modalCardVisual');
+    if(type === 'HUMO') {
+      cardBox.style.background = 'linear-gradient(135deg,#0d2238 0%,#081524 60%,rgba(0,176,255,0.25) 100%)';
+      cardBox.style.borderColor = 'rgba(0,176,255,0.35)';
+    } else if(type === 'VISA' || type === 'MASTERCARD') {
+      cardBox.style.background = 'linear-gradient(135deg,#241607 0%,#150d04 60%,rgba(245,158,11,0.25) 100%)';
+      cardBox.style.borderColor = 'rgba(245,158,11,0.35)';
+    } else {
+      cardBox.style.background = 'linear-gradient(135deg,#0e271c 0%,#091510 60%,rgba(0,230,118,0.25) 100%)';
+      cardBox.style.borderColor = 'rgba(0,230,118,0.35)';
+    }
+  }
+
+  async function saveCard() {
+    const id = document.getElementById('cardEditId').value;
+    const card_number = document.getElementById('crdNumber').value.trim();
+    const card_holder = document.getElementById('crdHolder').value.trim().toUpperCase();
+    const bank_name = document.getElementById('crdBank').value.trim();
+    const card_type = document.getElementById('crdType').value;
+    const is_active = document.getElementById('crdIsActive').checked;
+
+    const rawDigits = card_number.replace(/\s+/g, '');
+    if(rawDigits.length < 16) {
+      alert("Karta raqami kamida 16 ta raqam bo'lishi kerak!");
+      return;
+    }
+    if(!card_holder) {
+      alert("Iltimos, karta egasining ismini kiriting!");
+      return;
+    }
+    if(!bank_name) {
+      alert("Iltimos, bank nomini kiriting!");
       return;
     }
 
-    const body = {
-      click_active: clickActive,
-      payme_active: paymeActive,
-      card_active: cardActive,
-      card_number: cardNum,
-      card_holder: cardHolder,
-      bank_name: bankName,
-      autopaycard_active: false
-    };
+    const payload = { card_number, card_holder, bank_name, card_type, is_active };
 
-    const res = await fetch('/api/admin/payments', {
-      method: 'POST',
-      headers: adminHeaders(),
-      body: JSON.stringify(body)
-    });
-    if(res.ok) {
-      showToast("To'lov sozlamalari va karta ma'lumotlari saqlandi!");
-    } else {
-      alert("Xatolik yuz berdi");
+    try {
+      let res;
+      if(id) {
+        res = await fetch(`/api/admin/cards/${id}`, {
+          method: 'PUT',
+          headers: adminHeaders(),
+          body: JSON.stringify(payload)
+        });
+      } else {
+        res = await fetch('/api/admin/cards', {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify(payload)
+        });
+      }
+      if(res.ok) {
+        closeCardModal();
+        showToast(id ? "Karta muvaffaqiyatli yangilandi!" : "Yangi karta qo'shildi!");
+        loadCards();
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Xatolik yuz berdi");
+      }
+    } catch(e) {
+      console.error(e);
+      alert("Server bilan ulanishda xatolik!");
     }
+  }
+
+  async function toggleCardActive(id, newActive) {
+    try {
+      const res = await fetch(`/api/admin/cards/${id}`, {
+        method: 'PUT',
+        headers: adminHeaders(),
+        body: JSON.stringify({ is_active: newActive })
+      });
+      if(res.ok) {
+        showToast(newActive ? "Karta yoqildi!" : "Karta o'chirildi!");
+        loadCards();
+      }
+    } catch(e) { console.error(e); }
+  }
+
+  async function deleteCard(id) {
+    if(!confirm("Ushbu bank kartasini rostdan ham o'chirmoqchimisiz?")) return;
+    try {
+      const res = await fetch(`/api/admin/cards/${id}`, {
+        method: 'DELETE',
+        headers: adminHeaders()
+      });
+      if(res.ok) {
+        showToast("Karta o'chirildi!");
+        loadCards();
+      }
+    } catch(e) { console.error(e); }
   }
 
   // ================= 10. ADMINS MANAGEMENT ================= //

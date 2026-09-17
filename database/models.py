@@ -137,6 +137,18 @@ class PaymentSetting(Base):
     autopaycard_webhook_url = Column(String(255), default="https://stellar-bot.uz/webhook/autopaycard")
 
 
+class PaymentCard(Base):
+    __tablename__ = "payment_cards"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    card_number = Column(String(32), nullable=False)
+    card_holder = Column(String(128), nullable=False)
+    bank_name = Column(String(64), nullable=False)
+    card_type = Column(String(32), default="UZCARD")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class FragmentSetting(Base):
     __tablename__ = "fragment_settings"
 

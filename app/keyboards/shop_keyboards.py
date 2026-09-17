@@ -28,16 +28,6 @@ def get_shop_main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="🛟 Yordam & Ma'lumot", callback_data="help:view")
         ]
     ]
-    if is_admin:
-        admin_url = config.get_admin_app_url() if hasattr(config, "get_admin_app_url") else config.ADMIN_APP_URL
-        if admin_url and admin_url.startswith("https://"):
-            buttons.append([
-                InlineKeyboardButton(text="⚙️ Admin Boshqaruv Paneli (Web App)", web_app=WebAppInfo(url=admin_url))
-            ])
-        else:
-            buttons.append([
-                InlineKeyboardButton(text="⚙️ Admin Boshqaruv Paneli (Web App)", url=admin_url or "https://t.me")
-            ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 

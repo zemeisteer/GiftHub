@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from aiogram import Router, F, Bot
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
 from sqlalchemy import select, func
@@ -30,12 +30,12 @@ async def is_admin_user(user_id: int, session) -> bool:
     return bool(user and user.role != "user")
 
 
-@router.message(Command("admin"))
+@router.message(Command(commands=["panel", "admin"]))
 async def cmd_admin(message: Message):
     user_id = message.from_user.id
     async with AsyncSessionLocal() as session:
         if not await is_admin_user(user_id, session):
-            await message.answer("⛔ <b>Kechirasiz!</b> Bu buyruq faqat bot adminlari uchun mo'ljallangan.")
+            # Only for admins - ignore silently for normal users
             return
 
     admin_url = config.get_admin_app_url() if hasattr(config, "get_admin_app_url") else config.ADMIN_APP_URL

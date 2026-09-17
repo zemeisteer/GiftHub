@@ -6,7 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.models import (
     User, PricingSetting, Order, Transaction, ChannelRequirement,
     AdminAuditLog, ReferralSetting, PaymentSetting, BroadcastDraft,
-    PromoCode, PromoCodeUsage, FragmentSetting, UserJoinRequest, CustomService
+    PromoCode, PromoCodeUsage, FragmentSetting, UserJoinRequest, CustomService,
+    PaymentCard
 )
 
 # ================= USER QUERIES ================= #
@@ -773,4 +774,110 @@ async def delete_custom_service(session: AsyncSession, service_id: int) -> bool:
     await session.delete(service)
     await session.commit()
     return True
+
+
+# ================= PAYMENT CARDS ================= #
+
+async def list_payment_cards(session: AsyncSession, active_only: bool = False) -> List[PaymentCard]:
+    query = select(PaymentCard).order_by(PaymentCard.id)
+    if active_only:
+        query = query.where(PaymentCard.is_active == True)
+    res = await session.execute(query)
+    cards = list(res.scalars().all())
+
+    # Auto-seed from payment_settings if payment_cards is empty
+    if not cards and not active_only:
+        p = await get_payment_settings(session)
+        if p and p.card_number:
+            c = PaymentCard(
+                card_number=p.card_number,
+                card_holder=p.card_holder,
+                bank_name=p.bank_name,
+                card_type="UZCARD" if p.card_number.startswith("8600") else ("HUMO" if p.card_number.startswith("9860") else "VISA"),
+                is_active=p.card_active
+            )
+            session.add(c)
+            await session.commit()
+            await session.refresh(c)
+            cards = [c]
+    return cards
+
+
+async def list_active_payment_cards(session: AsyncSession) -> List[PaymentCard]:
+    cards = await list_payment_cards(session, active_only=True)
+    if not cards:
+        # Fallback to payment_settings
+        p = await get_payment_settings(session)
+        if p and p.card_active and p.card_number:
+            return [PaymentCard(
+                id=0,
+                card_number=p.card_number,
+                card_holder=p.card_holder,
+                bank_name=p.bank_name,
+                card_type="UZCARD" if p.card_number.startswith("8600") else ("HUMO" if p.card_number.startswith("9860") else "VISA"),
+                is_active=True
+            )]
+    return cards
+
+
+async def get_payment_card(session: AsyncSession, card_id: int) -> Optional[PaymentCard]:
+    return await session.get(PaymentCard, card_id)
+
+
+async def create_payment_card(
+    session: AsyncSession,
+    card_number: str,
+    card_holder: str,
+    bank_name: str,
+    card_type: str = "UZCARD",
+    is_active: bool = True
+) -> PaymentCard:
+    card = PaymentCard(
+        card_number=card_number.strip(),
+        card_holder=card_holder.strip().upper(),
+        bank_name=bank_name.strip(),
+        card_type=card_type.strip().upper(),
+        is_active=is_active
+    )
+    session.add(card)
+    await session.commit()
+    await session.refresh(card)
+    return card
+
+
+async def update_payment_card(
+    session: AsyncSession,
+    card_id: int,
+    card_number: Optional[str] = None,
+    card_holder: Optional[str] = None,
+    bank_name: Optional[str] = None,
+    card_type: Optional[str] = None,
+    is_active: Optional[bool] = None
+) -> Optional[PaymentCard]:
+    card = await session.get(PaymentCard, card_id)
+    if not card:
+        return None
+    if card_number is not None:
+        card.card_number = card_number.strip()
+    if card_holder is not None:
+        card.card_holder = card_holder.strip().upper()
+    if bank_name is not None:
+        card.bank_name = bank_name.strip()
+    if card_type is not None:
+        card.card_type = card_type.strip().upper()
+    if is_active is not None:
+        card.is_active = is_active
+    await session.commit()
+    await session.refresh(card)
+    return card
+
+
+async def delete_payment_card(session: AsyncSession, card_id: int) -> bool:
+    card = await session.get(PaymentCard, card_id)
+    if not card:
+        return False
+    await session.delete(card)
+    await session.commit()
+    return True
+
 
