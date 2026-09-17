@@ -585,6 +585,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
         Narxlar
       </div>
+      <div class="nav-item" data-view="services">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+        Boshqa xizmatlar
+      </div>
       <div class="nav-item" data-view="orders">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
         Buyurtmalar
@@ -645,6 +649,7 @@
     <div class="quick-nav">
       <div class="q-pill active" data-view="dash">Statistika</div>
       <div class="q-pill" data-view="price">Narxlar</div>
+      <div class="q-pill" data-view="services">Xizmatlar</div>
       <div class="q-pill" data-view="orders">Buyurtmalar</div>
       <div class="q-pill" data-view="users">Foydalanuvchilar</div>
       <div class="q-pill" data-view="broadcast">Broadcast</div>
@@ -1453,7 +1458,78 @@
         </div>
       </div>
     </section>
+
+    <!-- 12. VIEW: SERVICES (Boshqa Xizmatlar) -->
+    <section class="view-pane" id="services">
+      <div class="topbar">
+        <div class="page-title-box">
+          <h1>⚡ Qo'shimcha Xizmatlar Boshqaruvi</h1>
+          <p>Botda mijozlarga taqdim etiladigan maxsus xizmatlar, obunalar va raqamli mahsulotlar</p>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn btn-secondary" onclick="loadServices()">↻ Yangilash</button>
+          <button class="btn btn-primary" onclick="openAddServiceModal()">＋ Yangi xizmat qo'shish</button>
+        </div>
+      </div>
+
+      <div id="servicesGrid" class="grid-2" style="gap:16px;">
+        <!-- Dynamically loaded -->
+      </div>
+      <div id="servicesEmpty" style="display:none;text-align:center;padding:50px 20px;background:var(--panel);border-radius:var(--radius-lg);border:1px solid var(--line);margin-top:10px;">
+        <div style="font-size:42px;margin-bottom:12px;">⚡</div>
+        <div style="font-weight:700;font-size:16px;margin-bottom:6px;">Hozircha qo'shimcha xizmatlar qo'shilmagan</div>
+        <div style="color:var(--text-muted);font-size:13px;margin-bottom:18px;">Yangi raqamli xizmat yoki mahsulot yaratish uchun tugmani bosing:</div>
+        <button class="btn btn-primary" onclick="openAddServiceModal()">＋ Yangi xizmat qo'shish</button>
+      </div>
+    </section>
   </main>
+</div>
+
+<!-- Service Modal -->
+<div class="modal-backdrop" id="serviceModal">
+  <div class="modal-card" style="max-width:480px;">
+    <h3 style="margin:0 0 16px;font-size:17px;" id="serviceModalTitle">＋ Yangi xizmat qo'shish</h3>
+    <input type="hidden" id="serviceEditId" value="">
+    <div class="field-group" style="margin-bottom:12px;">
+      <label class="field-label">Xizmat nomi</label>
+      <input id="srvName" class="custom-input" placeholder="Masalan: Telegram Username xaridi, Discord Nitro...">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div class="field-group">
+        <label class="field-label">Kategoriya</label>
+        <input id="srvCategory" class="custom-input" placeholder="Obunalar, O'yinlar..." value="Raqamli xizmatlar">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Emoji / Belgi</label>
+        <input id="srvIcon" class="custom-input" placeholder="⚡, 💎, 🌐..." value="⚡">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div class="field-group">
+        <label class="field-label">Sotish narxi (so'm)</label>
+        <input id="srvPrice" type="number" class="custom-input" placeholder="50000">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Tannarxi (so'm)</label>
+        <input id="srvCost" type="number" class="custom-input" placeholder="40000" value="0">
+      </div>
+    </div>
+    <div class="field-group" style="margin-bottom:14px;">
+      <label class="field-label">Xizmat tavsifi</label>
+      <textarea id="srvDesc" class="custom-input" rows="2" style="resize:vertical;" placeholder="Xizmat haqida qisqacha ma'lumot..."></textarea>
+    </div>
+    <div class="toggle-row" style="margin-bottom:18px;background:var(--surface);padding:10px 14px;border-radius:var(--radius-sm);border:1px solid var(--line);">
+      <span style="font-size:13px;font-weight:600;">Xizmat holati (Faol)</span>
+      <label class="switch">
+        <input type="checkbox" id="srvIsActive" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;">
+      <button class="btn btn-secondary" onclick="closeServiceModal()">Bekor qilish</button>
+      <button class="btn btn-primary" onclick="saveService()">Saqlash</button>
+    </div>
+  </div>
 </div>
 
 <!-- Add Admin Modal -->
@@ -1619,6 +1695,7 @@
     if(viewId === 'promos') loadPromocodes();
     if(viewId === 'fragment') loadFragmentSettings();
     if(viewId === 'admins') loadAdmins();
+    if(viewId === 'services') loadServices();
   }
 
   // Get Bot Info
@@ -2790,6 +2867,193 @@
         </tr>
       `).join('');
     } catch(e){ console.error(e); }
+  // ================= 12. SERVICES MANAGEMENT ================= //
+  let cachedServices = [];
+
+  async function loadServices() {
+    try {
+      const res = await fetch('/api/admin/services', { headers: adminHeaders() });
+      if(!res.ok) return;
+      cachedServices = await res.json();
+      renderServices(cachedServices);
+    } catch(e) { console.error(e); }
+  }
+
+  function renderServices(services) {
+    const grid = document.getElementById('servicesGrid');
+    const empty = document.getElementById('servicesEmpty');
+    if(!services || services.length === 0) {
+      grid.style.display = 'none';
+      empty.style.display = 'block';
+      return;
+    }
+    grid.style.display = 'grid';
+    empty.style.display = 'none';
+
+    grid.innerHTML = services.map(s => {
+      const profit = (s.price_uzs || 0) - (s.cost_uzs || 0);
+      const activeBadge = s.is_active 
+        ? `<span class="badge-status done" style="font-size:11px;">● Faol</span>`
+        : `<span class="badge-status cancel" style="font-size:11px;">○ Nofaol</span>`;
+
+      return `
+        <div class="card" style="display:flex;flex-direction:column;justify-content:space-between;border:1px solid var(--line);position:relative;">
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div style="width:40px;height:40px;border-radius:var(--radius-md);background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:22px;border:1px solid var(--line);">
+                  ${s.icon || '⚡'}
+                </div>
+                <div>
+                  <h4 style="margin:0;font-size:15px;font-weight:700;">${s.name}</h4>
+                  <span style="font-size:11px;color:var(--text-muted);">${s.category || 'Xizmatlar'}</span>
+                </div>
+              </div>
+              <div>${activeBadge}</div>
+            </div>
+
+            ${s.description ? `<p style="font-size:12px;color:var(--text-muted);margin:0 0 12px;line-height:1.4;">${s.description}</p>` : ''}
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;background:var(--surface);padding:10px;border-radius:var(--radius-sm);margin-bottom:14px;border:1px solid var(--line);">
+              <div>
+                <span style="font-size:10.5px;color:var(--text-muted);display:block;">Sotish narxi</span>
+                <b style="font-size:14px;color:var(--primary);">${formatUZS(s.price_uzs)}</b>
+              </div>
+              <div>
+                <span style="font-size:10.5px;color:var(--text-muted);display:block;">Tannarxi</span>
+                <span style="font-size:13px;color:var(--text);font-weight:600;">${formatUZS(s.cost_uzs)}</span>
+              </div>
+              <div style="grid-column: 1 / -1;border-top:1px solid var(--line);padding-top:6px;margin-top:2px;display:flex;justify-content:space-between;font-size:11.5px;">
+                <span style="color:var(--text-faint);">Foyda (marja):</span>
+                <b style="color:var(--success);">+${formatUZS(profit)}</b>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:10px;">
+            <label class="switch" style="transform:scale(0.85);margin:0;" title="Faollik">
+              <input type="checkbox" ${s.is_active ? 'checked' : ''} onchange="toggleServiceActive(${s.id}, this.checked)">
+              <span class="slider"></span>
+            </label>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-secondary btn-sm" onclick="openEditServiceModal(${s.id})">✏️ Tahrirlash</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteService(${s.id})">🗑</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function openAddServiceModal() {
+    document.getElementById('serviceEditId').value = '';
+    document.getElementById('serviceModalTitle').innerText = '＋ Yangi xizmat qo\'shish';
+    document.getElementById('srvName').value = '';
+    document.getElementById('srvCategory').value = 'Raqamli xizmatlar';
+    document.getElementById('srvIcon').value = '⚡';
+    document.getElementById('srvPrice').value = '';
+    document.getElementById('srvCost').value = '0';
+    document.getElementById('srvDesc').value = '';
+    document.getElementById('srvIsActive').checked = true;
+    document.getElementById('serviceModal').style.display = 'flex';
+  }
+
+  function openEditServiceModal(id) {
+    const s = cachedServices.find(x => x.id === id);
+    if(!s) return;
+    document.getElementById('serviceEditId').value = s.id;
+    document.getElementById('serviceModalTitle').innerText = '✏️ Xizmatni tahrirlash';
+    document.getElementById('srvName').value = s.name || '';
+    document.getElementById('srvCategory').value = s.category || 'Raqamli xizmatlar';
+    document.getElementById('srvIcon').value = s.icon || '⚡';
+    document.getElementById('srvPrice').value = s.price_uzs || '';
+    document.getElementById('srvCost').value = s.cost_uzs || '0';
+    document.getElementById('srvDesc').value = s.description || '';
+    document.getElementById('srvIsActive').checked = !!s.is_active;
+    document.getElementById('serviceModal').style.display = 'flex';
+  }
+
+  function closeServiceModal() {
+    document.getElementById('serviceModal').style.display = 'none';
+  }
+
+  async function saveService() {
+    const id = document.getElementById('serviceEditId').value;
+    const name = document.getElementById('srvName').value.trim();
+    const category = document.getElementById('srvCategory').value.trim();
+    const icon = document.getElementById('srvIcon').value.trim() || '⚡';
+    const price_uzs = parseFloat(document.getElementById('srvPrice').value) || 0;
+    const cost_uzs = parseFloat(document.getElementById('srvCost').value) || 0;
+    const description = document.getElementById('srvDesc').value.trim();
+    const is_active = document.getElementById('srvIsActive').checked;
+
+    if(!name) {
+      alert("Iltimos, xizmat nomini kiriting!");
+      return;
+    }
+    if(price_uzs <= 0) {
+      alert("Iltimos, sotish narxini to'g'ri kiriting!");
+      return;
+    }
+
+    const payload = { name, category, icon, price_uzs, cost_uzs, description, is_active };
+    try {
+      let res;
+      if(id) {
+        res = await fetch(`/api/admin/services/${id}`, {
+          method: 'PUT',
+          headers: adminHeaders(),
+          body: JSON.stringify(payload)
+        });
+      } else {
+        res = await fetch('/api/admin/services', {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify(payload)
+        });
+      }
+      if(res.ok) {
+        closeServiceModal();
+        showToast(id ? "Xizmat muvaffaqiyatli yangilandi!" : "Yangi xizmat qo'shildi!");
+        loadServices();
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Xatolik yuz berdi");
+      }
+    } catch(e) {
+      console.error(e);
+      alert("Server bilan ulanishda xatolik!");
+    }
+  }
+
+  async function toggleServiceActive(id, newActive) {
+    try {
+      const res = await fetch(`/api/admin/services/${id}`, {
+        method: 'PUT',
+        headers: adminHeaders(),
+        body: JSON.stringify({ is_active: newActive })
+      });
+      if(res.ok) {
+        showToast(newActive ? "Xizmat yoqildi!" : "Xizmat o'chirildi!");
+        loadServices();
+      }
+    } catch(e) { console.error(e); }
+  }
+
+  async function deleteService(id) {
+    if(!confirm("Ushbu xizmatni rostdan ham o'chirmoqchimisiz?")) return;
+    try {
+      const res = await fetch(`/api/admin/services/${id}`, {
+        method: 'DELETE',
+        headers: adminHeaders()
+      });
+      if(res.ok) {
+        showToast("Xizmat o'chirildi!");
+        loadServices();
+      } else {
+        alert("O'chirishda xatolik yuz berdi");
+      }
+    } catch(e) { console.error(e); }
   }
 
   // Init

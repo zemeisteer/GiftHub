@@ -34,10 +34,12 @@ async def cb_shop_stars(callback: CallbackQuery, state: FSMContext):
         packages = []
         for st in packages_stars:
             calc = queries.calculate_stars_price(st, pricing)
+            p_uzs = float(calc.get("total_price_uzs") or calc.get("final_price_uzs") or 0.0)
+            c_uzs = float(calc.get("cost_total_uzs") or calc.get("base_cost_uzs") or 0.0)
             packages.append({
                 "stars": st,
-                "price_uzs": calc["final_price_uzs"],
-                "cost_uzs": calc["base_cost_uzs"]
+                "price_uzs": p_uzs,
+                "cost_uzs": c_uzs
             })
 
     text = (
@@ -59,18 +61,21 @@ async def cb_stars_package(callback: CallbackQuery, state: FSMContext):
         pricing = await queries.get_pricing(session)
         calc = queries.calculate_stars_price(stars_amount, pricing)
 
+    price_val = float(calc.get("total_price_uzs") or calc.get("final_price_uzs") or 0.0)
+    cost_val = float(calc.get("cost_total_uzs") or calc.get("base_cost_uzs") or 0.0)
+
     await state.update_data(
         product_type="stars",
         item_title=f"{stars_amount} Telegram Stars",
         amount=stars_amount,
-        total_price=float(calc["final_price_uzs"]),
-        cost_price=float(calc["base_cost_uzs"])
+        total_price=price_val,
+        cost_price=cost_val
     )
 
     my_username = callback.from_user.username
     text = (
         f"⭐ <b>{stars_amount} dona Stars</b> tanlandi.\n"
-        f"Narxi: <b>{calc['final_price_uzs']:,.0f} so'm</b>\n\n"
+        f"Narxi: <b>{price_val:,.0f} so'm</b>\n\n"
         "Stars qaysi profilga yuborilishi kerak?"
     )
     try:
@@ -111,18 +116,21 @@ async def process_stars_custom_amount(message: Message, state: FSMContext):
         pricing = await queries.get_pricing(session)
         calc = queries.calculate_stars_price(amount, pricing)
 
+    price_val = float(calc.get("total_price_uzs") or calc.get("final_price_uzs") or 0.0)
+    cost_val = float(calc.get("cost_total_uzs") or calc.get("base_cost_uzs") or 0.0)
+
     await state.update_data(
         product_type="stars",
         item_title=f"{amount} Telegram Stars",
         amount=amount,
-        total_price=float(calc["final_price_uzs"]),
-        cost_price=float(calc["base_cost_uzs"])
+        total_price=price_val,
+        cost_price=cost_val
     )
 
     my_username = message.from_user.username
     text = (
         f"⭐ <b>{amount} dona Stars</b> tanlandi.\n"
-        f"Narxi: <b>{calc['final_price_uzs']:,.0f} so'm</b>\n\n"
+        f"Narxi: <b>{price_val:,.0f} so'm</b>\n\n"
         "Stars qaysi profilga yuborilishi kerak?"
     )
     await message.answer(text, reply_markup=get_recipient_keyboard(my_username))

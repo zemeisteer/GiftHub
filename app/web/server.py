@@ -1620,6 +1620,88 @@ async def export_orders_csv(admin: User = Depends(get_current_admin)):
             headers={"Content-Disposition": "attachment; filename=stellar_orders.csv"}
         )
 
+# ================= CUSTOM SERVICES API ================= #
+
+class CreateServiceRequest(BaseModel):
+    name: str
+    price_uzs: float
+    cost_uzs: float = 0.0
+    category: str = "Xizmatlar"
+    icon: str = "⚡"
+    description: str = ""
+    is_active: bool = True
+
+class UpdateServiceRequest(BaseModel):
+    name: Optional[str] = None
+    price_uzs: Optional[float] = None
+    cost_uzs: Optional[float] = None
+    category: Optional[str] = None
+    icon: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+@app.get("/api/admin/services")
+async def api_admin_list_services():
+    async with AsyncSessionLocal() as session:
+        services = await queries.list_custom_services(session=session, active_only=False)
+        return [
+            {
+                "id": s.id,
+                "name": s.name,
+                "price_uzs": s.price_uzs,
+                "cost_uzs": s.cost_uzs,
+                "category": s.category,
+                "icon": s.icon,
+                "description": s.description,
+                "is_active": s.is_active,
+                "created_at": s.created_at.strftime("%Y-%m-%d %H:%M") if s.created_at else ""
+            }
+            for s in services
+        ]
+
+@app.post("/api/admin/services")
+async def api_admin_create_service(req: CreateServiceRequest):
+    if not req.name.strip():
+        raise HTTPException(status_code=400, detail="Xizmat nomi kiritilishi shart")
+    async with AsyncSessionLocal() as session:
+        s = await queries.create_custom_service(
+            session=session,
+            name=req.name,
+            price_uzs=req.price_uzs,
+            cost_uzs=req.cost_uzs,
+            category=req.category,
+            icon=req.icon,
+            description=req.description,
+            is_active=req.is_active
+        )
+        return {"success": True, "id": s.id, "message": "Xizmat muvaffaqiyatli qo'shildi"}
+
+@app.put("/api/admin/services/{service_id}")
+async def api_admin_update_service(service_id: int, req: UpdateServiceRequest):
+    async with AsyncSessionLocal() as session:
+        s = await queries.update_custom_service(
+            session=session,
+            service_id=service_id,
+            name=req.name,
+            price_uzs=req.price_uzs,
+            cost_uzs=req.cost_uzs,
+            category=req.category,
+            icon=req.icon,
+            description=req.description,
+            is_active=req.is_active
+        )
+        if not s:
+            raise HTTPException(status_code=404, detail="Xizmat topilmadi")
+        return {"success": True, "message": "Xizmat muvaffaqiyatli yangilandi"}
+
+@app.delete("/api/admin/services/{service_id}")
+async def api_admin_delete_service(service_id: int):
+    async with AsyncSessionLocal() as session:
+        ok = await queries.delete_custom_service(session=session, service_id=service_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Xizmat topilmadi")
+        return {"success": True, "message": "Xizmat o'chirildi"}
+
 # ================= HTML FRONTEND SERVING ================= #
 
 @app.get("/app", response_class=HTMLResponse)

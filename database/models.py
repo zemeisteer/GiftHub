@@ -228,3 +228,17 @@ class PromoCodeUsage(Base):
     promo_code = relationship("PromoCode", back_populates="usages")
 
 
+class CustomService(Base):
+    __tablename__ = "custom_services"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(128), nullable=False)
+    category = Column(String(64), default="Xizmatlar")
+    price_uzs = Column(Float, nullable=False, default=0.0)
+    cost_uzs = Column(Float, nullable=False, default=0.0)
+    icon = Column(String(16), default="⚡")
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+

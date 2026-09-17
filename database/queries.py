@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.models import (
     User, PricingSetting, Order, Transaction, ChannelRequirement,
     AdminAuditLog, ReferralSetting, PaymentSetting, BroadcastDraft,
-    PromoCode, PromoCodeUsage, FragmentSetting, UserJoinRequest
+    PromoCode, PromoCodeUsage, FragmentSetting, UserJoinRequest, CustomService
 )
 
 # ================= USER QUERIES ================= #
@@ -696,4 +696,81 @@ async def update_payment_settings(
     await session.commit()
     await session.refresh(setting)
     return setting
+
+
+# ================= CUSTOM SERVICES ================= #
+
+async def list_custom_services(session: AsyncSession, active_only: bool = False) -> List[CustomService]:
+    query = select(CustomService).order_by(CustomService.id)
+    if active_only:
+        query = query.where(CustomService.is_active == True)
+    res = await session.execute(query)
+    return list(res.scalars().all())
+
+async def get_custom_service(session: AsyncSession, service_id: int) -> Optional[CustomService]:
+    return await session.get(CustomService, service_id)
+
+async def create_custom_service(
+    session: AsyncSession,
+    name: str,
+    price_uzs: float,
+    cost_uzs: float = 0.0,
+    category: str = "Xizmatlar",
+    icon: str = "⚡",
+    description: str = "",
+    is_active: bool = True
+) -> CustomService:
+    service = CustomService(
+        name=name.strip(),
+        price_uzs=price_uzs,
+        cost_uzs=cost_uzs,
+        category=category.strip() if category else "Xizmatlar",
+        icon=icon.strip() if icon else "⚡",
+        description=description.strip() if description else "",
+        is_active=is_active
+    )
+    session.add(service)
+    await session.commit()
+    await session.refresh(service)
+    return service
+
+async def update_custom_service(
+    session: AsyncSession,
+    service_id: int,
+    name: Optional[str] = None,
+    price_uzs: Optional[float] = None,
+    cost_uzs: Optional[float] = None,
+    category: Optional[str] = None,
+    icon: Optional[str] = None,
+    description: Optional[str] = None,
+    is_active: Optional[bool] = None
+) -> Optional[CustomService]:
+    service = await session.get(CustomService, service_id)
+    if not service:
+        return None
+    if name is not None:
+        service.name = name.strip()
+    if price_uzs is not None:
+        service.price_uzs = price_uzs
+    if cost_uzs is not None:
+        service.cost_uzs = cost_uzs
+    if category is not None:
+        service.category = category.strip()
+    if icon is not None:
+        service.icon = icon.strip()
+    if description is not None:
+        service.description = description.strip()
+    if is_active is not None:
+        service.is_active = is_active
+    await session.commit()
+    await session.refresh(service)
+    return service
+
+async def delete_custom_service(session: AsyncSession, service_id: int) -> bool:
+    service = await session.get(CustomService, service_id)
+    if not service:
+        return False
+    await session.delete(service)
+    await session.commit()
+    return True
 

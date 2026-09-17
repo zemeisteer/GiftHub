@@ -89,8 +89,13 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext)
 
     welcome_text = build_main_menu_text(first_name, balance, user_id)
 
-    # Pastki qulay reply tugmalarni ham qo'shib yuboramiz
-    await message.answer("✨ Stellar menyusi faollashtirildi.", reply_markup=get_reply_main_keyboard())
+    # Eski reply tugmalar bo'lsa tozalash
+    try:
+        rm_msg = await message.answer("🔄", reply_markup=ReplyKeyboardRemove())
+        await rm_msg.delete()
+    except Exception:
+        pass
+
     await message.answer(
         text=welcome_text,
         reply_markup=get_shop_main_menu(is_admin=is_admin)

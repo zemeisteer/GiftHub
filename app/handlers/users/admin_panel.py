@@ -31,6 +31,35 @@ async def is_admin_user(user_id: int, session) -> bool:
 
 
 @router.message(Command("admin"))
+async def cmd_admin(message: Message):
+    user_id = message.from_user.id
+    async with AsyncSessionLocal() as session:
+        if not await is_admin_user(user_id, session):
+            await message.answer("⛔ <b>Kechirasiz!</b> Bu buyruq faqat bot adminlari uchun mo'ljallangan.")
+            return
+
+    admin_url = config.get_admin_app_url() if hasattr(config, "get_admin_app_url") else config.ADMIN_APP_URL
+    buttons = []
+    if admin_url and admin_url.startswith("https://"):
+        buttons.append([
+            InlineKeyboardButton(text="⚙️ Admin Panelni ochish (Web App)", web_app=WebAppInfo(url=admin_url))
+        ])
+    else:
+        buttons.append([
+            InlineKeyboardButton(text="⚙️ Admin Panelni ochish (Web App)", url=admin_url or "https://t.me")
+        ])
+    buttons.append([
+        InlineKeyboardButton(text="📊 Bot ichida ko'rish", callback_data="admin:menu")
+    ])
+
+    await message.answer(
+        "⚙️ <b>GiftHub (Stellar) — Boshqaruv Paneli (Admin Panel)</b>\n\n"
+        "Narxlar, buyurtmalar, yangi xizmatlar, majburiy obuna va statistikani "
+        "boshqarish uchun quyidagi tugmani bosing:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+    )
+
+
 @router.callback_query(F.data == "admin:menu")
 async def show_admin_dashboard(event, state: FSMContext = None):
     if state:
@@ -63,8 +92,11 @@ async def show_admin_dashboard(event, state: FSMContext = None):
 
     kb = get_admin_main_keyboard()
     if isinstance(event, CallbackQuery):
+        from aiogram.exceptions import TelegramBadRequest
         try:
             await event.message.edit_text(text, reply_markup=kb)
+        except TelegramBadRequest:
+            pass
         except Exception:
             await event.message.answer(text, reply_markup=kb)
         await event.answer()
@@ -121,11 +153,17 @@ async def cb_admin_orders(callback: CallbackQuery):
         orders = await queries.list_all_orders(session=session, limit=10)
 
     text = "📦 <b>Oxirgi buyurtmalar ro'yxati:</b>\n\nBatafsil ko'rish yoki holatini o'zgartirish uchun buyurtmani bosing:"
+    from aiogram.exceptions import TelegramBadRequest
     try:
         await callback.message.edit_text(text, reply_markup=get_admin_orders_keyboard(orders))
+        await callback.answer("✅ Ro'yxat yangilandi!")
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e).lower():
+            await callback.answer("✅ Ro'yxat eng so'nggi holatda!", show_alert=False)
+        else:
+            await callback.answer()
     except Exception:
-        await callback.message.answer(text, reply_markup=get_admin_orders_keyboard(orders))
-    await callback.answer()
+        await callback.answer()
 
 
 @router.callback_query(F.data.startswith("adm_ord:view:"))
@@ -309,11 +347,25 @@ async def cb_admin_prices(callback: CallbackQuery):
         f"• 1 dona Stars tannarxi: <b>{pricing.star_unit_price_uzs:,.0f} so'm</b>\n"
         f"• Marja (ustama foiz): <b>{pricing.margin_percent}%</b>\n"
         f"• 1 TON kursi: <b>{pricing.ton_rate_uzs:,.0f} so'm</b>\n\n"
-        "<i>Narxlarni avtomatik tarzda formula orqali tizim hisoblab boradi.</i>"
+        "Narxlarni batafsil va qulay o'zgartirish uchun Web App admin panelidan foydalaning:"
     )
 
+    admin_url = config.get_admin_app_url() if hasattr(config, "get_admin_app_url") else config.ADMIN_APP_URL
+    rows = []
+    if admin_url and admin_url.startswith("https://"):
+        rows.append([
+            InlineKeyboardButton(text="⚙️ Narxlarni o'zgartirish (Web App)", web_app=WebAppInfo(url=f"{admin_url}"))
+        ])
+    else:
+        rows.append([
+            InlineKeyboardButton(text="⚙️ Narxlarni o'zgartirish (Web App)", url=admin_url or "https://t.me")
+        ])
+    rows.append([
+        InlineKeyboardButton(text="🔙 Admin panelga qaytish", callback_data="admin:menu")
+    ])
+
     try:
-        await callback.message.edit_text(text, reply_markup=get_admin_back_keyboard())
+        await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     except Exception:
-        await callback.message.answer(text, reply_markup=get_admin_back_keyboard())
+        await callback.message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await callback.answer()
