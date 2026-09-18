@@ -3707,8 +3707,10 @@
     return `https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.0.1/img/apple/64/${file}`;
   }
 
+  let isParsingEmojis = false;
   function renderAppleEmojis(node) {
-    if(!window.twemoji) return;
+    if(!window.twemoji || isParsingEmojis) return;
+    isParsingEmojis = true;
     try {
       window.twemoji.parse(node || document.body, {
         className: 'apple-emoji emoji',
@@ -3718,10 +3720,16 @@
         })
       });
     } catch(e) { console.debug("twemoji parse:", e); }
+    finally {
+      requestAnimationFrame(() => {
+        setTimeout(() => { isParsingEmojis = false; }, 80);
+      });
+    }
   }
 
   let emojiDebounceTimer = null;
   const emojiObserver = new MutationObserver((mutations) => {
+    if(isParsingEmojis) return;
     let shouldUpdate = false;
     for(const m of mutations) {
       if(m.type === 'childList') {
@@ -3730,12 +3738,10 @@
             const tag = n.tagName;
             if(tag === 'IMG' && (n.classList.contains('apple-emoji') || n.classList.contains('emoji'))) continue;
             if(['INPUT', 'TEXTAREA', 'SELECT', 'OPTION', 'SCRIPT', 'STYLE'].includes(tag)) continue;
-            shouldUpdate = true;
-            break;
-          } else if(n.nodeType === 3 && n.nodeValue && n.nodeValue.trim().length > 0) {
-            // Text change
-            shouldUpdate = true;
-            break;
+            if(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u.test(n.textContent || '')) {
+              shouldUpdate = true;
+              break;
+            }
           }
         }
       }
@@ -3745,9 +3751,9 @@
     if(emojiDebounceTimer) clearTimeout(emojiDebounceTimer);
     emojiDebounceTimer = setTimeout(() => {
       renderAppleEmojis(document.body);
-    }, 150);
+    }, 250);
   });
-  emojiObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+  emojiObserver.observe(document.body, { childList: true, subtree: true });
 
   // Init
   initTheme();
