@@ -272,6 +272,86 @@ async def cb_admin_channel_del(callback: CallbackQuery):
     await cb_admin_channels(callback)
 
 
+@router.callback_query(F.data == "adm_ch:add")
+async def cb_admin_channel_add(callback: CallbackQuery):
+    text = (
+        "➕ <b>Yangi majburiy kanal qo'shish:</b>\n\n"
+        "1. Botni kanalingiz yoki guruhingizga <b>admin</b> qilib qo'shing.\n"
+        "2. Bot avtomatik tarzda kanalni aniqlaydi va ro'yxatga oladi.\n"
+        "3. Yoki /panel buyrug'i orqali Admin Web App'ga kirib, havola orqali kanal qo'shishingiz mumkin."
+    )
+    try:
+        await callback.message.edit_text(text, reply_markup=get_admin_back_keyboard())
+    except Exception:
+        await callback.message.answer(text, reply_markup=get_admin_back_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("adm_ch:view:"))
+async def cb_admin_channel_view(callback: CallbackQuery):
+    ch_id = int(callback.data.split(":")[2])
+    async with AsyncSessionLocal() as session:
+        ch = await queries.get_channel(session, ch_id)
+    if not ch:
+        await callback.answer("Kanal topilmadi!", show_alert=True)
+        return
+
+    st = "🟢 Faol" if ch.is_active else "🔴 Nofaol"
+    text = (
+        f"📢 <b>Kanal ma'lumotlari:</b>\n\n"
+        f"📌 Nomi: <b>{ch.title}</b>\n"
+        f"🔗 Havola: <code>{ch.username_or_link}</code>\n"
+        f"📊 Turi: <b>{ch.req_type}</b>\n"
+        f"⚙️ Holati: <b>{st}</b>\n"
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🗑 O'chirish", callback_data=f"adm_ch:del:{ch.id}")
+        ],
+        [
+            InlineKeyboardButton(text="🔙 Kanallarga qaytish", callback_data="admin:channels")
+        ]
+    ])
+    try:
+        await callback.message.edit_text(text, reply_markup=kb)
+    except Exception:
+        await callback.message.answer(text, reply_markup=kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin:card")
+async def cb_admin_card(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        if not await is_admin_user(user_id, session):
+            await callback.answer("Ruxsat yo'q!", show_alert=True)
+            return
+        cards = await queries.list_payment_cards(session)
+        p = await queries.get_payment_settings(session)
+
+    cards_text = ""
+    if cards:
+        for i, c in enumerate(cards, 1):
+            st = "🟢 Faol" if c.is_active else "🔴 Nofaol"
+            cards_text += f"{i}. <b>{c.bank_name}</b> ({c.card_type}) — {st}\n   <code>{c.card_number}</code> | {c.card_holder}\n\n"
+    else:
+        cards_text = "<i>Hozircha kartalar qo'shilmagan.</i>\n\n"
+
+    master_st = "🟢 Yoqilgan" if (p and p.card_active) else "🔴 O'chirilgan"
+
+    text = (
+        "💳 <b>Bank kartalari sozlamalari (P2P)</b>\n\n"
+        f"Karta to'lovlari umumiy holati: <b>{master_st}</b>\n\n"
+        f"{cards_text}"
+        "💡 <i>Kartalarni qo'shish, tahrirlash va o'chirish uchun /panel buyrug'i orqali Admin Web App'dan foydalaning.</i>"
+    )
+    try:
+        await callback.message.edit_text(text, reply_markup=get_admin_back_keyboard())
+    except Exception:
+        await callback.message.answer(text, reply_markup=get_admin_back_keyboard())
+    await callback.answer()
+
+
 # ================= ADMIN BROADCAST ================= #
 
 @router.callback_query(F.data == "admin:broadcast")

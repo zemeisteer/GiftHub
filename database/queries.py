@@ -699,6 +699,28 @@ async def update_payment_settings(
     return setting
 
 
+# ================= REFERRAL & FRAGMENT SETTINGS ================= #
+
+async def get_referral_settings(session: AsyncSession) -> ReferralSetting:
+    ref = await session.get(ReferralSetting, 1)
+    if not ref:
+        ref = ReferralSetting(id=1, bonus_percent=5.0, min_purchase_uzs=20000.0, auto_reward=True, require_purchase=True)
+        session.add(ref)
+        await session.commit()
+        await session.refresh(ref)
+    return ref
+
+
+async def get_fragment_settings(session: AsyncSession) -> FragmentSetting:
+    frag = await session.get(FragmentSetting, 1)
+    if not frag:
+        frag = FragmentSetting(id=1, is_auto_buy=True)
+        session.add(frag)
+        await session.commit()
+        await session.refresh(frag)
+    return frag
+
+
 # ================= CUSTOM SERVICES ================= #
 
 async def list_custom_services(session: AsyncSession, active_only: bool = False) -> List[CustomService]:
