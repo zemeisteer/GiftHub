@@ -2197,6 +2197,7 @@
         </div>
       `;
     }).join('');
+    renderAppleEmojis(container);
   }
 
   function updateSingleGiftPrice(id, val) {
@@ -2968,6 +2969,7 @@
             </td>
           </tr>
         `;
+        renderAppleEmojis(tbody);
         return;
       }
       tbody.innerHTML = promos.map(p => `
@@ -2983,6 +2985,7 @@
           </td>
         </tr>
       `).join('');
+      renderAppleEmojis(tbody);
     } catch(e){ console.error(e); }
   }
 
@@ -3241,6 +3244,7 @@
         </div>
       `;
     }).join('');
+    renderAppleEmojis(grid);
   }
 
   function openAddCardModal() {
@@ -3560,6 +3564,7 @@
           </div>
         `;
       }).join('');
+      renderAppleEmojis(grid);
     }
     if(empty) empty.style.display = 'none';
   }
@@ -3676,13 +3681,41 @@
   }
 
   // ================= APPLE EMOJI RENDERING ENGINE ================= //
+  const APPLE_FE0F_SET = new Set([
+    "00a9","00ae","203c","2049","2122","2139","2194","2195","2196","2197","2198","2199","21a9","21aa","231a","231b",
+    "2328","23cf","23ed","23ee","23ef","23f1","23f2","23f8","23f9","23fa","24c2","25aa","25ab","25b6","25c0","25fb",
+    "25fc","25fd","25fe","2600","2601","2602","2603","2604","260e","2611","2614","2615","2618","2620","2622","2623",
+    "2626","262a","262e","262f","2638","2639","263a","2640","2642","2648","2649","264a","264b","264c","264d","264e",
+    "264f","2650","2651","2652","2653","265f","2660","2663","2665","2666","2668","267b","267e","2692","2693","2694",
+    "2695","2696","2697","2699","269b","269c","26a0","26a1","26a7","26b0","26b1","26c4","26c5","26c8","26ce","26cf",
+    "26d1","26d3","26e9","26ea","26f0","26f1","26f2","26f3","26f4","26f5","26f7","26f8","26f9","26fa","26fd","2702",
+    "2708","2709","270c","270d","270f","2712","2714","2716","271d","2721","2733","2734","2744","2747","2757","2763",
+    "2764","27a1","2934","2935","2b05","2b06","2b07","2b1b","2b1c","2b55","3030","303d","3297","3299",
+    "1f004","1f0cf","1f170","1f171","1f17e","1f17f","1f202","1f237","1f321","1f324","1f325","1f326","1f327","1f328",
+    "1f329","1f32a","1f32b","1f32c","1f336","1f37d","1f396","1f397","1f399","1f39a","1f39b","1f39e","1f39f","1f3cb",
+    "1f3cc","1f3cd","1f3ce","1f3d4","1f3d5","1f3d6","1f3d7","1f3d8","1f3d9","1f3da","1f3db","1f3dc","1f3dd","1f3de",
+    "1f3df","1f3e4","1f3ed","1f3f3","1f3f5","1f3f7","1f43f","1f441","1f46f","1f4cd","1f573","1f574","1f575","1f576",
+    "1f577","1f578","1f579","1f587","1f58a","1f58b","1f58c","1f58d","1f590","1f5a5","1f5a8","1f5b1","1f5b2","1f5bc",
+    "1f5c2","1f5c3","1f5c4","1f5d1","1f5d2","1f5d3","1f5dc","1f5dd","1f5de","1f5e1","1f5e3","1f5e8","1f5ef","1f5f3",
+    "1f5fa","1f6cb","1f6cd","1f6ce","1f6cf","1f6d0","1f6e0","1f6e1","1f6e2","1f6e3","1f6e4","1f6e5","1f6e9","1f6f0",
+    "1f6f3"
+  ]);
+
+  function getAppleEmojiUrl(icon) {
+    const code = String(icon).toLowerCase();
+    const file = APPLE_FE0F_SET.has(code) ? `${code}-fe0f.png` : `${code}.png`;
+    return `https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.0.1/img/apple/64/${file}`;
+  }
+
   function renderAppleEmojis(node) {
     if(!window.twemoji) return;
     try {
       window.twemoji.parse(node || document.body, {
         className: 'apple-emoji emoji',
-        base: 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.0.1/img/apple/64/',
-        callback: (icon, options) => `${options.base}${icon}.png`
+        callback: (icon) => getAppleEmojiUrl(icon),
+        attributes: () => ({
+          onerror: "if(!this.dataset.retry){this.dataset.retry='1';this.src=this.src.includes('-fe0f')?this.src.replace('-fe0f',''):this.src.replace('.png','-fe0f.png');}"
+        })
       });
     } catch(e) { console.debug("twemoji parse:", e); }
   }
@@ -3699,6 +3732,10 @@
             if(['INPUT', 'TEXTAREA', 'SELECT', 'OPTION', 'SCRIPT', 'STYLE'].includes(tag)) continue;
             shouldUpdate = true;
             break;
+          } else if(n.nodeType === 3 && n.nodeValue && n.nodeValue.trim().length > 0) {
+            // Text change
+            shouldUpdate = true;
+            break;
           }
         }
       }
@@ -3708,9 +3745,9 @@
     if(emojiDebounceTimer) clearTimeout(emojiDebounceTimer);
     emojiDebounceTimer = setTimeout(() => {
       renderAppleEmojis(document.body);
-    }, 250);
+    }, 150);
   });
-  emojiObserver.observe(document.body, { childList: true, subtree: true });
+  emojiObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
 
   // Init
   initTheme();
