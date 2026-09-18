@@ -2409,12 +2409,15 @@
             <td>${pill}</td>
             <td>${fragPill}</td>
             <td style="white-space:nowrap;">
-              ${o.status === 'pending' ? `
+              ${o.fulfillment_status !== 'fulfilled' && o.status !== 'cancel' ? `
                 <button class="btn btn-primary btn-sm" onclick="fulfillFragmentOrder(${o.id})" title="Fragment orqali bot hamyonidan yuborish" style="padding:4px 8px;font-size:11.5px;margin-right:4px;">⚡ Fragment</button>
                 ${o.fragment_payload ? `<a href="${o.fragment_payload}" target="_blank" class="btn btn-sm btn-secondary" style="background:#0098EA;color:#fff;border:none;text-decoration:none;padding:4px 8px;font-size:11.5px;margin-right:4px;" title="Tonkeeper orqali to'lash">💎 Tonkeeper</a>` : ''}
+                <button class="btn btn-secondary btn-sm" onclick="markOrderFulfilled(${o.id})" title="Yetkazildi deb tasdiqlash" style="padding:4px 7px;margin-right:4px;color:#10b981;font-weight:700;">✓</button>
+              ` : ''}
+              ${o.status === 'pending' && o.fulfillment_status === 'fulfilled' ? `
                 <button class="btn btn-secondary btn-sm" onclick="changeOrderStatus(${o.id}, 'done')" title="Bajarildi deb belgilash" style="padding:4px 7px;">✓</button>
               ` : ''}
-              ${o.status !== 'cancel' ? `<button class="btn btn-danger btn-sm" onclick="changeOrderStatus(${o.id}, 'cancel')" title="Bekor qilish" style="padding:4px 7px;margin-left:4px;">✕</button>` : ''}
+              ${o.status !== 'cancel' ? `<button class="btn btn-danger btn-sm" onclick="changeOrderStatus(${o.id}, 'cancel')" title="Bekor qilish va qaytarish" style="padding:4px 7px;margin-left:4px;">✕</button>` : ''}
             </td>
           </tr>
         `;
@@ -2423,6 +2426,25 @@
   }
 
   document.getElementById('adminOrderSearch').addEventListener('input', loadAdminOrders);
+
+  async function markOrderFulfilled(orderId) {
+    if(!confirm("Ushbu buyurtma mijozga yetkazilganini (Bajarildi deb) tasdiqlaysizmi?")) return;
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/mark-fulfilled`, {
+        method: 'POST',
+        headers: adminHeaders()
+      });
+      const data = await res.json();
+      if(data.success) {
+        showToast("✅ Buyurtma muvaffaqiyatli yetkazildi deb belgilandi!");
+        loadAdminOrders();
+      } else {
+        alert(data.detail || "Xatolik yuz berdi");
+      }
+    } catch(e) {
+      alert("Tarmoq xatosi!");
+    }
+  }
 
   async function fulfillFragmentOrder(orderId) {
     if(!confirm("Ushbu buyurtmani Fragment orqali darhol yetkazib berilsinmi?")) return;

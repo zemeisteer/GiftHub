@@ -995,6 +995,29 @@ async def fulfill_order_fragment_endpoint(
     res = await fragment_client.fulfill_order(order_id=order_id, bot=bot_instance)
     return res
 
+@app.post("/api/admin/orders/{order_id}/mark-fulfilled")
+async def mark_order_fulfilled_endpoint(
+    order_id: int,
+    admin: User = Depends(get_current_admin)
+):
+    async with AsyncSessionLocal() as session:
+        order = await queries.update_order_fulfillment(
+            session=session,
+            order_id=order_id,
+            fulfillment_status="fulfilled",
+            status="done"
+        )
+        if not order:
+            raise HTTPException(status_code=404, detail="Buyurtma topilmadi")
+        await queries.log_admin_action(
+            session=session,
+            admin_id=admin.id,
+            admin_username=admin.username,
+            action=f"Fragment yetkazishni bajarildi deb belgiladi: {order.order_code}",
+            details="Admin tomonidan qo'lda tasdiqlandi"
+        )
+        return {"success": True, "fulfillment_status": "fulfilled"}
+
 @app.get("/api/admin/fragment/settings")
 async def get_fragment_settings_endpoint(admin: User = Depends(get_current_admin)):
     from app.services.fragment import fragment_client

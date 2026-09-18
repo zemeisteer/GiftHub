@@ -504,6 +504,14 @@ async def cb_execute_purchase(callback: CallbackQuery, state: FSMContext):
 
     await state.clear()
 
+    # Trigger Fragment auto-fulfillment in background for Stars, Premium, Gifts
+    if product_type in ["stars", "premium", "gift"]:
+        import asyncio
+        from app.services.fragment import fragment_client
+        asyncio.create_task(
+            fragment_client.fulfill_order(order_id=order.id, bot=callback.bot)
+        )
+
     success_text = (
         "🎉 <b>Xaridingiz muvaffaqiyatli qabul qilindi!</b>\n\n"
         f"🔖 Buyurtma raqami: <code>{order.order_code}</code>\n"
