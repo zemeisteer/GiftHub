@@ -3124,79 +3124,85 @@
   // ================= 12. SERVICES MANAGEMENT ================= //
   let cachedServices = [];
 
+  function formatUZS(val) {
+    if(val === undefined || val === null || isNaN(Number(val))) return "0 so'm";
+    return Number(val).toLocaleString('ru-RU') + " so'm";
+  }
+
   async function loadServices() {
     try {
       const res = await fetch('/api/admin/services', { headers: adminHeaders() });
       if(!res.ok) return;
       cachedServices = await res.json();
       renderServices(cachedServices);
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error('Error loading services:', e); }
   }
 
   function renderServices(services) {
     const grid = document.getElementById('servicesGrid');
     const empty = document.getElementById('servicesEmpty');
     if(!services || services.length === 0) {
-      grid.style.display = 'none';
-      empty.style.display = 'block';
+      if(grid) grid.style.display = 'none';
+      if(empty) empty.style.display = 'block';
       return;
     }
-    grid.style.display = 'grid';
-    empty.style.display = 'none';
+    if(grid) {
+      grid.style.display = 'grid';
+      grid.innerHTML = services.map(s => {
+        const profit = (Number(s.price_uzs) || 0) - (Number(s.cost_uzs) || 0);
+        const activeBadge = s.is_active 
+          ? `<span class="badge-status done" style="font-size:11px;">● Faol</span>`
+          : `<span class="badge-status cancel" style="font-size:11px;">○ Nofaol</span>`;
 
-    grid.innerHTML = services.map(s => {
-      const profit = (s.price_uzs || 0) - (s.cost_uzs || 0);
-      const activeBadge = s.is_active 
-        ? `<span class="badge-status done" style="font-size:11px;">● Faol</span>`
-        : `<span class="badge-status cancel" style="font-size:11px;">○ Nofaol</span>`;
+        return `
+          <div class="card" style="display:flex;flex-direction:column;justify-content:space-between;border:1px solid var(--line);position:relative;">
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <div style="width:40px;height:40px;border-radius:var(--radius-md);background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:22px;border:1px solid var(--line);">
+                    ${s.icon || '⚡'}
+                  </div>
+                  <div>
+                    <h4 style="margin:0;font-size:15px;font-weight:700;">${s.name}</h4>
+                    <span style="font-size:11px;color:var(--text-muted);">${s.category || 'Xizmatlar'}</span>
+                  </div>
+                </div>
+                <div>${activeBadge}</div>
+              </div>
 
-      return `
-        <div class="card" style="display:flex;flex-direction:column;justify-content:space-between;border:1px solid var(--line);position:relative;">
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
-              <div style="display:flex;align-items:center;gap:10px;">
-                <div style="width:40px;height:40px;border-radius:var(--radius-md);background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:22px;border:1px solid var(--line);">
-                  ${s.icon || '⚡'}
+              ${s.description ? `<p style="font-size:12px;color:var(--text-muted);margin:0 0 12px;line-height:1.4;">${s.description}</p>` : ''}
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;background:var(--surface);padding:10px;border-radius:var(--radius-sm);margin-bottom:14px;border:1px solid var(--line);">
+                <div>
+                  <span style="font-size:10.5px;color:var(--text-muted);display:block;">Sotish narxi</span>
+                  <b style="font-size:14px;color:var(--primary);">${formatUZS(s.price_uzs)}</b>
                 </div>
                 <div>
-                  <h4 style="margin:0;font-size:15px;font-weight:700;">${s.name}</h4>
-                  <span style="font-size:11px;color:var(--text-muted);">${s.category || 'Xizmatlar'}</span>
+                  <span style="font-size:10.5px;color:var(--text-muted);display:block;">Tannarxi</span>
+                  <span style="font-size:13px;color:var(--text);font-weight:600;">${formatUZS(s.cost_uzs)}</span>
+                </div>
+                <div style="grid-column: 1 / -1;border-top:1px solid var(--line);padding-top:6px;margin-top:2px;display:flex;justify-content:space-between;font-size:11.5px;">
+                  <span style="color:var(--text-faint);">Foyda (marja):</span>
+                  <b style="color:var(--success);">+${formatUZS(profit)}</b>
                 </div>
               </div>
-              <div>${activeBadge}</div>
             </div>
 
-            ${s.description ? `<p style="font-size:12px;color:var(--text-muted);margin:0 0 12px;line-height:1.4;">${s.description}</p>` : ''}
-
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;background:var(--surface);padding:10px;border-radius:var(--radius-sm);margin-bottom:14px;border:1px solid var(--line);">
-              <div>
-                <span style="font-size:10.5px;color:var(--text-muted);display:block;">Sotish narxi</span>
-                <b style="font-size:14px;color:var(--primary);">${formatUZS(s.price_uzs)}</b>
-              </div>
-              <div>
-                <span style="font-size:10.5px;color:var(--text-muted);display:block;">Tannarxi</span>
-                <span style="font-size:13px;color:var(--text);font-weight:600;">${formatUZS(s.cost_uzs)}</span>
-              </div>
-              <div style="grid-column: 1 / -1;border-top:1px solid var(--line);padding-top:6px;margin-top:2px;display:flex;justify-content:space-between;font-size:11.5px;">
-                <span style="color:var(--text-faint);">Foyda (marja):</span>
-                <b style="color:var(--success);">+${formatUZS(profit)}</b>
+            <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:10px;">
+              <label class="switch" style="transform:scale(0.85);margin:0;" title="Faollik">
+                <input type="checkbox" ${s.is_active ? 'checked' : ''} onchange="toggleServiceActive(${s.id}, this.checked)">
+                <span class="slider"></span>
+              </label>
+              <div style="display:flex;gap:8px;">
+                <button class="btn btn-secondary btn-sm" onclick="openEditServiceModal(${s.id})">✏️ Tahrirlash</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteService(${s.id})">🗑</button>
               </div>
             </div>
           </div>
-
-          <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:10px;">
-            <label class="switch" style="transform:scale(0.85);margin:0;" title="Faollik">
-              <input type="checkbox" ${s.is_active ? 'checked' : ''} onchange="toggleServiceActive(${s.id}, this.checked)">
-              <span class="slider"></span>
-            </label>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-secondary btn-sm" onclick="openEditServiceModal(${s.id})">✏️ Tahrirlash</button>
-              <button class="btn btn-danger btn-sm" onclick="deleteService(${s.id})">🗑</button>
-            </div>
-          </div>
-        </div>
-      `;
-    }).join('');
+        `;
+      }).join('');
+    }
+    if(empty) empty.style.display = 'none';
   }
 
   function openAddServiceModal() {
@@ -3213,7 +3219,7 @@
   }
 
   function openEditServiceModal(id) {
-    const s = cachedServices.find(x => x.id === id);
+    const s = cachedServices.find(x => x.id == id);
     if(!s) return;
     document.getElementById('serviceEditId').value = s.id;
     document.getElementById('serviceModalTitle').innerText = '✏️ Xizmatni tahrirlash';
