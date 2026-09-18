@@ -319,12 +319,23 @@ async def get_products(stars_amount: Optional[int] = None):
 
         # Gifts list
         try:
-            gifts_list = json.loads(pricing.gifts_json)
+            gifts_list = json.loads(pricing.gifts_json) if pricing and pricing.gifts_json else []
         except Exception:
+            gifts_list = []
+        if not gifts_list:
             gifts_list = [
-                {"id": "bear", "name": "Teddy Bear sovg'a", "price_uzs": 64000, "icon": "🧸"},
-                {"id": "heart", "name": "Neon Heart sovg'a", "price_uzs": 85000, "icon": "💖"},
-                {"id": "rocket", "name": "Cosmo Rocket sovg'a", "price_uzs": 120000, "icon": "🚀"}
+                {"id": "bear", "name": "Teddy Bear", "price_uzs": 64000, "cost_uzs": 50000, "icon": "🧸", "type": "3d"},
+                {"id": "heart", "name": "Neon Heart", "price_uzs": 85000, "cost_uzs": 68000, "icon": "💖", "type": "3d"},
+                {"id": "rocket", "name": "Cosmo Rocket", "price_uzs": 120000, "cost_uzs": 95000, "icon": "🚀", "type": "3d"},
+                {"id": "star", "name": "Cosmic Star", "price_uzs": 60000, "cost_uzs": 45000, "icon": "⭐", "type": "classic"},
+                {"id": "ring", "name": "Diamond Ring", "price_uzs": 165000, "cost_uzs": 130000, "icon": "💍", "type": "3d"},
+                {"id": "trophy", "name": "Gold Trophy", "price_uzs": 195000, "cost_uzs": 155000, "icon": "🏆", "type": "vip"},
+                {"id": "yacht", "name": "Luxury Yacht", "price_uzs": 270000, "cost_uzs": 220000, "icon": "🛥️", "type": "vip"},
+                {"id": "crown", "name": "Ruby Crown", "price_uzs": 225000, "cost_uzs": 180000, "icon": "👑", "type": "vip"},
+                {"id": "medal", "name": "Star Medal", "price_uzs": 95000, "cost_uzs": 75000, "icon": "🎖️", "type": "classic"},
+                {"id": "hat", "name": "Magic Hat", "price_uzs": 78000, "cost_uzs": 60000, "icon": "🎩", "type": "classic"},
+                {"id": "eagle", "name": "Flying Eagle", "price_uzs": 110000, "cost_uzs": 88000, "icon": "🦅", "type": "3d"},
+                {"id": "lion", "name": "Golden Lion", "price_uzs": 175000, "cost_uzs": 140000, "icon": "🦁", "type": "vip"}
             ]
 
         # Active payment methods

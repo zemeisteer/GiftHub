@@ -1605,8 +1605,34 @@
       // 4. Render Gifts Subgrid in #screen-gifts
       const gSubGrid = document.getElementById('giftsSubGrid');
       if(gSubGrid) {
-        const halos = { bear: 'rgba(245, 158, 11, 0.45)', heart: 'rgba(236, 72, 153, 0.5)', rocket: 'rgba(124, 58, 237, 0.5)' };
-        const badges = { bear: 'LIMITED', heart: 'POPULAR', rocket: 'EXCLUSIVE' };
+        const halos = {
+          bear: 'rgba(245, 158, 11, 0.45)',
+          heart: 'rgba(236, 72, 153, 0.5)',
+          rocket: 'rgba(124, 58, 237, 0.5)',
+          star: 'rgba(234, 179, 8, 0.5)',
+          ring: 'rgba(59, 130, 246, 0.5)',
+          trophy: 'rgba(245, 158, 11, 0.5)',
+          yacht: 'rgba(14, 165, 233, 0.5)',
+          crown: 'rgba(239, 68, 68, 0.5)',
+          medal: 'rgba(168, 85, 247, 0.5)',
+          hat: 'rgba(99, 102, 241, 0.5)',
+          eagle: 'rgba(20, 184, 166, 0.5)',
+          lion: 'rgba(217, 119, 6, 0.5)'
+        };
+        const badges = {
+          bear: 'LIMITED',
+          heart: 'POPULAR',
+          rocket: 'EXCLUSIVE',
+          star: 'HOT',
+          ring: 'DIAMOND',
+          trophy: 'CHAMPION',
+          yacht: 'LUXURY',
+          crown: 'ROYAL',
+          medal: 'HONOR',
+          hat: 'MAGIC',
+          eagle: 'LEGEND',
+          lion: 'KING'
+        };
 
         gSubGrid.innerHTML = productsCatalog.gifts.map((g, idx) => {
           const halo = halos[g.id] || 'rgba(0, 230, 118, 0.35)';

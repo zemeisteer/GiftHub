@@ -217,10 +217,21 @@ async def cb_shop_gifts(callback: CallbackQuery, state: FSMContext):
             if pricing.gifts_json:
                 gifts = json.loads(pricing.gifts_json)
         except Exception:
+            gifts = []
+        if not gifts:
             gifts = [
-                {"id": "bear", "name": "Teddy Bear", "price_uzs": 64000, "cost_uzs": 58000, "icon": "🧸"},
-                {"id": "heart", "name": "Neon Heart", "price_uzs": 85000, "cost_uzs": 75000, "icon": "💖"},
-                {"id": "rocket", "name": "Cosmo Rocket", "price_uzs": 120000, "cost_uzs": 105000, "icon": "🚀"}
+                {"id": "bear", "name": "Teddy Bear", "price_uzs": 64000, "cost_uzs": 50000, "icon": "🧸", "type": "3d"},
+                {"id": "heart", "name": "Neon Heart", "price_uzs": 85000, "cost_uzs": 68000, "icon": "💖", "type": "3d"},
+                {"id": "rocket", "name": "Cosmo Rocket", "price_uzs": 120000, "cost_uzs": 95000, "icon": "🚀", "type": "3d"},
+                {"id": "star", "name": "Cosmic Star", "price_uzs": 60000, "cost_uzs": 45000, "icon": "⭐", "type": "classic"},
+                {"id": "ring", "name": "Diamond Ring", "price_uzs": 165000, "cost_uzs": 130000, "icon": "💍", "type": "3d"},
+                {"id": "trophy", "name": "Gold Trophy", "price_uzs": 195000, "cost_uzs": 155000, "icon": "🏆", "type": "vip"},
+                {"id": "yacht", "name": "Luxury Yacht", "price_uzs": 270000, "cost_uzs": 220000, "icon": "🛥️", "type": "vip"},
+                {"id": "crown", "name": "Ruby Crown", "price_uzs": 225000, "cost_uzs": 180000, "icon": "👑", "type": "vip"},
+                {"id": "medal", "name": "Star Medal", "price_uzs": 95000, "cost_uzs": 75000, "icon": "🎖️", "type": "classic"},
+                {"id": "hat", "name": "Magic Hat", "price_uzs": 78000, "cost_uzs": 60000, "icon": "🎩", "type": "classic"},
+                {"id": "eagle", "name": "Flying Eagle", "price_uzs": 110000, "cost_uzs": 88000, "icon": "🦅", "type": "3d"},
+                {"id": "lion", "name": "Golden Lion", "price_uzs": 175000, "cost_uzs": 140000, "icon": "🦁", "type": "vip"}
             ]
 
     text = (
