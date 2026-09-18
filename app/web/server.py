@@ -705,6 +705,74 @@ async def get_admin_dashboard(admin: User = Depends(get_current_admin)):
             select(func.sum(Order.cost_price)).where(Order.product_type == "gift", Order.status == "done")
         )).scalar() or 0.0
 
+        # Fetch completed orders for sales charts (last 30 days)
+        month_ago = now - timedelta(days=30)
+        orders_q = await session.execute(
+            select(Order.total_price, Order.created_at, Order.completed_at)
+            .where(Order.status == "done", Order.created_at >= month_ago)
+        )
+        done_orders = orders_q.all()
+
+        # 1. Kunlik (Bugungi kun - 4 soatlik intervallar)
+        today_date = now.date()
+        daily_chart = [
+            {"label": "00-04", "start_h": 0, "end_h": 4, "sales": 0, "count": 0},
+            {"label": "04-08", "start_h": 4, "end_h": 8, "sales": 0, "count": 0},
+            {"label": "08-12", "start_h": 8, "end_h": 12, "sales": 0, "count": 0},
+            {"label": "12-16", "start_h": 12, "end_h": 16, "sales": 0, "count": 0},
+            {"label": "16-20", "start_h": 16, "end_h": 20, "sales": 0, "count": 0},
+            {"label": "20-24", "start_h": 20, "end_h": 24, "sales": 0, "count": 0},
+        ]
+        for row in done_orders:
+            dt = row.completed_at or row.created_at
+            if dt and dt.date() == today_date:
+                h = dt.hour
+                for slot in daily_chart:
+                    if slot["start_h"] <= h < slot["end_h"]:
+                        slot["sales"] += round(row.total_price or 0)
+                        slot["count"] += 1
+                        break
+
+        # 2. Haftalik (So'nggi 7 kun: Du, Se, Ch, Pa, Ju, Sh, Ya)
+        uz_weekdays = ["Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"]
+        weekly_chart = []
+        for d in range(6, -1, -1):
+            target_dt = (now - timedelta(days=d)).date()
+            day_label = uz_weekdays[target_dt.weekday()]
+            day_sales = 0
+            day_count = 0
+            for row in done_orders:
+                dt = row.completed_at or row.created_at
+                if dt and dt.date() == target_dt:
+                    day_sales += round(row.total_price or 0)
+                    day_count += 1
+            weekly_chart.append({
+                "label": day_label,
+                "date": target_dt.strftime("%d-%m"),
+                "sales": day_sales,
+                "count": day_count
+            })
+
+        # 3. Oylik (So'nggi 4 hafta)
+        monthly_chart = []
+        for w in range(3, -1, -1):
+            start_date = (now - timedelta(days=(w+1)*7)).date()
+            end_date = (now - timedelta(days=w*7)).date()
+            week_label = f"{4-w}-hafta"
+            week_sales = 0
+            week_count = 0
+            for row in done_orders:
+                dt = row.completed_at or row.created_at
+                if dt and start_date < dt.date() <= end_date:
+                    week_sales += round(row.total_price or 0)
+                    week_count += 1
+            monthly_chart.append({
+                "label": week_label,
+                "range": f"{start_date.strftime('%d.%m')} - {end_date.strftime('%d.%m')}",
+                "sales": week_sales,
+                "count": week_count
+            })
+
         return {
             "users_total": users_total,
             "new_users_week": new_users_week,
@@ -736,7 +804,12 @@ async def get_admin_dashboard(admin: User = Depends(get_current_admin)):
                 {"name": "Premium — 3 oy", "count": 96},
                 {"name": "50 ⭐ Stars", "count": 88},
                 {"name": "Teddy Bear sovg'a", "count": 21}
-            ]
+            ],
+            "charts": {
+                "daily": daily_chart,
+                "weekly": weekly_chart,
+                "monthly": monthly_chart
+            }
         }
 
 @app.get("/api/admin/pricing")
