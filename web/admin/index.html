@@ -1703,17 +1703,17 @@
     <h3 style="margin:0 0 16px;font-size:17px;" id="serviceModalTitle">＋ Yangi xizmat qo'shish</h3>
     <input type="hidden" id="serviceEditId" value="">
     <div class="field-group" style="margin-bottom:12px;">
-      <label class="field-label">Xizmat nomi</label>
-      <input id="srvName" class="custom-input" placeholder="Masalan: Telegram Username xaridi, Discord Nitro...">
+      <label class="field-label">Xizmat nomi (Masalan: ChatGPT Plus, Gemini Pro, Duolingo, Canva)</label>
+      <input id="srvName" class="custom-input" placeholder="Xizmatning aniq nomini kiriting (masalan: ChatGPT Plus)">
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
       <div class="field-group">
-        <label class="field-label">Kategoriya</label>
-        <input id="srvCategory" class="custom-input" placeholder="Obunalar, O'yinlar..." value="Raqamli xizmatlar">
+        <label class="field-label">Kategoriya (Masalan: Obunalar, AI, O'yinlar)</label>
+        <input id="srvCategory" class="custom-input" placeholder="Obunalar" value="Obunalar">
       </div>
       <div class="field-group">
         <label class="field-label">Emoji / Belgi</label>
-        <input id="srvIcon" class="custom-input" placeholder="⚡, 💎, 🌐..." value="⚡">
+        <input id="srvIcon" class="custom-input" placeholder="⚡, 🤖, 💎..." value="⚡">
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
@@ -3573,7 +3573,7 @@
     document.getElementById('serviceEditId').value = '';
     document.getElementById('serviceModalTitle').innerText = '＋ Yangi xizmat qo\'shish';
     document.getElementById('srvName').value = '';
-    document.getElementById('srvCategory').value = 'Raqamli xizmatlar';
+    document.getElementById('srvCategory').value = 'Obunalar';
     document.getElementById('srvIcon').value = '⚡';
     document.getElementById('srvPrice').value = '';
     document.getElementById('srvCost').value = '0';

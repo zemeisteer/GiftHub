@@ -15,16 +15,9 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 def build_main_menu_text(first_name: str, balance: float, user_id: int, services_count: int = 0, services: Optional[list] = None) -> str:
-    if services and len(services) == 1:
-        srv = services[0]
-        s_name = getattr(srv, "name", "Xizmat") if not isinstance(srv, dict) else srv.get("name", "Xizmat")
-        s_icon = getattr(srv, "icon", "⚡") if not isinstance(srv, dict) else srv.get("icon", "⚡")
-        s_price = getattr(srv, "price_uzs", 0.0) if not isinstance(srv, dict) else srv.get("price_uzs", 0.0)
-        srv_line = f"\n⚡ <b>Yangi xizmat:</b> <i>{s_icon} {s_name} ({s_price:,.0f} so'm)</i>"
-    elif services_count > 0:
-        srv_line = f"\n⚡ <b>Yangi xizmatlar:</b> <i>{services_count} ta mavjud</i>"
-    else:
-        srv_line = ""
+    count = len(services) if services else services_count
+    srv_line = f"\n⚡ <b>Qo'shimcha xizmatlar:</b> <i>{count} ta mavjud</i>" if count > 0 else ""
+
 
     return (
         f"Assalomu alaykum, <b>{first_name}</b>!\n\n"

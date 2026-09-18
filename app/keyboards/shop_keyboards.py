@@ -11,22 +11,8 @@ from aiogram.types import (
 from data import config
 
 def get_shop_main_menu(is_admin: bool = False, services_count: int = 0, services: Optional[list] = None) -> InlineKeyboardMarkup:
-    if services is None:
-        services = []
-
-    # Agar ro'yxatda 1 ta xizmat bo'lsa, xizmatning aniq nomini chiqaramiz (masalan: ⚡ Gemini)
-    if len(services) == 1:
-        srv = services[0]
-        s_name = getattr(srv, "name", "Xizmat") if not isinstance(srv, dict) else srv.get("name", "Xizmat")
-        s_icon = getattr(srv, "icon", "⚡") if not isinstance(srv, dict) else srv.get("icon", "⚡")
-        s_id = getattr(srv, "id", 0) if not isinstance(srv, dict) else srv.get("id", 0)
-        services_btn = InlineKeyboardButton(text=f"{s_icon} {s_name}", callback_data=f"srv:view:{s_id}")
-    elif len(services) > 1:
-        services_btn = InlineKeyboardButton(text=f"⚡ Qo'shimcha Xizmatlar ({len(services)})", callback_data="shop:services")
-    elif services_count > 0:
-        services_btn = InlineKeyboardButton(text=f"⚡ Qo'shimcha Xizmatlar ({services_count})", callback_data="shop:services")
-    else:
-        services_btn = InlineKeyboardButton(text="⚡ Yangi Xizmatlar", callback_data="shop:services")
+    # Barqaror va o'zgarmas tugma nomi (qo'shimcha xizmat qo'shilganda o'zgarib ketmaydi)
+    services_btn = InlineKeyboardButton(text="⚡ Qo'shimcha Xizmatlar", callback_data="shop:services")
 
     buttons = [
         [
@@ -351,17 +337,23 @@ def get_services_keyboard(services: list) -> InlineKeyboardMarkup:
         if isinstance(s, dict):
             s_id = s.get("id")
             name = s.get("name", "Xizmat")
+            category = s.get("category", "")
             icon = s.get("icon", "⚡")
             price = float(s.get("price_uzs", 0.0))
         else:
             s_id = getattr(s, "id", 0)
             name = getattr(s, "name", "Xizmat")
+            category = getattr(s, "category", "")
             icon = getattr(s, "icon", "⚡")
             price = float(getattr(s, "price_uzs", 0.0))
 
+        display_name = name
+        if name.lower() in ["obunalar", "obuna", "xizmat", "xizmatlar", "raqamli xizmatlar"] and category and category.lower() not in ["obunalar", "obuna", "xizmat", "xizmatlar", "raqamli xizmatlar"]:
+            display_name = category
+
         buttons.append([
             InlineKeyboardButton(
-                text=f"{icon} {name} — {price:,.0f} so'm",
+                text=f"{icon} {display_name} — {price:,.0f} so'm",
                 callback_data=f"srv:view:{s_id}"
             )
         ])
