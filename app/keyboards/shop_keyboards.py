@@ -10,7 +10,8 @@ from aiogram.types import (
 )
 from data import config
 
-def get_shop_main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
+def get_shop_main_menu(is_admin: bool = False, services_count: int = 0) -> InlineKeyboardMarkup:
+    services_text = f"⚡ Yangi Xizmatlar ({services_count})" if services_count > 0 else "⚡ Yangi Xizmatlar"
     buttons = [
         [
             InlineKeyboardButton(text="⭐ Telegram Stars", callback_data="shop:stars"),
@@ -18,16 +19,21 @@ def get_shop_main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="🎁 Raqamli Sovg'alar", callback_data="shop:gifts"),
-            InlineKeyboardButton(text="💰 Hamyon / Balans", callback_data="wallet:view")
+            InlineKeyboardButton(text=services_text, callback_data="shop:services")
         ],
         [
-            InlineKeyboardButton(text="👤 Profil & Referal", callback_data="profile:view"),
-            InlineKeyboardButton(text="📋 Buyurtmalar", callback_data="orders:history")
+            InlineKeyboardButton(text="💰 Hamyon / Balans", callback_data="wallet:view"),
+            InlineKeyboardButton(text="👤 Profil & Referal", callback_data="profile:view")
         ],
         [
+            InlineKeyboardButton(text="📋 Buyurtmalar", callback_data="orders:history"),
             InlineKeyboardButton(text="🛟 Yordam & Ma'lumot", callback_data="help:view")
         ]
     ]
+    if is_admin:
+        buttons.append([
+            InlineKeyboardButton(text="⚙️ Boshqaruv Paneli", callback_data="admin:menu")
+        ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -319,5 +325,59 @@ def get_orders_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="menu:main")
+        ]
+    ])
+
+
+def get_services_keyboard(services: list) -> InlineKeyboardMarkup:
+    buttons = []
+    for s in services:
+        if isinstance(s, dict):
+            s_id = s.get("id")
+            name = s.get("name", "Xizmat")
+            icon = s.get("icon", "⚡")
+            price = float(s.get("price_uzs", 0.0))
+        else:
+            s_id = getattr(s, "id", 0)
+            name = getattr(s, "name", "Xizmat")
+            icon = getattr(s, "icon", "⚡")
+            price = float(getattr(s, "price_uzs", 0.0))
+
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"{icon} {name} — {price:,.0f} so'm",
+                callback_data=f"srv:view:{s_id}"
+            )
+        ])
+    buttons.append([
+        InlineKeyboardButton(text="🔙 Bosh menyu", callback_data="menu:main")
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_service_detail_keyboard(service_id: int, can_afford: bool) -> InlineKeyboardMarkup:
+    buttons = []
+    if can_afford:
+        buttons.append([
+            InlineKeyboardButton(text="✅ Xarid qilish", callback_data=f"srv:buy:{service_id}")
+        ])
+    else:
+        buttons.append([
+            InlineKeyboardButton(text="💳 Hamyonni to'ldirish", callback_data="wallet:topup")
+        ])
+    buttons.append([
+        InlineKeyboardButton(text="🔙 Barcha xizmatlar", callback_data="shop:services"),
+        InlineKeyboardButton(text="🏠 Bosh menyu", callback_data="menu:main")
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_service_purchase_confirm_keyboard(service_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Tasdiqlash va to'lash", callback_data=f"srv:confirm:{service_id}")
+        ],
+        [
+            InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"srv:view:{service_id}")
         ]
     ])

@@ -6,7 +6,8 @@ def get_reply_main_keyboard() -> ReplyKeyboardMarkup:
     Web App havolalari yo'q, barchasi bot ichida ishlaydi.
     """
     keyboard = [
-        [KeyboardButton(text="⭐ Bosh menyu"), KeyboardButton(text="💰 Balans")],
-        [KeyboardButton(text="👤 Profil"), KeyboardButton(text="🛟 Yordam")]
+        [KeyboardButton(text="⭐ Bosh menyu"), KeyboardButton(text="⚡ Yangi xizmatlar")],
+        [KeyboardButton(text="💰 Balans"), KeyboardButton(text="👤 Profil")],
+        [KeyboardButton(text="🛟 Yordam")]
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)

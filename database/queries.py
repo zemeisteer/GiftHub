@@ -165,7 +165,8 @@ async def create_order(
     amount: int,
     total_price: float,
     cost_price: float,
-    recipient_username: Optional[str] = None
+    recipient_username: Optional[str] = None,
+    status: Optional[str] = None
 ) -> Order:
     user = await session.get(User, user_id)
     if not user or user.balance < total_price:
@@ -187,6 +188,9 @@ async def create_order(
     import random
     order_code = f"#{random.randint(10000, 99999)}"
 
+    if status is None:
+        status = "pending" if product_type == "service" else "done"
+
     order = Order(
         order_code=order_code,
         user_id=user_id,
@@ -196,9 +200,9 @@ async def create_order(
         unit_price=round(total_price / amount, 2) if amount else total_price,
         total_price=total_price,
         cost_price=cost_price,
-        status="done",  # Auto-completed in simulation mode or instant delivery
+        status=status,
         recipient_username=recipient_username,
-        completed_at=datetime.utcnow()
+        completed_at=datetime.utcnow() if status == "done" else None
     )
     session.add(order)
     await session.flush()

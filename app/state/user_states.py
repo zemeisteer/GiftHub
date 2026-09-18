@@ -20,3 +20,7 @@ class BalanceTopupState(StatesGroup):
 
 class PromoCodeState(StatesGroup):
     entering_code = State()        # Promo-kod kiritish
+
+class ServicePurchaseState(StatesGroup):
+    entering_details = State()     # Hisob / login / username kiritish
+    confirming = State()           # Xaridni tasdiqlash

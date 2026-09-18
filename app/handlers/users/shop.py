@@ -2,12 +2,13 @@ import json
 import logging
 from typing import Optional
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
 from database.db import AsyncSessionLocal
 from database import queries
-from app.state.user_states import StarsPurchaseState, PremiumPurchaseState, GiftPurchaseState
+from data import config
+from app.state.user_states import StarsPurchaseState, PremiumPurchaseState, GiftPurchaseState, ServicePurchaseState
 from app.keyboards.shop_keyboards import (
     get_shop_main_menu,
     get_stars_keyboard,
@@ -17,7 +18,10 @@ from app.keyboards.shop_keyboards import (
     get_premium_keyboard,
     get_gifts_keyboard,
     get_insufficient_balance_keyboard,
-    get_back_to_main_keyboard
+    get_back_to_main_keyboard,
+    get_services_keyboard,
+    get_service_detail_keyboard,
+    get_service_purchase_confirm_keyboard
 )
 from app.services.fragment import pricing_engine
 
@@ -503,3 +507,245 @@ async def cb_execute_purchase(callback: CallbackQuery, state: FSMContext):
     except Exception:
         await callback.message.answer(success_text, reply_markup=get_back_to_main_keyboard())
     await callback.answer("✅ Xarid muvaffaqiyatli amalga oshirildi!")
+
+
+# ================= CUSTOM SERVICES FLOW ================= #
+
+@router.callback_query(F.data == "shop:services")
+async def cb_shop_services(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    async with AsyncSessionLocal() as session:
+        services = await queries.list_custom_services(session, active_only=True)
+
+    if not services:
+        text = (
+            "⚡ <b>Yangi va Qo'shimcha Xizmatlar</b>\n\n"
+            "Hozirda faol qo'shimcha xizmatlar mavjud emas.\n"
+            "Tez orada yangi qulay xizmatlar qo'shiladi!"
+        )
+        try:
+            await callback.message.edit_text(text, reply_markup=get_back_to_main_keyboard())
+        except Exception:
+            await callback.message.answer(text, reply_markup=get_back_to_main_keyboard())
+        await callback.answer()
+        return
+
+    text = (
+        "⚡ <b>Yangi va Qo'shimcha Xizmatlar</b>\n\n"
+        "Quyidagi xizmatlardan birini tanlab, to'liq ma'lumot olishingiz va qulay xarid qilishingiz mumkin:"
+    )
+    kb = get_services_keyboard(services)
+    try:
+        await callback.message.edit_text(text, reply_markup=kb)
+    except Exception:
+        await callback.message.answer(text, reply_markup=kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("srv:view:"))
+async def cb_service_view(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    service_id = int(callback.data.split(":")[2])
+    user_id = callback.from_user.id
+
+    async with AsyncSessionLocal() as session:
+        service = await queries.get_custom_service(session, service_id)
+        user = await queries.get_user_by_id(session, user_id)
+        balance = user.balance if user else 0.0
+
+    if not service or not service.is_active:
+        await callback.answer("⚠️ Bu xizmat hozirda mavjud emas!", show_alert=True)
+        return
+
+    can_afford = balance >= service.price_uzs
+    balance_status = f"✅ Mablag' yetarli ({balance:,.0f} so'm)" if can_afford else f"⚠️ Mablag' yetarli emas (Balansingiz: {balance:,.0f} so'm)"
+
+    desc = service.description or "Batafsil ma'lumot berilmagan."
+    text = (
+        f"{service.icon} <b>{service.name}</b>\n\n"
+        f"🏷 <b>Kategoriya:</b> {service.category}\n"
+        f"💵 <b>Narxi:</b> <b>{service.price_uzs:,.0f} so'm</b>\n"
+        f"💰 <b>Balansingiz:</b> {balance_status}\n\n"
+        f"📝 <b>Xizmat haqida:</b>\n{desc}\n\n"
+        "Xizmatni xarid qilish uchun quyidagi tugmani bosing:"
+    )
+    kb = get_service_detail_keyboard(service_id=service.id, can_afford=can_afford)
+    try:
+        await callback.message.edit_text(text, reply_markup=kb)
+    except Exception:
+        await callback.message.answer(text, reply_markup=kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("srv:buy:"))
+async def cb_service_buy_start(callback: CallbackQuery, state: FSMContext):
+    service_id = int(callback.data.split(":")[2])
+    user_id = callback.from_user.id
+
+    async with AsyncSessionLocal() as session:
+        service = await queries.get_custom_service(session, service_id)
+        user = await queries.get_user_by_id(session, user_id)
+        balance = user.balance if user else 0.0
+
+    if not service or not service.is_active:
+        await callback.answer("⚠️ Bu xizmat faol emas!", show_alert=True)
+        return
+
+    if balance < service.price_uzs:
+        diff = service.price_uzs - balance
+        text = (
+            f"❌ <b>Balansingizda yetarli mablag' mavjud emas!</b>\n\n"
+            f"Xizmat: <b>{service.icon} {service.name}</b>\n"
+            f"Narxi: <b>{service.price_uzs:,.0f} so'm</b>\n"
+            f"Sizning balansingiz: <b>{balance:,.0f} so'm</b>\n"
+            f"Yetishmayotgan summa: <b>{diff:,.0f} so'm</b>\n\n"
+            "Iltimos, avval hamyoningizni to'ldiring:"
+        )
+        try:
+            await callback.message.edit_text(text, reply_markup=get_insufficient_balance_keyboard(diff))
+        except Exception:
+            await callback.message.answer(text, reply_markup=get_insufficient_balance_keyboard(diff))
+        await callback.answer()
+        return
+
+    await state.set_state(ServicePurchaseState.entering_details)
+    await state.update_data(
+        service_id=service.id,
+        service_name=service.name,
+        service_icon=service.icon,
+        price_uzs=service.price_uzs,
+        cost_uzs=service.cost_uzs,
+        category=service.category
+    )
+
+    text = (
+        f"{service.icon} <b>{service.name} xaridi</b>\n\n"
+        f"💵 Narxi: <b>{service.price_uzs:,.0f} so'm</b>\n\n"
+        "✍️ <b>Xizmatni ulash / faollashtirish uchun ma'lumotingizni kiriting:</b>\n"
+        "<i>(Masalan: Telegram @username, profilingiz havolasi, emailingiz yoki telefon raqamingiz)</i>\n\n"
+        "Bekor qilish uchun quyidagi tugmani bosing:"
+    )
+    cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 Bekor qilish", callback_data=f"srv:view:{service_id}")]
+    ])
+    try:
+        await callback.message.edit_text(text, reply_markup=cancel_kb)
+    except Exception:
+        await callback.message.answer(text, reply_markup=cancel_kb)
+    await callback.answer()
+
+
+@router.message(ServicePurchaseState.entering_details, F.text)
+async def msg_service_details(message: Message, state: FSMContext):
+    raw = (message.text or "").strip()
+    if raw.lower() in ["/cancel", "bekor qilish", "❌ bekor qilish"]:
+        data = await state.get_data()
+        service_id = data.get("service_id")
+        await state.clear()
+        if service_id:
+            class DummyCallback:
+                def __init__(self, msg, sid):
+                    self.message = msg
+                    self.from_user = msg.from_user
+                    self.data = f"srv:view:{sid}"
+                    self.bot = msg.bot
+                async def answer(self, *args, **kwargs):
+                    pass
+            return await cb_service_view(DummyCallback(message, service_id), state)
+        from app.handlers.users.start import cmd_start
+        return await cmd_start(message, None, state)
+
+    if len(raw) < 2:
+        await message.answer("⚠️ Iltimos, hisob yoki @username ma'lumotini to'g'ri kiriting:")
+        return
+
+    data = await state.get_data()
+    service_id = data.get("service_id")
+    service_name = data.get("service_name")
+    service_icon = data.get("service_icon", "⚡")
+    price_uzs = float(data.get("price_uzs", 0.0))
+
+    await state.update_data(recipient_detail=raw)
+    await state.set_state(ServicePurchaseState.confirming)
+
+    text = (
+        "⚡ <b>Xaridni tasdiqlang</b>\n\n"
+        f"📦 Xizmat: <b>{service_icon} {service_name}</b>\n"
+        f"💵 Narxi: <b>{price_uzs:,.0f} so'm</b>\n"
+        f"👤 Qabul qiluvchi / Hisob: <code>{raw}</code>\n"
+        f"💰 Balansingizdan yechiladi: <b>{price_uzs:,.0f} so'm</b>\n\n"
+        "Xaridni tasdiqlaysizmi?"
+    )
+    kb = get_service_purchase_confirm_keyboard(service_id=service_id)
+    await message.answer(text, reply_markup=kb)
+
+
+@router.callback_query(ServicePurchaseState.confirming, F.data.startswith("srv:confirm:"))
+async def cb_service_purchase_confirm(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    service_id = data.get("service_id")
+    service_name = data.get("service_name")
+    service_icon = data.get("service_icon", "⚡")
+    price_uzs = float(data.get("price_uzs", 0.0))
+    cost_uzs = float(data.get("cost_uzs", 0.0))
+    recipient_detail = data.get("recipient_detail", "")
+
+    user_id = callback.from_user.id
+
+    async with AsyncSessionLocal() as session:
+        user = await queries.get_user_by_id(session, user_id)
+        if not user or user.balance < price_uzs:
+            await callback.answer("❌ Balansingizda mablag' yetarli emas!", show_alert=True)
+            return
+
+        try:
+            order, bonus, referrer = await queries.create_order(
+                session=session,
+                user_id=user_id,
+                product_type="service",
+                item_title=f"{service_icon} {service_name}",
+                amount=1,
+                total_price=price_uzs,
+                cost_price=cost_uzs,
+                recipient_username=recipient_detail,
+                status="pending"
+            )
+            new_balance = user.balance
+        except Exception as e:
+            logger.error(f"Xizmat xaridi yaratishda xatolik: {e}")
+            await callback.answer("❌ Xatolik yuz berdi. Qayta urinib ko'ring.", show_alert=True)
+            return
+
+    await state.clear()
+
+    success_text = (
+        "🎉 <b>Xaridingiz muvaffaqiyatli qabul qilindi!</b>\n\n"
+        f"🔖 Buyurtma kodi: <code>{order.order_code}</code>\n"
+        f"📦 Xizmat: <b>{service_icon} {service_name}</b>\n"
+        f"👤 Qabul qiluvchi / Hisob: <code>{recipient_detail}</code>\n"
+        f"💵 To'langan summa: <b>{price_uzs:,.0f} so'm</b>\n"
+        f"💳 Qolgan balansingiz: <b>{new_balance:,.0f} so'm</b>\n\n"
+        "⚡ <i>Buyurtmangiz tizimga qabul qilindi. Tez orada faollashtiriladi!</i>"
+    )
+    try:
+        await callback.message.edit_text(success_text, reply_markup=get_back_to_main_keyboard())
+    except Exception:
+        await callback.message.answer(success_text, reply_markup=get_back_to_main_keyboard())
+    await callback.answer("✅ Xarid muvaffaqiyatli amalga oshirildi!")
+
+    # Adminlarga yangi buyurtma haqida xabarnoma yuborish
+    admin_notify_text = (
+        "⚡ <b>Yangi xizmat buyurtmasi!</b>\n\n"
+        f"🔖 Buyurtma: <code>{order.order_code}</code>\n"
+        f"📦 Xizmat: <b>{service_icon} {service_name}</b>\n"
+        f"💵 Narxi: <b>{price_uzs:,.0f} so'm</b> (Tannarxi: {cost_uzs:,.0f} so'm)\n"
+        f"👤 Xaridor: <a href='tg://user?id={user_id}'>{callback.from_user.full_name}</a> (<code>{user_id}</code>)\n"
+        f"📝 Qabul qiluvchi ma'lumoti: <code>{recipient_detail}</code>\n"
+        f"📊 Holati: ⏳ <b>Kutilmoqda (pending)</b>\n"
+        "💡 <i>Web App admin panelidan 'Bajarildi' deb belgilashingiz mumkin.</i>"
+    )
+    for adm in config.ADMINS:
+        try:
+            await callback.bot.send_message(chat_id=int(adm), text=admin_notify_text)
+        except Exception as e:
+            logger.warning(f"Adminga xizmat buyurtmasi xabarini yuborishda xatolik ({adm}): {e}")
