@@ -39,23 +39,34 @@ async def cmd_admin(message: Message):
             return
 
     admin_url = config.get_admin_app_url() if hasattr(config, "get_admin_app_url") else config.ADMIN_APP_URL
+    local_url = f"http://localhost:{config.WEB_PORT}/admin"
+
     buttons = []
     if admin_url and admin_url.startswith("https://"):
         buttons.append([
-            InlineKeyboardButton(text="⚙️ Admin Panelni ochish (Web App)", web_app=WebAppInfo(url=admin_url))
+            InlineKeyboardButton(text="📱 Admin Web App (Telegram ichida)", web_app=WebAppInfo(url=admin_url))
+        ])
+        buttons.append([
+            InlineKeyboardButton(text="🌐 Brauzerda ochish (Tunnel orqali)", url=admin_url)
         ])
     else:
         buttons.append([
-            InlineKeyboardButton(text="⚙️ Admin Panelni ochish (Web App)", url=admin_url or "https://t.me")
+            InlineKeyboardButton(text="🌐 Web Appni ochish", url=admin_url or local_url)
         ])
     buttons.append([
-        InlineKeyboardButton(text="📊 Bot ichida ko'rish", callback_data="admin:menu")
+        InlineKeyboardButton(text="📊 Bot ichida boshqarish (Inline)", callback_data="admin:menu")
     ])
 
+    text = (
+        "⚙️ <b>GiftHub (Stellar) — Administrator Boshqaruv Markazi</b>\n\n"
+        f"🔗 <b>Onlayn Web App havolasi:</b>\n<code>{admin_url or 'Oflayn'}</code>\n\n"
+        f"💻 <b>Kompyuter brauzerida (Tunnelsiz, 100% barqaror):</b>\n<code>{local_url}</code>\n\n"
+        "<i>💡 Maslahat: Agar bot turgan kompyuterda ishlayotgan bo'lsangiz, yuqoridagi <b>localhost</b> manzilini brauzerda ochsangiz, hech qanday tunnelsiz 24/7 uzluksiz ishlaydi.</i>\n\n"
+        "Boshqarish usulini tanlang:"
+    )
+
     await message.answer(
-        "⚙️ <b>GiftHub (Stellar) — Boshqaruv Paneli (Admin Panel)</b>\n\n"
-        "Narxlar, buyurtmalar, yangi xizmatlar, majburiy obuna va statistikani "
-        "boshqarish uchun quyidagi tugmani bosing:",
+        text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
     )
 
