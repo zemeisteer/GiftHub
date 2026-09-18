@@ -361,6 +361,7 @@ async def cancel_recipient_selection(message: Message, state: FSMContext):
         balance = user.balance if user else 0.0
         from app.handlers.users.start import check_admin_status, build_main_menu_text
         is_admin = await check_admin_status(user_id, session)
+        services = await queries.list_custom_services(session, active_only=True)
 
     try:
         rm = await message.answer("❌ Bekor qilindi.", reply_markup=ReplyKeyboardRemove())
@@ -369,8 +370,8 @@ async def cancel_recipient_selection(message: Message, state: FSMContext):
         pass
 
     await message.answer(
-        text=build_main_menu_text(first_name, balance, user_id),
-        reply_markup=get_shop_main_menu(is_admin=is_admin)
+        text=build_main_menu_text(first_name, balance, user_id, services_count=len(services), services=services),
+        reply_markup=get_shop_main_menu(is_admin=is_admin, services_count=len(services), services=services)
     )
 
 

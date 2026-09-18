@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@twemoji/api@latest/dist/twemoji.min.js" crossorigin="anonymous"></script>
 <style>
   /* ================= CSS VARIABLES & THEMES ================= */
   :root {
@@ -15,12 +16,13 @@
     --radius-lg: 14px;
     --radius-md: 10px;
     --radius-sm: 6px;
-    --font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "SF Pro Text", "Segoe UI Emoji", sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
   }
 
   /* Dark Theme (Tungi Rejim) */
   [data-theme="dark"] {
+    color-scheme: dark;
     --bg: #090D11;
     --bg-elevated: #0E141B;
     --panel: #111922;
@@ -54,6 +56,7 @@
 
   /* Light Theme (Kunduzgi Rejim) */
   [data-theme="light"] {
+    color-scheme: light;
     --bg: #F8FAFC;
     --bg-elevated: #FFFFFF;
     --panel: #FFFFFF;
@@ -339,32 +342,51 @@
     background: var(--bg-elevated);
   }
 
+  @keyframes spin-refresh {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  .refresh-spinning {
+    opacity: 0.65;
+    pointer-events: none;
+    display: inline-block;
+    animation: spin-refresh 0.65s linear infinite;
+  }
+
+  /* Apple / iPhone Emojis across all platforms */
+  img.apple-emoji {
+    height: 1.25em !important;
+    width: 1.25em !important;
+    margin: 0 0.12em !important;
+    vertical-align: -0.22em !important;
+    display: inline-block !important;
+  }
+
   /* Custom Styled Dropdowns / Selects (Sleek Glassmorphic & Modern) */
   .custom-select {
+    color-scheme: inherit;
     appearance: none;
     -webkit-appearance: none;
+    -moz-appearance: none;
     background-color: var(--surface);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%2300E676' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2300E676' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
     background-repeat: no-repeat;
-    background-position: right 14px center;
-    background-size: 16px 16px;
-    padding: 11px 42px 11px 15px;
+    background-position: calc(100% - 14px) center;
+    background-size: 15px 15px;
+    padding: 10px 42px 10px 14px;
     font-size: 13.5px;
     font-weight: 600;
     border-radius: var(--radius-md);
     border: 1px solid var(--line);
+    color: var(--text);
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
     transition: var(--transition);
-  }
-  [data-theme="light"] .custom-select {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23059669' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-    background-color: #F8FAFC;
-    border-color: #CBD5E1;
   }
   .custom-select:hover {
     border-color: var(--primary);
     background-color: var(--surface-hover);
+    box-shadow: 0 4px 16px var(--primary-glow);
   }
   .custom-select:focus {
     border-color: var(--primary);
@@ -372,15 +394,21 @@
     background-color: var(--bg-elevated);
   }
   .custom-select option {
-    background: var(--panel);
-    color: var(--text);
-    padding: 12px;
+    background-color: #0E141B !important;
+    color: #F1F5F9 !important;
+    padding: 12px 14px;
     font-size: 13.5px;
     font-weight: 500;
   }
-  [data-theme="light"] .custom-select option {
-    background: #FFFFFF;
+  [data-theme="light"] .custom-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23059669' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-color: #F8FAFC;
+    border-color: #CBD5E1;
     color: #0F172A;
+  }
+  [data-theme="light"] .custom-select option {
+    background-color: #FFFFFF !important;
+    color: #0F172A !important;
   }
 
   /* Table Responsive Scroll */
@@ -669,7 +697,7 @@
           <p>Umumiy statistika, sotuvlar va real vaqt ko'rsatkichlari</p>
         </div>
         <div class="topbar-actions">
-          <button class="btn btn-secondary" onclick="loadDashboard()">↻ Yangilash</button>
+          <button class="btn btn-secondary" onclick="loadDashboard(this)">↻ Yangilash</button>
         </div>
       </div>
 
@@ -1127,7 +1155,7 @@
           <h1>Majburiy Obuna Sozlamalari</h1>
           <p>Foydalanuvchi botdan foydalanishi uchun qo'yiladigan majburiy kanallar va guruhlar</p>
         </div>
-        <button class="btn btn-secondary" onclick="loadChannels()">↻ Ro'yxatni yangilash</button>
+        <button class="btn btn-secondary" onclick="loadChannels(this)">↻ Ro'yxatni yangilash</button>
       </div>
 
       <!-- Prominent Telegram Channel Picker Card -->
@@ -1333,7 +1361,7 @@
           <p>Stars va Premium xaridlarini Fragment orqali avtomatik yetkazib berish sozlamalari</p>
         </div>
         <div class="topbar-actions">
-          <button class="btn btn-secondary" onclick="loadFragmentSettings()">↻ Yangilash</button>
+          <button class="btn btn-secondary" onclick="loadFragmentSettings(this)">↻ Yangilash</button>
           <button class="btn btn-primary" onclick="saveFragmentSettings()">💾 Saqlash</button>
         </div>
       </div>
@@ -1441,7 +1469,7 @@
           <p>Botda mijozlarga taqdim etiladigan maxsus xizmatlar, obunalar va raqamli mahsulotlar</p>
         </div>
         <div class="topbar-actions">
-          <button class="btn btn-secondary" onclick="loadServices()">↻ Yangilash</button>
+          <button class="btn btn-secondary" onclick="loadServices(this)">↻ Yangilash</button>
           <button class="btn btn-primary" onclick="openAddServiceModal()">＋ Yangi xizmat qo'shish</button>
         </div>
       </div>
@@ -1752,7 +1780,9 @@
   }
 
   // ================= 1. DASHBOARD ================= //
-  async function loadDashboard() {
+  async function loadDashboard(btn) {
+    let spinBtn = (btn && btn instanceof HTMLElement) ? (btn.tagName === 'BUTTON' ? btn : btn.closest('button')) : null;
+    if(spinBtn) spinBtn.classList.add('refresh-spinning');
     try {
       const res = await fetch('/api/admin/dashboard', { headers: adminHeaders() });
       if(!res.ok) return;
@@ -1771,7 +1801,13 @@
           <td style="color:var(--primary);font-weight:700;">${Number(b.profit).toLocaleString('ru-RU')} so'm</td>
         </tr>
       `).join('');
-    } catch(e){ console.error(e); }
+      if(spinBtn) showToast("Statistika muvaffaqiyatli yangilandi! ⚡");
+    } catch(e){
+      console.error(e);
+      if(spinBtn) showToast("Yangilashda xatolik yuz berdi!", "error");
+    } finally {
+      if(spinBtn) spinBtn.classList.remove('refresh-spinning');
+    }
   }
 
   // ================= 2. PRICING ================= //
@@ -2046,49 +2082,63 @@
   }
 
   async function savePricing() {
-    const discounts = [];
-    document.querySelectorAll('#discountsTableBody tr').forEach(r => {
-      const min = parseInt(r.querySelector('.disc-min').value);
-      const pct = parseFloat(r.querySelector('.disc-pct').value);
-      if(min && pct) discounts.push({ min_amount: min, discount_pct: pct });
-    });
+    try {
+      const discounts = [];
+      document.querySelectorAll('#discountsTableBody tr').forEach(r => {
+        const minInp = r.querySelector('.disc-min');
+        const pctInp = r.querySelector('.disc-pct');
+        if(minInp && pctInp) {
+          const min = parseInt(minInp.value);
+          const pct = parseFloat(pctInp.value);
+          if(min && pct) discounts.push({ min_amount: min, discount_pct: pct });
+        }
+      });
 
-    const m3 = parseInt(document.getElementById('inpPremMargin3').value) || 0;
-    const m6 = parseInt(document.getElementById('inpPremMargin6').value) || 0;
-    const m12 = parseInt(document.getElementById('inpPremMargin12').value) || 0;
+      const m3 = parseInt(document.getElementById('inpPremMargin3').value) || 0;
+      const m6 = parseInt(document.getElementById('inpPremMargin6').value) || 0;
+      const m12 = parseInt(document.getElementById('inpPremMargin12').value) || 0;
 
-    const base3 = fragmentBasePrem['3'] || 138000;
-    const base6 = fragmentBasePrem['6'] || 205000;
-    const base12 = fragmentBasePrem['12'] || 375000;
+      const base3 = fragmentBasePrem['3'] || 138000;
+      const base6 = fragmentBasePrem['6'] || 205000;
+      const base12 = fragmentBasePrem['12'] || 375000;
 
-    const body = {
-      star_unit_price_uzs: fragmentBaseStar,
-      margin_percent: parseFloat(document.getElementById('inpMargin').value) || 20,
-      discounts,
-      premium_prices: {
-        "3": base3 + m3,
-        "6": base6 + m6,
-        "12": base12 + m12
-      },
-      gifts: allCatalogGifts.map(g => ({
-        id: g.id,
-        name: g.name,
-        price_uzs: g.price_uzs,
-        icon: g.icon,
-        type: g.type
-      }))
-    };
+      const customStarPrice = parseFloat(document.getElementById('inpStarUnitPrice').value) || fragmentBaseStar;
 
-    const res = await fetch('/api/admin/pricing', {
-      method: 'POST',
-      headers: adminHeaders(),
-      body: JSON.stringify(body)
-    });
-    if(res.ok) {
-      showToast("Narxlar muvaffaqiyatli saqlandi!");
-      updateStarsPreview();
-      updatePremPreview();
-      updateGiftsPreview();
+      const body = {
+        star_unit_price_uzs: customStarPrice,
+        margin_percent: parseFloat(document.getElementById('inpMargin').value) || 20,
+        discounts,
+        premium_prices: {
+          "3": base3 + m3,
+          "6": base6 + m6,
+          "12": base12 + m12
+        },
+        gifts: allCatalogGifts.map(g => ({
+          id: g.id,
+          name: g.name,
+          price_uzs: g.price_uzs,
+          icon: g.icon,
+          type: g.type
+        }))
+      };
+
+      const res = await fetch('/api/admin/pricing', {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: JSON.stringify(body)
+      });
+      if(res.ok) {
+        showToast("Barcha narxlar muvaffaqiyatli saqlandi!");
+        updateStarsPreview();
+        updatePremPreview();
+        if(typeof updateGiftsPreview === 'function') updateGiftsPreview();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.detail || "Narxlarni saqlashda xatolik yuz berdi!");
+      }
+    } catch(e) {
+      console.error(e);
+      showToast("Server bilan bog'lanishda xatolik!");
     }
   }
 
@@ -2110,7 +2160,7 @@
         if(o.fulfillment_status === 'fulfilled') {
           fragPill = `<span class="badge-status done" style="display:inline-flex;align-items:center;gap:3px;">⚡ Bajarildi</span>`;
           if(o.fragment_tx_hash) {
-            fragPill += `<div style="font-size:10.5px;margin-top:2px;"><a href="https://tonscan.org/tx/${o.fragment_tx_hash}" target="_blank" style="color:var(--primary);text-decoration:none;">🔗 TX Chek</a></div>`;
+            fragPill += `<div style="font-size:10.5px;margin-top:2px;"><a href="https://tonscan.org/tx/${o.fragment_tx_hash}" target="_blank" style="color:var(--primary);text-decoration:none;" title="TON Blokcheyn tranzaksiya kvitansiyasi (Tonscan)">🔗 TON Chek</a></div>`;
           }
         } else if(o.fulfillment_status === 'processing') {
           fragPill = `<span class="badge-status pending">⏳ Yuborilmoqda...</span>`;
@@ -2182,7 +2232,9 @@
   }
 
   // ================= FRAGMENT & TON HANDLERS ================= //
-  async function loadFragmentSettings() {
+  async function loadFragmentSettings(btn) {
+    let spinBtn = (btn && btn instanceof HTMLElement) ? (btn.tagName === 'BUTTON' ? btn : btn.closest('button')) : null;
+    if(spinBtn) spinBtn.classList.add('refresh-spinning');
     try {
       const res = await fetch('/api/admin/fragment/settings', { headers: adminHeaders() });
       if(!res.ok) return;
@@ -2213,7 +2265,13 @@
         autoBadge.innerText = "Yarim avtomat (Admin tasdig'i)";
         autoBadge.style.color = "var(--warn)";
       }
-    } catch(e){ console.error("loadFragmentSettings error:", e); }
+      if(spinBtn) showToast("Fragment sozlamalari yangilandi! ⚡");
+    } catch(e){
+      console.error("loadFragmentSettings error:", e);
+      if(spinBtn) showToast("Yangilashda xatolik!", "error");
+    } finally {
+      if(spinBtn) spinBtn.classList.remove('refresh-spinning');
+    }
   }
 
   async function saveFragmentSettings() {
@@ -2420,25 +2478,52 @@
     showToast("Telegram ochilmoqda. Kanalingizni tanlang!");
   }
 
+  // ================= 6. CHANNELS (Majburiy Obuna) ================= //
+  let lastChannelsDataHash = '';
+
   async function loadChannelsSilently() {
     try {
       const res = await fetch('/api/admin/channels', { headers: adminHeaders() });
       if(!res.ok) return;
       const channels = await res.json();
-      renderChannelsTable(channels);
+      renderChannelsTable(channels, true);
     } catch(e){}
   }
 
-  async function loadChannels() {
+  async function loadChannels(btn) {
+    let spinBtn = (btn && btn instanceof HTMLElement) ? (btn.tagName === 'BUTTON' ? btn : btn.closest('button')) : null;
+    if(spinBtn) spinBtn.classList.add('refresh-spinning');
     try {
       const res = await fetch('/api/admin/channels', { headers: adminHeaders() });
       if(!res.ok) return;
       const channels = await res.json();
-      renderChannelsTable(channels);
-    } catch(e){ console.error(e); }
+      lastChannelsDataHash = ''; // Manual refresh always updates
+      renderChannelsTable(channels, false);
+      if(spinBtn) showToast("Kanallar ro'yxati yangilandi! ⚡");
+    } catch(e){
+      console.error(e);
+      if(spinBtn) showToast("Yangilashda xatolik!", "error");
+    } finally {
+      if(spinBtn) spinBtn.classList.remove('refresh-spinning');
+    }
   }
 
-  function renderChannelsTable(channels) {
+  function renderChannelsTable(channels, isSilent = false) {
+    const activeEl = document.activeElement;
+    // Foydalanuvchi select yoki input ochib turgan bo'lsa, DOM ni almashtirmaslik
+    if (activeEl && (activeEl.tagName === 'SELECT' || activeEl.tagName === 'INPUT')) {
+      const channelsPane = document.getElementById('channels');
+      if (channelsPane && channelsPane.contains(activeEl)) {
+        return;
+      }
+    }
+
+    const currentHash = JSON.stringify(channels || []);
+    if (isSilent && currentHash === lastChannelsDataHash) {
+      return;
+    }
+    lastChannelsDataHash = currentHash;
+
     const detected = (channels || []).filter(c => c.is_detected);
     const activeList = (channels || []).filter(c => !c.is_detected);
 
@@ -2495,7 +2580,7 @@
         <td><b>${c.title}</b></td>
         <td><code style="font-family:var(--font-mono);font-size:12px;">${c.username_or_link}</code></td>
         <td>
-          <select class="custom-select" style="padding:6px 28px 6px 10px;font-size:12px;font-weight:600;min-width:145px;" onchange="changeChannelType(${c.id}, this.value)">
+          <select class="custom-select" style="padding:6px 32px 6px 10px;font-size:12px;font-weight:600;min-width:145px;" onchange="changeChannelType(${c.id}, this.value)">
             <option value="ordinary" ${c.req_type === 'ordinary' ? 'selected' : ''}>📢 Oddiy kanal</option>
             <option value="join_request" ${c.req_type === 'join_request' ? 'selected' : ''}>📩 Zayavka (So'rov)</option>
             <option value="group" ${c.req_type === 'group' ? 'selected' : ''}>👥 Guruh</option>
@@ -2645,6 +2730,19 @@
       if(!res.ok) return;
       const promos = await res.json();
       const tbody = document.getElementById('promosTableBody');
+      if(!promos || promos.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" style="text-align:center;padding:48px 16px;color:var(--text-muted);">
+              <div style="font-size:32px;margin-bottom:10px;">🎟️</div>
+              <div style="font-weight:700;font-size:15px;color:var(--text);margin-bottom:6px;">Hozircha promo-kodlar yo'q</div>
+              <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;">Foydalanuvchilar uchun chegirma yoki bonus promo-kodlarini yarating.</div>
+              <button class="btn btn-primary btn-sm" onclick="openPromoModal()">+ Birinchi promo-kodni qo'shish</button>
+            </td>
+          </tr>
+        `;
+        return;
+      }
       tbody.innerHTML = promos.map(p => `
         <tr>
           <td><b style="font-family:var(--font-mono);">${p.code}</b></td>
@@ -2707,14 +2805,23 @@
   }
 
   async function saveReferralSettings() {
-    const body = {
-      bonus_percent: parseFloat(document.getElementById('inpRefBonus').value) || 5,
-      min_purchase_uzs: parseFloat(document.getElementById('inpRefMinPurchase').value) || 20000,
-      auto_reward: true,
-      require_purchase: true
-    };
-    const res = await fetch('/api/admin/referral', { method: 'POST', headers: adminHeaders(), body: JSON.stringify(body) });
-    if(res.ok) showToast("Referal sozlamalari saqlandi!");
+    try {
+      const body = {
+        bonus_percent: parseFloat(document.getElementById('inpRefBonus').value) || 5,
+        min_purchase_uzs: parseFloat(document.getElementById('inpRefMinPurchase').value) || 20000,
+        auto_reward: true,
+        require_purchase: true
+      };
+      const res = await fetch('/api/admin/referral', { method: 'POST', headers: adminHeaders(), body: JSON.stringify(body) });
+      if(res.ok) {
+        showToast("Referal sozlamalari muvaffaqiyatli saqlandi!");
+      } else {
+        showToast("Referal sozlamalarini saqlashda xatolik yuz berdi!");
+      }
+    } catch(e) {
+      console.error(e);
+      showToast("Server bilan bog'lanishda xatolik!");
+    }
   }
 
   // ================= 9. PAYMENTS & CARD VALIDATION ================= //
@@ -2722,11 +2829,49 @@
   let paymeActive = true;
   let cardActive = true;
 
-  document.getElementById('togClick').addEventListener('click', function(){ this.classList.toggle('on'); clickActive = this.classList.contains('on'); });
-  document.getElementById('togPayme').addEventListener('click', function(){ this.classList.toggle('on'); paymeActive = this.classList.contains('on'); });
+  document.getElementById('togClick').addEventListener('click', function(){
+    this.classList.toggle('on');
+    clickActive = this.classList.contains('on');
+  });
+  document.getElementById('togPayme').addEventListener('click', function(){
+    this.classList.toggle('on');
+    paymeActive = this.classList.contains('on');
+  });
   const togCardEl = document.getElementById('togCard');
   if(togCardEl) {
-    togCardEl.addEventListener('click', function(){ this.classList.toggle('on'); cardActive = this.classList.contains('on'); });
+    togCardEl.addEventListener('click', function(){
+      this.classList.toggle('on');
+      cardActive = this.classList.contains('on');
+    });
+  }
+
+  async function savePaymentSettings() {
+    try {
+      const tc = document.getElementById('togClick');
+      const tp = document.getElementById('togPayme');
+      const tcard = document.getElementById('togCard');
+      clickActive = tc ? tc.classList.contains('on') : true;
+      paymeActive = tp ? tp.classList.contains('on') : true;
+      cardActive = tcard ? tcard.classList.contains('on') : true;
+
+      const res = await fetch('/api/admin/payments', {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: JSON.stringify({
+          click_active: clickActive,
+          payme_active: paymeActive,
+          card_active: cardActive
+        })
+      });
+      if(res.ok) {
+        showToast("To'lov sozlamalari muvaffaqiyatli saqlandi!");
+      } else {
+        showToast("To'lov sozlamalarini saqlashda xatolik!");
+      }
+    } catch(e) {
+      console.error(e);
+      showToast("Server bilan bog'lanishda xatolik!");
+    }
   }
 
   function formatCardNumberInput(el) {
@@ -2790,27 +2935,6 @@
 
       await loadCards();
     } catch(e){ console.error(e); }
-  }
-
-  // Master switch for Card payments
-  const cardSwitch = document.getElementById('togCard');
-  if(cardSwitch) {
-    cardSwitch.onclick = async function() {
-      cardActive = !cardActive;
-      this.classList.toggle('on', cardActive);
-      try {
-        await fetch('/api/admin/payments', {
-          method: 'POST',
-          headers: adminHeaders(),
-          body: JSON.stringify({
-            click_active: clickActive,
-            payme_active: paymeActive,
-            card_active: cardActive
-          })
-        });
-        showToast(cardActive ? "Karta orqali to'lovlar yoqildi!" : "Karta to'lovlari o'chirildi!");
-      } catch(e) { console.error(e); }
-    };
   }
 
   // ================= PAYMENT CARDS MANAGEMENT ================= //
@@ -3129,13 +3253,21 @@
     return Number(val).toLocaleString('ru-RU') + " so'm";
   }
 
-  async function loadServices() {
+  async function loadServices(btn) {
+    let spinBtn = (btn && btn instanceof HTMLElement) ? (btn.tagName === 'BUTTON' ? btn : btn.closest('button')) : null;
+    if(spinBtn) spinBtn.classList.add('refresh-spinning');
     try {
       const res = await fetch('/api/admin/services', { headers: adminHeaders() });
       if(!res.ok) return;
       cachedServices = await res.json();
       renderServices(cachedServices);
-    } catch(e) { console.error('Error loading services:', e); }
+      if(spinBtn) showToast("Xizmatlar ro'yxati yangilandi! ⚡");
+    } catch(e) {
+      console.error('Error loading services:', e);
+      if(spinBtn) showToast("Yangilashda xatolik!", "error");
+    } finally {
+      if(spinBtn) spinBtn.classList.remove('refresh-spinning');
+    }
   }
 
   function renderServices(services) {
@@ -3316,11 +3448,34 @@
     } catch(e) { console.error(e); }
   }
 
+  // ================= APPLE EMOJI RENDERING ENGINE ================= //
+  function renderAppleEmojis(node) {
+    if(window.twemoji) {
+      try {
+        window.twemoji.parse(node || document.body, {
+          base: 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.0.1/img/apple/64/',
+          attributes: () => ({ class: 'apple-emoji' }),
+          callback: (icon, options) => `${options.base}${icon}.png`
+        });
+      } catch(e) { console.debug("twemoji parse:", e); }
+    }
+  }
+
+  let emojiDebounceTimer = null;
+  const emojiObserver = new MutationObserver(() => {
+    if(emojiDebounceTimer) clearTimeout(emojiDebounceTimer);
+    emojiDebounceTimer = setTimeout(() => {
+      renderAppleEmojis(document.body);
+    }, 200);
+  });
+  emojiObserver.observe(document.body, { childList: true, subtree: true });
+
   // Init
   initTheme();
   fetchBotInfo();
   loadDashboard();
   filterGiftsCatalog();
+  renderAppleEmojis(document.body);
 </script>
 </body>
 </html>

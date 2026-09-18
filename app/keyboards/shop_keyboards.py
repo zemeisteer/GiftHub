@@ -10,8 +10,24 @@ from aiogram.types import (
 )
 from data import config
 
-def get_shop_main_menu(is_admin: bool = False, services_count: int = 0) -> InlineKeyboardMarkup:
-    services_text = f"⚡ Yangi Xizmatlar ({services_count})" if services_count > 0 else "⚡ Yangi Xizmatlar"
+def get_shop_main_menu(is_admin: bool = False, services_count: int = 0, services: Optional[list] = None) -> InlineKeyboardMarkup:
+    if services is None:
+        services = []
+
+    # Agar ro'yxatda 1 ta xizmat bo'lsa, xizmatning aniq nomini chiqaramiz (masalan: ⚡ Gemini)
+    if len(services) == 1:
+        srv = services[0]
+        s_name = getattr(srv, "name", "Xizmat") if not isinstance(srv, dict) else srv.get("name", "Xizmat")
+        s_icon = getattr(srv, "icon", "⚡") if not isinstance(srv, dict) else srv.get("icon", "⚡")
+        s_id = getattr(srv, "id", 0) if not isinstance(srv, dict) else srv.get("id", 0)
+        services_btn = InlineKeyboardButton(text=f"{s_icon} {s_name}", callback_data=f"srv:view:{s_id}")
+    elif len(services) > 1:
+        services_btn = InlineKeyboardButton(text=f"⚡ Qo'shimcha Xizmatlar ({len(services)})", callback_data="shop:services")
+    elif services_count > 0:
+        services_btn = InlineKeyboardButton(text=f"⚡ Qo'shimcha Xizmatlar ({services_count})", callback_data="shop:services")
+    else:
+        services_btn = InlineKeyboardButton(text="⚡ Yangi Xizmatlar", callback_data="shop:services")
+
     buttons = [
         [
             InlineKeyboardButton(text="⭐ Telegram Stars", callback_data="shop:stars"),
@@ -19,7 +35,7 @@ def get_shop_main_menu(is_admin: bool = False, services_count: int = 0) -> Inlin
         ],
         [
             InlineKeyboardButton(text="🎁 Raqamli Sovg'alar", callback_data="shop:gifts"),
-            InlineKeyboardButton(text=services_text, callback_data="shop:services")
+            services_btn
         ],
         [
             InlineKeyboardButton(text="💰 Hamyon / Balans", callback_data="wallet:view"),

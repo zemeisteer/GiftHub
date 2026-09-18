@@ -14,8 +14,18 @@ from data import config
 router = Router()
 logger = logging.getLogger(__name__)
 
-def build_main_menu_text(first_name: str, balance: float, user_id: int, services_count: int = 0) -> str:
-    srv_line = f"\n⚡ <b>Yangi xizmatlar:</b> <i>{services_count} ta mavjud</i>" if services_count > 0 else ""
+def build_main_menu_text(first_name: str, balance: float, user_id: int, services_count: int = 0, services: Optional[list] = None) -> str:
+    if services and len(services) == 1:
+        srv = services[0]
+        s_name = getattr(srv, "name", "Xizmat") if not isinstance(srv, dict) else srv.get("name", "Xizmat")
+        s_icon = getattr(srv, "icon", "⚡") if not isinstance(srv, dict) else srv.get("icon", "⚡")
+        s_price = getattr(srv, "price_uzs", 0.0) if not isinstance(srv, dict) else srv.get("price_uzs", 0.0)
+        srv_line = f"\n⚡ <b>Yangi xizmat:</b> <i>{s_icon} {s_name} ({s_price:,.0f} so'm)</i>"
+    elif services_count > 0:
+        srv_line = f"\n⚡ <b>Yangi xizmatlar:</b> <i>{services_count} ta mavjud</i>"
+    else:
+        srv_line = ""
+
     return (
         f"Assalomu alaykum, <b>{first_name}</b>!\n\n"
         f"⭐ <b>GiftHub (Stellar)</b> — Telegram Stars, Telegram Premium va yangi raqamli xizmatlarni "
@@ -90,7 +100,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext)
         )
         return
 
-    welcome_text = build_main_menu_text(first_name, balance, user_id, services_count=services_count)
+    welcome_text = build_main_menu_text(first_name, balance, user_id, services_count=services_count, services=services)
 
     # Eski reply tugmalar bo'lsa tozalash
     try:
@@ -101,7 +111,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext)
 
     await message.answer(
         text=welcome_text,
-        reply_markup=get_shop_main_menu(is_admin=is_admin, services_count=services_count)
+        reply_markup=get_shop_main_menu(is_admin=is_admin, services_count=services_count, services=services)
     )
 
 
@@ -118,8 +128,8 @@ async def cb_main_menu(callback: CallbackQuery, state: FSMContext):
         services = await queries.list_custom_services(session, active_only=True)
         services_count = len(services)
 
-    text = build_main_menu_text(first_name, balance, user_id, services_count=services_count)
-    kb = get_shop_main_menu(is_admin=is_admin, services_count=services_count)
+    text = build_main_menu_text(first_name, balance, user_id, services_count=services_count, services=services)
+    kb = get_shop_main_menu(is_admin=is_admin, services_count=services_count, services=services)
 
     try:
         await callback.message.edit_text(text, reply_markup=kb)
@@ -141,8 +151,8 @@ async def user_main_menu_msg(message: Message, state: FSMContext):
         services = await queries.list_custom_services(session, active_only=True)
         services_count = len(services)
 
-    text = build_main_menu_text(first_name, balance, user_id, services_count=services_count)
-    await message.answer(text, reply_markup=get_shop_main_menu(is_admin=is_admin, services_count=services_count))
+    text = build_main_menu_text(first_name, balance, user_id, services_count=services_count, services=services)
+    await message.answer(text, reply_markup=get_shop_main_menu(is_admin=is_admin, services_count=services_count, services=services))
 
 
 @router.message(F.text.in_(["⚡ Yangi xizmatlar", "Yangi xizmatlar", "Xizmatlar"]))
@@ -235,8 +245,8 @@ async def cb_check_subscription(callback: CallbackQuery, state: FSMContext):
     async with AsyncSessionLocal() as session:
         services = await queries.list_custom_services(session, active_only=True)
         services_count = len(services)
-    welcome_text = build_main_menu_text(first_name, balance, user_id, services_count=services_count)
+    welcome_text = build_main_menu_text(first_name, balance, user_id, services_count=services_count, services=services)
     await callback.message.edit_text(
         text=welcome_text,
-        reply_markup=get_shop_main_menu(is_admin=is_admin, services_count=services_count)
+        reply_markup=get_shop_main_menu(is_admin=is_admin, services_count=services_count, services=services)
     )
