@@ -12,6 +12,9 @@ TELEGRAM_API_SERVER = env.str("TELEGRAM_API_SERVER")
 TELEGRAM_PROXY = env.str("TELEGRAM_PROXY")
 
 WEB_APP_URL = env.str("WEB_APP_URL")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ENV_PATH = os.path.join(BASE_DIR, ".env")
+
 ADMIN_APP_URL = env.str("ADMIN_APP_URL")
 WEB_HOST = env.str("WEB_HOST")
 WEB_PORT = env.int("WEB_PORT")
@@ -19,7 +22,7 @@ WEB_PORT = env.int("WEB_PORT")
 def get_web_app_url() -> str:
     try:
         fresh_env = Env()
-        fresh_env.read_env(override=True)
+        fresh_env.read_env(ENV_PATH, override=True)
         return fresh_env.str("WEB_APP_URL", WEB_APP_URL)
     except Exception:
         return WEB_APP_URL
@@ -27,7 +30,7 @@ def get_web_app_url() -> str:
 def get_admin_app_url() -> str:
     try:
         fresh_env = Env()
-        fresh_env.read_env(override=True)
+        fresh_env.read_env(ENV_PATH, override=True)
         return fresh_env.str("ADMIN_APP_URL", ADMIN_APP_URL)
     except Exception:
         return ADMIN_APP_URL

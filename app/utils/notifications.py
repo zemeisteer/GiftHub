@@ -8,7 +8,7 @@ from data import config
 logger = logging.getLogger(__name__)
 
 def get_store_keyboard() -> Optional[InlineKeyboardMarkup]:
-    url = config.WEB_APP_URL
+    url = config.get_web_app_url() if hasattr(config, "get_web_app_url") else config.WEB_APP_URL
     if url and url.startswith("https://"):
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="⭐ Do'konni ochish", web_app=WebAppInfo(url=url))]
@@ -16,7 +16,7 @@ def get_store_keyboard() -> Optional[InlineKeyboardMarkup]:
     return None
 
 def get_admin_keyboard() -> Optional[InlineKeyboardMarkup]:
-    url = config.ADMIN_APP_URL
+    url = config.get_admin_app_url() if hasattr(config, "get_admin_app_url") else config.ADMIN_APP_URL
     if url and url.startswith("https://"):
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="⚙️ Admin Panel", web_app=WebAppInfo(url=url))]
