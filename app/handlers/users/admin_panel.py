@@ -10,7 +10,7 @@ from database.db import AsyncSessionLocal
 from database.models import User, Order, Transaction, ChannelRequirement
 from database import queries
 from data import config
-from app.state.admin_states import AdminBroadcastState
+from app.state.admin_states import AdminBroadcastState, AdminDeliverServiceState
 from app.keyboards.admin_keyboards import (
     get_admin_main_keyboard,
     get_admin_orders_keyboard,
@@ -199,10 +199,11 @@ async def cb_admin_order_detail(callback: CallbackQuery):
         f"📅 Sana: <code>{order.created_at.strftime('%d.%m.%Y %H:%M')}</code>"
     )
 
+    is_service = (order.product_type == "service")
     try:
-        await callback.message.edit_text(text, reply_markup=get_admin_order_action_keyboard(order_id))
+        await callback.message.edit_text(text, reply_markup=get_admin_order_action_keyboard(order_id, is_service=is_service))
     except Exception:
-        await callback.message.answer(text, reply_markup=get_admin_order_action_keyboard(order_id))
+        await callback.message.answer(text, reply_markup=get_admin_order_action_keyboard(order_id, is_service=is_service))
     await callback.answer()
 
 
@@ -249,6 +250,177 @@ async def cb_admin_order_cancel(callback: CallbackQuery, bot: Bot):
 
     await callback.answer("❌ Buyurtma bekor qilindi va pul qaytarildi!", show_alert=True)
     await cb_admin_orders(callback)
+
+
+# ================= SERVICE / AI LINK DELIVERY ================= #
+
+@router.callback_query(F.data.startswith("adm_srv:send:"))
+async def cb_admin_deliver_service_start(callback: CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        if not await is_admin_user(user_id, session):
+            await callback.answer("Ruxsat yo'q!", show_alert=True)
+            return
+
+        order_id = int(callback.data.split(":")[2])
+        order = await session.get(Order, order_id)
+        if not order:
+            await callback.answer("Buyurtma topilmadi!", show_alert=True)
+            return
+
+        if order.status == "done":
+            await callback.answer("Bu buyurtma allaqachon bajarilgan!", show_alert=True)
+            return
+        if order.status == "cancel":
+            await callback.answer("Bu buyurtma bekor qilingan!", show_alert=True)
+            return
+
+        buyer = await queries.get_user_by_id(session, order.user_id)
+        buyer_name = buyer.first_name if buyer else f"Foydalanuvchi ({order.user_id})"
+
+    await state.set_state(AdminDeliverServiceState.waiting_for_link)
+    await state.update_data(
+        order_id=order.id,
+        order_code=order.order_code,
+        item_title=order.item_title,
+        buyer_id=order.user_id
+    )
+
+    cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 Bekor qilish", callback_data=f"adm_srv:back:{order.id}")]
+    ])
+
+    text = (
+        f"🔗 <b>Buyurtma #{order.order_code} — Taklif havolasini yuborish</b>\n\n"
+        f"📦 Xizmat: <b>{order.item_title}</b>\n"
+        f"👤 Xaridor: <b>{buyer_name}</b> (<code>{order.user_id}</code>)\n"
+        f"📝 Qabul qiluvchi: <code>{order.recipient_username or 'Kiritilmagan'}</code>\n\n"
+        "✍️ <b>Iltimos, xaridorga yuboriladigan taklif havolasini (link) yoki ulanish ma'lumotini yuboring:</b>\n"
+        "<i>(Bekor qilish uchun /cancel deb yozing)</i>"
+    )
+    try:
+        await callback.message.edit_text(text, reply_markup=cancel_kb)
+    except Exception:
+        await callback.message.answer(text, reply_markup=cancel_kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("adm_srv:back:"))
+async def cb_admin_deliver_service_back(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    order_id = int(callback.data.split(":")[2])
+    # Return to order detail view
+    callback.data = f"adm_ord:view:{order_id}"
+    await cb_admin_order_detail(callback)
+
+
+@router.callback_query(F.data.startswith("adm_srv:cancel:"))
+async def cb_admin_service_order_cancel(callback: CallbackQuery, bot: Bot):
+    user_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        if not await is_admin_user(user_id, session):
+            await callback.answer("Ruxsat yo'q!", show_alert=True)
+            return
+
+        order_id = int(callback.data.split(":")[2])
+        order = await queries.update_order_status(session, order_id, "cancel")
+        if not order:
+            await callback.answer("Buyurtma topilmadi!", show_alert=True)
+            return
+
+        try:
+            await bot.send_message(
+                chat_id=order.user_id,
+                text=(
+                    f"❌ <b>Buyurtmangiz bekor qilindi</b>\n\n"
+                    f"🔖 Buyurtma kodi: <code>{order.order_code}</code>\n"
+                    f"📦 Mahsulot: <b>{order.item_title}</b>\n"
+                    f"💰 <b>{order.total_price:,.0f} so'm</b> mablag' hisobingizga qaytarildi."
+                )
+            )
+        except Exception:
+            pass
+
+    await callback.answer("❌ Buyurtma bekor qilindi va mablag' qaytarildi!", show_alert=True)
+    try:
+        await callback.message.edit_text(
+            f"❌ <b>Buyurtma #{order.order_code} bekor qilindi.</b>\n"
+            f"Mijoz hisobiga <b>{order.total_price:,.0f} so'm</b> qaytarildi."
+        )
+    except Exception:
+        pass
+
+
+@router.message(AdminDeliverServiceState.waiting_for_link, F.text)
+async def msg_admin_deliver_service_link(message: Message, state: FSMContext, bot: Bot):
+    raw_text = (message.text or "").strip()
+    if raw_text.lower() in ["/cancel", "bekor qilish", "❌ bekor qilish"]:
+        await state.clear()
+        await message.answer("🔙 Havola yuborish bekor qilindi.")
+        return
+
+    data = await state.get_data()
+    order_id = data.get("order_id")
+    order_code = data.get("order_code")
+    item_title = data.get("item_title")
+    buyer_id = data.get("buyer_id")
+
+    if not order_id or not buyer_id:
+        await state.clear()
+        await message.answer("⚠️ Buyurtma ma'lumotlari topilmadi. Qayta urinib ko'ring.")
+        return
+
+    async with AsyncSessionLocal() as session:
+        order = await queries.update_order_status(session, order_id, "done", payload=raw_text)
+        if not order:
+            await state.clear()
+            await message.answer("❌ Buyurtma bazadan topilmadi!")
+            return
+
+    await state.clear()
+
+    # Foydalanuvchiga yuboriladigan yakuniy xabar
+    user_notify_text = (
+        "🎉 <b>Sizning taklif havolangiz tayyor!</b>\n\n"
+        f"🔖 Buyurtma kodi: <code>{order.order_code}</code>\n"
+        f"📦 Xizmat: <b>{order.item_title}</b>\n\n"
+        f"🔗 <b>Ulanish havolasi:</b>\n{raw_text}\n\n"
+        "⚠️ <b>DIQQAT:</b> Ushbu taklif havolasi 24 soat ichida ulanmasa kuyib ketadi (eskiradi)! Iltimos, hoziroq ulanib oling."
+    )
+
+    if raw_text.startswith("http://") or raw_text.startswith("https://"):
+        user_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🚀 Havolaga o'tish", url=raw_text)],
+            [InlineKeyboardButton(text="🔙 Bosh menyu", callback_data="menu:main")]
+        ])
+    else:
+        user_kb = get_back_to_main_keyboard()
+
+    user_sent = True
+    try:
+        await bot.send_message(
+            chat_id=order.user_id,
+            text=user_notify_text,
+            reply_markup=user_kb,
+            disable_web_page_preview=False
+        )
+    except Exception as e:
+        logger.error(f"Foydalanuvchiga havola yuborishda xatolik ({order.user_id}): {e}")
+        user_sent = False
+
+    admin_confirm_text = (
+        f"✅ <b>Havola muvaffaqiyatli yuborildi!</b>\n\n"
+        f"🔖 Buyurtma: <code>{order.order_code}</code>\n"
+        f"📦 Xizmat: <b>{order.item_title}</b>\n"
+        f"👤 Xaridor ID: <code>{order.user_id}</code>\n"
+        f"🔗 Havola: <code>{raw_text}</code>\n\n"
+        f"📊 Holati: ✅ <b>Bajarildi</b>"
+    )
+    if not user_sent:
+        admin_confirm_text += "\n\n⚠️ <i>Diqqat: Foydalanuvchi botni bloklagan bo'lishi mumkin, xabar yetib bormadi.</i>"
+
+    await message.answer(admin_confirm_text)
+
 
 
 # ================= ADMIN CHANNELS ================= #

@@ -36,10 +36,14 @@ async def cb_orders_history(callback: CallbackQuery, state: FSMContext):
 
             date_str = ord_item.created_at.strftime("%d.%m.%Y %H:%M")
             rec = f"@{ord_item.recipient_username}" if ord_item.recipient_username else ""
+            link_info = ""
+            if ord_item.product_type == "service" and ord_item.fragment_payload and ord_item.status == "done":
+                link_info = f"\n   🔗 <b>Havola:</b> {ord_item.fragment_payload}\n   ⚠️ <i>24 soat ichida ulaning</i>"
+
             text += (
                 f"🔖 <b>{ord_item.order_code}</b> — {ord_item.item_title}\n"
                 f"   Summa: <b>{ord_item.total_price:,.0f} so'm</b> | {st_icon}\n"
-                f"   Qabul qiluvchi: {rec} ({date_str})\n\n"
+                f"   Qabul qiluvchi: {rec} ({date_str}){link_info}\n\n"
             )
 
     try:

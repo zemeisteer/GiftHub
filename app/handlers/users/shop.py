@@ -726,7 +726,7 @@ async def cb_service_purchase_confirm(callback: CallbackQuery, state: FSMContext
         f"👤 Qabul qiluvchi / Hisob: <code>{recipient_detail}</code>\n"
         f"💵 To'langan summa: <b>{price_uzs:,.0f} so'm</b>\n"
         f"💳 Qolgan balansingiz: <b>{new_balance:,.0f} so'm</b>\n\n"
-        "⚡ <i>Buyurtmangiz tizimga qabul qilindi. Tez orada faollashtiriladi!</i>"
+        "⏳ <b>Eslatma:</b> Taklif havolasi (link) eskirib, kuyib ketishining oldini olish uchun — eng yangi havola admin tomonidan sizga tez orada ushbu bot orqali yuboriladi!"
     )
     try:
         await callback.message.edit_text(success_text, reply_markup=get_back_to_main_keyboard())
@@ -742,11 +742,18 @@ async def cb_service_purchase_confirm(callback: CallbackQuery, state: FSMContext
         f"💵 Narxi: <b>{price_uzs:,.0f} so'm</b> (Tannarxi: {cost_uzs:,.0f} so'm)\n"
         f"👤 Xaridor: <a href='tg://user?id={user_id}'>{callback.from_user.full_name}</a> (<code>{user_id}</code>)\n"
         f"📝 Qabul qiluvchi ma'lumoti: <code>{recipient_detail}</code>\n"
-        f"📊 Holati: ⏳ <b>Kutilmoqda (pending)</b>\n"
-        "💡 <i>Web App admin panelidan 'Bajarildi' deb belgilashingiz mumkin.</i>"
+        f"📊 Holati: ⏳ <b>Kutilmoqda (pending)</b>\n\n"
+        "💡 <i>Havolani mijozga yuborish yoki bekor qilish uchun quyidagi tugmani bosing:</i>"
     )
+    admin_action_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🔗 Havola (Link) yuborish", callback_data=f"adm_srv:send:{order.id}"),
+            InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"adm_srv:cancel:{order.id}")
+        ]
+    ])
     for adm in config.ADMINS:
         try:
-            await callback.bot.send_message(chat_id=int(adm), text=admin_notify_text)
+            await callback.bot.send_message(chat_id=int(adm), text=admin_notify_text, reply_markup=admin_action_kb)
         except Exception as e:
             logger.warning(f"Adminga xizmat buyurtmasi xabarini yuborishda xatolik ({adm}): {e}")
+

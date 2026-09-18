@@ -262,7 +262,7 @@ async def list_all_orders(session: AsyncSession, search: Optional[str] = None, l
     res = await session.execute(query.limit(limit))
     return list(res.scalars().all())
 
-async def update_order_status(session: AsyncSession, order_id: int, new_status: str) -> Optional[Order]:
+async def update_order_status(session: AsyncSession, order_id: int, new_status: str, payload: Optional[str] = None) -> Optional[Order]:
     order = await session.get(Order, order_id)
     if not order:
         return None
@@ -283,11 +283,16 @@ async def update_order_status(session: AsyncSession, order_id: int, new_status: 
             session.add(tx)
 
     order.status = new_status
+    if payload is not None:
+        order.fragment_payload = payload
     if new_status == "done":
         order.completed_at = datetime.utcnow()
+        if order.product_type == "service":
+            order.fulfillment_status = "fulfilled"
     await session.commit()
     await session.refresh(order)
     return order
+
 
 # ================= MANDATORY CHANNELS ================= #
 

@@ -36,16 +36,20 @@ def get_admin_orders_keyboard(orders: list) -> InlineKeyboardMarkup:
     ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-def get_admin_order_action_keyboard(order_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="✅ Bajarildi deb belgilash", callback_data=f"adm_ord:done:{order_id}"),
-            InlineKeyboardButton(text="❌ Bekor qilish (+ Pul qaytarish)", callback_data=f"adm_ord:cancel:{order_id}")
-        ],
-        [
-            InlineKeyboardButton(text="🔙 Buyurtmalarga qaytish", callback_data="admin:orders")
-        ]
+def get_admin_order_action_keyboard(order_id: int, is_service: bool = False) -> InlineKeyboardMarkup:
+    rows = []
+    if is_service:
+        rows.append([
+            InlineKeyboardButton(text="🔗 Havola (Link) yuborish", callback_data=f"adm_srv:send:{order_id}")
+        ])
+    rows.append([
+        InlineKeyboardButton(text="✅ Bajarildi deb belgilash", callback_data=f"adm_ord:done:{order_id}"),
+        InlineKeyboardButton(text="❌ Bekor qilish (+ Pul qaytarish)", callback_data=f"adm_ord:cancel:{order_id}")
     ])
+    rows.append([
+        InlineKeyboardButton(text="🔙 Buyurtmalarga qaytish", callback_data="admin:orders")
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 def get_admin_channels_keyboard(channels: list) -> InlineKeyboardMarkup:
     buttons = []

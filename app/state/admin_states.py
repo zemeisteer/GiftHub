@@ -7,3 +7,7 @@ class AdminBroadcastState(StatesGroup):
 class AdminPriceState(StatesGroup):
     entering_star_cost = State()  # 1 Stars tannarxi (TON yoki so'm)
     entering_margin = State()     # Margin foizi
+
+class AdminDeliverServiceState(StatesGroup):
+    waiting_for_link = State()    # Taklif havolasi (link) kiritish holati
+
