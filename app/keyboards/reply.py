@@ -1,4 +1,5 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
+
 
 def get_reply_main_keyboard() -> ReplyKeyboardMarkup:
     """

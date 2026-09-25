@@ -1,13 +1,14 @@
 import logging
 from datetime import datetime
-from typing import Optional, List
+
 from aiogram import Bot
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+
 from data import config
 
 logger = logging.getLogger(__name__)
 
-def get_store_keyboard() -> Optional[InlineKeyboardMarkup]:
+def get_store_keyboard() -> InlineKeyboardMarkup | None:
     url = config.get_web_app_url() if hasattr(config, "get_web_app_url") else config.WEB_APP_URL
     if url and url.startswith("https://"):
         return InlineKeyboardMarkup(inline_keyboard=[
@@ -15,7 +16,7 @@ def get_store_keyboard() -> Optional[InlineKeyboardMarkup]:
         ])
     return None
 
-def get_admin_keyboard() -> Optional[InlineKeyboardMarkup]:
+def get_admin_keyboard() -> InlineKeyboardMarkup | None:
     url = config.get_admin_app_url() if hasattr(config, "get_admin_app_url") else config.ADMIN_APP_URL
     if url and url.startswith("https://"):
         return InlineKeyboardMarkup(inline_keyboard=[
@@ -24,7 +25,7 @@ def get_admin_keyboard() -> Optional[InlineKeyboardMarkup]:
     return None
 
 async def send_topup_notification(
-    bot: Optional[Bot],
+    bot: Bot | None,
     user_id: int,
     amount: float,
     method: str,
@@ -56,7 +57,7 @@ async def send_topup_notification(
     except Exception as e:
         logger.warning(f"Foydalanuvchiga to'ldirish xabarnomasi yuborilmadi ({user_id}): {e}")
 
-def format_recipient_link(recipient: Optional[str]) -> str:
+def format_recipient_link(recipient: str | None) -> str:
     if not recipient:
         return ""
     clean = recipient.strip()
@@ -72,7 +73,7 @@ def format_recipient_link(recipient: Optional[str]) -> str:
         return f'<a href="https://t.me/{clean}">@{clean}</a>'
 
 async def send_order_created_notification(
-    bot: Optional[Bot],
+    bot: Bot | None,
     user_id: int,
     order_code: str,
     item_title: str,
@@ -80,8 +81,8 @@ async def send_order_created_notification(
     total_price: float,
     status: str,
     new_balance: float,
-    recipient_username: Optional[str] = None,
-    buyer_username: Optional[str] = None
+    recipient_username: str | None = None,
+    buyer_username: str | None = None
 ):
     if not bot:
         return
@@ -118,18 +119,18 @@ async def send_order_created_notification(
         logger.warning(f"Foydalanuvchiga buyurtma xabarnomasi yuborilmadi ({user_id}): {e}")
 
 async def send_admin_order_alert(
-    bot: Optional[Bot],
-    admin_ids: List[str],
+    bot: Bot | None,
+    admin_ids: list[str],
     user_name: str,
     user_id: int,
-    username: Optional[str],
+    username: str | None,
     order_code: str,
     item_title: str,
     amount: int,
     total_price: float,
     cost_price: float,
     status: str,
-    recipient_username: Optional[str] = None
+    recipient_username: str | None = None
 ):
     if not bot:
         return
@@ -163,7 +164,7 @@ async def send_admin_order_alert(
             logger.warning(f"Adminga ({admin_id_str}) xabar yuborilmadi: {e}")
 
 async def send_order_status_update_notification(
-    bot: Optional[Bot],
+    bot: Bot | None,
     user_id: int,
     order_code: str,
     item_title: str,
@@ -205,7 +206,7 @@ async def send_order_status_update_notification(
         logger.warning(f"Buyurtma holati xabarnomasi yuborilmadi ({user_id}): {e}")
 
 async def send_referral_reward_notification(
-    bot: Optional[Bot],
+    bot: Bot | None,
     referrer_id: int,
     buyer_name: str,
     bonus_amount: float,
@@ -231,11 +232,11 @@ async def send_referral_reward_notification(
         logger.warning(f"Referal bonus xabarnomasi yuborilmadi ({referrer_id}): {e}")
 
 async def send_promocode_notification(
-    bot: Optional[Bot],
+    bot: Bot | None,
     user_id: int,
     code: str,
     message: str,
-    new_balance: Optional[float] = None
+    new_balance: float | None = None
 ):
     if not bot:
         return

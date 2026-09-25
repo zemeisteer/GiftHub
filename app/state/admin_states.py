@@ -1,5 +1,6 @@
 from aiogram.fsm.state import State, StatesGroup
 
+
 class AdminBroadcastState(StatesGroup):
     entering_message = State()    # Xabar matni yoki rasm
     confirming = State()          # Tasdiqlash va yuborish

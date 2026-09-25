@@ -1,24 +1,31 @@
 import asyncio
 import logging
-from aiogram import Router, F, Bot
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+
+from aiogram import Bot, F, Router
 from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
-from sqlalchemy import select, func
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    WebAppInfo,
+)
+from sqlalchemy import func, select
 
-from database.db import AsyncSessionLocal
-from database.models import User, Order, Transaction, ChannelRequirement
-from database import queries
-from data import config
-from app.state.admin_states import AdminBroadcastState, AdminDeliverServiceState
 from app.keyboards.admin_keyboards import (
-    get_admin_main_keyboard,
-    get_admin_orders_keyboard,
-    get_admin_order_action_keyboard,
+    get_admin_back_keyboard,
     get_admin_channels_keyboard,
-    get_admin_back_keyboard
+    get_admin_main_keyboard,
+    get_admin_order_action_keyboard,
+    get_admin_orders_keyboard,
 )
 from app.keyboards.shop_keyboards import get_back_to_main_keyboard
+from app.state.admin_states import AdminBroadcastState, AdminDeliverServiceState
+from data import config
+from database import queries
+from database.db import AsyncSessionLocal
+from database.models import Order, User
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -58,7 +65,7 @@ async def cmd_admin(message: Message):
     ])
 
     text = (
-        "⚙️ <b>GiftHub (Stellar) — Administrator Boshqaruv Markazi</b>\n\n"
+        "⚙️ <b>GiftHub — Administrator Boshqaruv Markazi</b>\n\n"
         f"🔗 <b>Onlayn Web App havolasi:</b>\n<code>{admin_url or 'Oflayn'}</code>\n\n"
         f"💻 <b>Kompyuter brauzerida (Tunnelsiz, 100% barqaror):</b>\n<code>{local_url}</code>\n\n"
         "<i>💡 Maslahat: Agar bot turgan kompyuterda ishlayotgan bo'lsangiz, yuqoridagi <b>localhost</b> manzilini brauzerda ochsangiz, hech qanday tunnelsiz 24/7 uzluksiz ishlaydi.</i>\n\n"
@@ -188,11 +195,12 @@ async def cb_admin_order_detail(callback: CallbackQuery):
         user = await queries.get_user_by_id(session, order.user_id)
         buyer_name = user.first_name if user else "Foydalanuvchi"
 
-    text = (
-        f"📦 <b>Buyurtma #{order.order_code}</b>\n\n"
-        f"👤 Xaridor: <b>{buyer_name}</b> (ID: <code>{order.user_id}</code>)\n"
-        f"🎁 Mahsulot: <b>{order.item_title}</b>\n"
-        f"👤 Qabul qiluvchi: <b>@{order.recipient_username or 'noma\'lum'}</b>\n"
+        rcp = order.recipient_username or "noma'lum"
+        text = (
+            f"📦 <b>Buyurtma #{order.order_code}</b>\n\n"
+            f"👤 Xaridor: <b>{buyer_name}</b> (ID: <code>{order.user_id}</code>)\n"
+            f"🎁 Mahsulot: <b>{order.item_title}</b>\n"
+            f"👤 Qabul qiluvchi: <b>@{rcp}</b>\n"
         f"💰 Narxi: <b>{order.total_price:,.0f} so'm</b>\n"
         f"📉 Tannarxi: <b>{order.cost_price:,.0f} so'm</b>\n"
         f"📊 Holati: <b>{order.status.upper()}</b>\n"

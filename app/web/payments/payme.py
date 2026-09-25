@@ -1,15 +1,15 @@
 import base64
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from data import config
-from database.models import User, PaymeTransaction
-from database import queries
 from app.utils.notifications import send_topup_notification
+from data import config
+from database import queries
+from database.models import PaymeTransaction
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ def generate_payme_link(user_id: int, amount_uzs: float) -> str:
     encoded = base64.b64encode(params_str.encode("utf-8")).decode("utf-8")
     return f"https://checkout.paycom.uz/{encoded}"
 
-def verify_payme_auth(auth_header: Optional[str]) -> bool:
+def verify_payme_auth(auth_header: str | None) -> bool:
     if not auth_header or not auth_header.startswith("Basic "):
         return False
     try:
@@ -44,7 +44,7 @@ def verify_payme_auth(auth_header: Optional[str]) -> bool:
     except Exception:
         return False
 
-def make_rpc_error(code: int, message: str, rpc_id: Any) -> Dict[str, Any]:
+def make_rpc_error(code: int, message: str, rpc_id: Any) -> dict[str, Any]:
     return {
         "jsonrpc": "2.0",
         "id": rpc_id,
@@ -60,9 +60,9 @@ def make_rpc_error(code: int, message: str, rpc_id: Any) -> Dict[str, Any]:
 
 async def handle_payme_request(
     session: AsyncSession,
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     bot=None
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     rpc_id = payload.get("id")
     method = payload.get("method")
     params = payload.get("params", {})
@@ -82,7 +82,7 @@ async def handle_payme_request(
     else:
         return make_rpc_error(-32601, "Metod topilmadi", rpc_id)
 
-async def check_perform_transaction(session: AsyncSession, params: Dict[str, Any], rpc_id: Any) -> Dict[str, Any]:
+async def check_perform_transaction(session: AsyncSession, params: dict[str, Any], rpc_id: Any) -> dict[str, Any]:
     amount = params.get("amount", 0) # in tiyin
     account = params.get("account", {})
     user_id_raw = account.get("user_id")
@@ -107,7 +107,7 @@ async def check_perform_transaction(session: AsyncSession, params: Dict[str, Any
         }
     }
 
-async def create_transaction(session: AsyncSession, params: Dict[str, Any], rpc_id: Any) -> Dict[str, Any]:
+async def create_transaction(session: AsyncSession, params: dict[str, Any], rpc_id: Any) -> dict[str, Any]:
     paycom_id = params.get("id")
     paycom_time = params.get("time", 0)
     amount = params.get("amount", 0)
@@ -166,7 +166,7 @@ async def create_transaction(session: AsyncSession, params: Dict[str, Any], rpc_
         }
     }
 
-async def perform_transaction(session: AsyncSession, params: Dict[str, Any], rpc_id: Any, bot=None) -> Dict[str, Any]:
+async def perform_transaction(session: AsyncSession, params: dict[str, Any], rpc_id: Any, bot=None) -> dict[str, Any]:
     paycom_id = params.get("id")
 
     res = await session.execute(
@@ -220,7 +220,7 @@ async def perform_transaction(session: AsyncSession, params: Dict[str, Any], rpc
         }
     }
 
-async def cancel_transaction(session: AsyncSession, params: Dict[str, Any], rpc_id: Any) -> Dict[str, Any]:
+async def cancel_transaction(session: AsyncSession, params: dict[str, Any], rpc_id: Any) -> dict[str, Any]:
     paycom_id = params.get("id")
     reason = params.get("reason")
 
@@ -260,7 +260,7 @@ async def cancel_transaction(session: AsyncSession, params: Dict[str, Any], rpc_
         }
     }
 
-async def check_transaction(session: AsyncSession, params: Dict[str, Any], rpc_id: Any) -> Dict[str, Any]:
+async def check_transaction(session: AsyncSession, params: dict[str, Any], rpc_id: Any) -> dict[str, Any]:
     paycom_id = params.get("id")
 
     res = await session.execute(
@@ -284,7 +284,7 @@ async def check_transaction(session: AsyncSession, params: Dict[str, Any], rpc_i
         }
     }
 
-async def get_statement(session: AsyncSession, params: Dict[str, Any], rpc_id: Any) -> Dict[str, Any]:
+async def get_statement(session: AsyncSession, params: dict[str, Any], rpc_id: Any) -> dict[str, Any]:
     from_time = params.get("from", 0)
     to_time = params.get("to", 0)
 

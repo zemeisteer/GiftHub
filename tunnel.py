@@ -4,16 +4,26 @@ Avtomatlashtirilgan va Uzluksiz Tunnel Skripti (Cloudflare Quick & Named Tunnel)
 2. .env fayliga yangi ADMIN_APP_URL va WEB_APP_URL ni o'zi yozib qo'yadi
 3. Uzilib qolmaydi, HTTP/2 protokoli bilan barqaror ishlaydi
 """
-import subprocess
-import re
-import sys
 import os
+import re
+import subprocess
+import sys
 import time
 
-if sys.platform == 'win32':
-    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
-PORT = 8008
+
+try:
+    from app.core.config import settings
+    PORT = settings.WEB_PORT
+except Exception:
+    PORT = 8000
+
 
 def update_env(tunnel_url):
     env_path = os.path.join(os.path.dirname(__file__), ".env")
@@ -93,7 +103,7 @@ def run_cloudflare_tunnel():
                         url_found = True
                         update_env(url)
                         print("\n" + "=" * 65)
-                        print(f"🎉 [SUCCESS] CLOUDFLARE HTTPS TUNNEL TAYYOR!")
+                        print("🎉 [SUCCESS] CLOUDFLARE HTTPS TUNNEL TAYYOR!")
                         print(f"🔗 Admin Web App: {url}/admin")
                         print("=" * 65 + "\n")
                         break

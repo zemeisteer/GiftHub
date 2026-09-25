@@ -1,40 +1,68 @@
-import os
-import json
+import asyncio
 import csv
 import io
-import asyncio
-from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any
+import json
+import os
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+from typing import Any
 
-from fastapi import FastAPI, Request, HTTPException, Depends, Header, Query
-from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
-from data import config
-from database.db import AsyncSessionLocal
-from database.models import (
-    User, PricingSetting, Order, Transaction, ChannelRequirement,
-    AdminAuditLog, ReferralSetting, PaymentSetting, BroadcastDraft
+from app.core.config import settings
+from app.core.database import AsyncSessionLocal
+from app.core.exceptions import (
+    GiftHubException,
+    InsufficientBalanceError,
+    PriceExpiredError,
+)
+from app.core.logging import get_logger
+from app.core.security import Permission, has_permission, validate_telegram_init_data
+from app.models import (
+    BroadcastDraft,
+    ChannelRequirement,
+    Order,
+    OrderStatus,
+    PaymentSetting,
+    ReferralSetting,
+    SupportTicket,
+    TicketMessage,
+    User,
+)
+from app.services.fulfillment.service import fulfillment_service
+from app.services.notifications.service import notification_service
+from app.services.orders.service import order_service
+from app.services.payments import (
+    generate_click_link,
+    generate_payme_link,
+    handle_autopaycard_webhook,
+    handle_payme_request,
+    process_click_complete,
+    process_click_prepare,
+    verify_payme_auth,
+)
+from app.services.pricing.service import pricing_service
+from app.services.promotions.service import promotion_service
+from app.services.referrals.service import referral_service
+from app.services.support.service import support_service
+from app.services.wallet.service import wallet_service
+from app.utils.notifications import (
+    send_admin_order_alert,
+    send_order_created_notification,
+    send_order_status_update_notification,
 )
 from database import queries
-from app.web.auth import validate_init_data
-from app.utils.notifications import (
-    send_topup_notification,
-    send_order_created_notification,
-    send_admin_order_alert,
-    send_order_status_update_notification,
-    send_referral_reward_notification,
-    send_promocode_notification
-)
-from app.web.payments import (
-    generate_click_link, process_click_prepare, process_click_complete,
-    generate_payme_link, handle_payme_request, verify_payme_auth,
-    handle_autopaycard_webhook
-)
 
-app = FastAPI(title="Stellar Bot Web App & API")
+logger = get_logger("GiftHubAPI")
+
+app = FastAPI(
+    title="GiftHub Web App & API",
+    description="Official API for GiftHub — Telegram Stars, Premium, Gifts & Services Platform",
+    version="2.0.0"
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -48,11 +76,67 @@ app.add_middleware(
 bot_instance = None
 bot_username = None
 
-def set_bot(bot, username: Optional[str] = None):
+
+def set_bot(bot, username: str | None = None):
     global bot_instance, bot_username
     bot_instance = bot
     if username:
         bot_username = username
+
+
+# ================= HEALTH & READINESS ================= #
+
+@app.get("/health")
+async def health_check():
+    """Liveness probe."""
+    return {
+        "status": "healthy",
+        "app": "GiftHub",
+        "environment": settings.ENVIRONMENT,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@app.get("/ready")
+async def readiness_check():
+    """Readiness probe verifying database and redis connectivity."""
+    db_ok = False
+    redis_ok = False
+
+    # Check Database
+    try:
+        from sqlalchemy import text
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+            db_ok = True
+    except Exception as e:
+        logger.error(f"Readiness DB probe failed: {e}")
+
+    # Check Redis
+    from app.core.redis import get_redis_client
+    r_client = get_redis_client()
+    if r_client:
+        try:
+            pong = await r_client.ping()
+            redis_ok = bool(pong)
+        except Exception:
+            redis_ok = False
+    else:
+        # If Redis is not configured in local environment, treat as optional
+        redis_ok = True if settings.ENVIRONMENT != "production" else False
+
+    is_ready = db_ok and (redis_ok or settings.ENVIRONMENT != "production")
+    status_code = status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": "ready" if is_ready else "not_ready",
+            "database": "connected" if db_ok else "disconnected",
+            "redis": "connected" if redis_ok else "disconnected",
+            "environment": settings.ENVIRONMENT
+        }
+    )
+
 
 @app.get("/api/bot-info")
 async def get_bot_info():
@@ -63,21 +147,24 @@ async def get_bot_info():
             uname = me.username
         except Exception:
             pass
-    return {"username": uname or "stellar_gift_bot"}
+    return {"username": uname or "gifthub_bot"}
 
-# ================= AUTH HELPER ================= #
+
+# ================= AUTHENTICATION & RBAC DEPENDENCIES ================= #
 
 async def get_current_user(
-    x_telegram_init_data: Optional[str] = Header(None),
-    x_auth_user_id: Optional[str] = Header(None),
-    auth_user_id: Optional[int] = Query(None)
+    x_telegram_init_data: str | None = Header(None),
+    x_auth_user_id: str | None = Header(None),
+    auth_user_id: int | None = Query(None)
 ) -> User:
     """
-    Authenticates user via Telegram WebApp initData header or dev auth_user_id.
+    Authenticates user authoritatively via Telegram WebApp initData HMAC-SHA256 signature.
+    Prevents unauthorized header or query user-id spoofing in production environments.
     """
     async with AsyncSessionLocal() as session:
+        # 1. Cryptographic Telegram initData validation
         if x_telegram_init_data:
-            tg_user = validate_init_data(x_telegram_init_data)
+            tg_user = validate_telegram_init_data(x_telegram_init_data)
             if tg_user and "id" in tg_user:
                 return await queries.get_or_create_user(
                     session=session,
@@ -88,89 +175,110 @@ async def get_current_user(
                     photo_url=tg_user.get("photo_url")
                 )
             else:
-                logging.warning(f"⚠️ Telegram initData haqiqiy emas yoki tekshiruvdan o'tmadi!")
+                logger.warning("Telegram initData validation failed or signature expired!")
 
-        # Explicit test / development user ID from query or custom header
-        effective_uid = auth_user_id
-        if not effective_uid and x_auth_user_id and x_auth_user_id.isdigit():
-            effective_uid = int(x_auth_user_id)
+        # 2. Local development fallback (Disallowed in production!)
+        if settings.ENVIRONMENT in ("development", "test"):
+            effective_uid = auth_user_id
+            if not effective_uid and x_auth_user_id and x_auth_user_id.isdigit():
+                effective_uid = int(x_auth_user_id)
 
-        if effective_uid:
-            user = await queries.get_user_by_id(session, effective_uid)
-            if user:
-                return user
-            return await queries.get_or_create_user(
-                session=session,
-                user_id=effective_uid,
-                first_name=f"Foydalanuvchi {effective_uid}",
-                username=f"user_{effective_uid}"
-            )
+            if effective_uid:
+                user = await queries.get_user_by_id(session, effective_uid)
+                if user:
+                    return user
+                return await queries.get_or_create_user(
+                    session=session,
+                    user_id=effective_uid,
+                    first_name=f"Foydalanuvchi {effective_uid}",
+                    username=f"user_{effective_uid}"
+                )
 
-        # Standalone browser demo (when opened directly in browser without Telegram)
-        # Never impersonate real admin user for normal users!
-        demo_uid = 999999999
-        user = await queries.get_user_by_id(session, demo_uid)
-        if not user:
-            user = await queries.get_or_create_user(
-                session=session,
-                user_id=demo_uid,
-                first_name="Mehmon",
-                username="mehmon"
-            )
-        return user
+            # Standalone browser demo guest
+            demo_uid = 999999999
+            user = await queries.get_user_by_id(session, demo_uid)
+            if not user:
+                user = await queries.get_or_create_user(
+                    session=session,
+                    user_id=demo_uid,
+                    first_name="Mehmon",
+                    username="mehmon"
+                )
+            return user
+
+        # In production without valid initData: Reject
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Autentifikatsiya talab qilinadi: Telegram initData yaroqsiz."
+        )
+
 
 async def get_current_admin(
-    x_telegram_init_data: Optional[str] = Header(None),
-    x_auth_user_id: Optional[str] = Header(None),
-    auth_user_id: Optional[int] = Query(None)
+    x_telegram_init_data: str | None = Header(None),
+    x_auth_user_id: str | None = Header(None),
+    auth_user_id: int | None = Query(None)
 ) -> User:
+    """
+    Authenticates administrator and checks admin status authoritatively on the server.
+    """
     async with AsyncSessionLocal() as session:
         if x_telegram_init_data:
-            tg_user = validate_init_data(x_telegram_init_data)
+            tg_user = validate_telegram_init_data(x_telegram_init_data)
             if tg_user and "id" in tg_user:
                 user = await queries.get_or_create_user(
                     session=session,
                     user_id=int(tg_user["id"]),
-                    first_name=tg_user.get("first_name", "Foydalanuvchi"),
+                    first_name=tg_user.get("first_name", "Admin"),
                     last_name=tg_user.get("last_name"),
                     username=tg_user.get("username"),
                     photo_url=tg_user.get("photo_url")
                 )
-                if user.role == "user" and str(user.id) not in config.ADMINS:
-                    raise HTTPException(status_code=403, detail="Ruxsat berilmagan: Siz admin emassiz!")
+                if user.role == "user" and user.id not in settings.ADMINS:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Ruxsat berilmagan: Siz admin emassiz!"
+                    )
                 return user
 
-        effective_uid = auth_user_id
-        if not effective_uid and x_auth_user_id and x_auth_user_id.isdigit():
-            effective_uid = int(x_auth_user_id)
+        # Development admin access (only with explicit user id)
+        if settings.ENVIRONMENT in ("development", "test"):
+            effective_uid = auth_user_id
+            if not effective_uid and x_auth_user_id and x_auth_user_id.isdigit():
+                effective_uid = int(x_auth_user_id)
 
-        if effective_uid:
-            user = await queries.get_user_by_id(session, effective_uid)
-            if user and (user.role != "user" or str(user.id) in config.ADMINS):
-                return user
-            raise HTTPException(status_code=403, detail="Ruxsat berilmagan: Siz admin emassiz!")
+            if effective_uid:
+                user = await queries.get_user_by_id(session, effective_uid)
+                if user and (user.role != "user" or user.id in settings.ADMINS):
+                    return user
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Ruxsat berilmagan: Siz admin emassiz!"
+                )
 
-        # Standalone PC browser access for Admin Panel (development / server manager)
-        if config.ADMINS:
-            admin_uid = int(config.ADMINS[0])
-            admin_user = await queries.get_user_by_id(session, admin_uid)
-            if admin_user:
-                return admin_user
-            return await queries.get_or_create_user(
-                session=session,
-                user_id=admin_uid,
-                first_name="Admin",
-                username="admin"
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ruxsat berilmagan: Admin huquqi talab qilinadi."
+        )
+
+
+def require_permission(required_perm: str):
+    """RBAC dependency ensuring the authenticated admin has the requested permission."""
+    async def permission_dependency(admin: User = Depends(get_current_admin)) -> User:
+        if not has_permission(admin.role, admin.id, required_perm):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Yetarli huquq mavjud emas: '{required_perm}' talab qilinadi."
             )
+        return admin
+    return permission_dependency
 
-        raise HTTPException(status_code=403, detail="Ruxsat berilmagan: Admin mavjud emas!")
 
 # ================= USER API ROUTES ================= #
 
 @app.get("/api/user/me")
 async def get_me(user: User = Depends(get_current_user)):
     async with AsyncSessionLocal() as session:
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
         # Count total orders
         res = await session.execute(
             select(func.count(Order.id)).where(Order.user_id == user.id)
@@ -179,7 +287,10 @@ async def get_me(user: User = Depends(get_current_user)):
 
         # Count completed orders
         res_done = await session.execute(
-            select(func.count(Order.id)).where(Order.user_id == user.id, Order.status == "done")
+            select(func.count(Order.id)).where(
+                Order.user_id == user.id,
+                Order.status.in_([OrderStatus.COMPLETED, "done"])
+            )
         )
         completed_orders = res_done.scalar() or 0
 
@@ -189,28 +300,22 @@ async def get_me(user: User = Depends(get_current_user)):
             "last_name": user.last_name,
             "username": user.username,
             "photo_url": user.photo_url,
-            "balance": round(user.balance),
+            "balance": round(float(user.balance)),
             "role": user.role,
             "referrals_count": user.referrals_count,
-            "referral_earnings": round(user.referral_earnings),
+            "referral_earnings": round(float(user.referral_earnings)),
             "orders_count": orders_count,
             "completed_orders": completed_orders,
             "created_at": user.created_at.strftime("%d %b %Y") if user.created_at else ""
         }
 
+
 @app.get("/api/gate/check")
 async def check_gate_channels(user: User = Depends(get_current_user)):
-    """
-    Checks mandatory subscription conditions (gate screen).
-    Supports: ordinary, join_request, external.
-    """
+    """Checks mandatory subscription conditions (gate screen)."""
     async with AsyncSessionLocal() as session:
-        # Admins bypass gate screen
-        if str(user.id) in config.ADMINS or (user.role and user.role != "user"):
-            return {
-                "all_passed": True,
-                "channels": []
-            }
+        if user.id in settings.ADMINS or (user.role and user.role != "user"):
+            return {"all_passed": True, "channels": []}
 
         channels = await queries.list_channels(session, active_only=True)
         results = []
@@ -222,10 +327,8 @@ async def check_gate_channels(user: User = Depends(get_current_user)):
 
             is_member = False
             if ch.req_type == "external":
-                # External links cannot be checked by bot API; marked as soft requirement
                 is_member = True
             elif ch.req_type == "join_request":
-                # Check if user sent join request or is already an accepted member
                 has_req = False
                 if ch.chat_id:
                     has_req = await queries.has_user_join_request(session, user.id, ch.chat_id)
@@ -237,7 +340,6 @@ async def check_gate_channels(user: User = Depends(get_current_user)):
                         has_req = False
                 is_member = has_req
             else:
-                # Ordinary / Group channel
                 target = ch.chat_id
                 if not target and ch.username_or_link:
                     val = ch.username_or_link.strip()
@@ -275,37 +377,31 @@ async def check_gate_channels(user: User = Depends(get_current_user)):
                 "passed": is_member
             })
 
-        return {
-            "all_passed": all_passed,
-            "channels": results
-        }
+        return {"all_passed": all_passed, "channels": results}
+
 
 @app.get("/api/products")
-async def get_products(stars_amount: Optional[int] = None):
-    """
-    Returns calculated product packages for Stars, Premium, and Gifts based on pricing engine.
-    """
+async def get_products(stars_amount: int | None = None):
+    """Returns calculated product packages for Stars, Premium, and Gifts with authoritative pricing."""
     async with AsyncSessionLocal() as session:
         pricing = await queries.get_pricing(session)
 
-        # Calculate popular Stars packages
         popular_amounts = [50, 100, 250, 500, 1000]
         stars_packages = []
         for amt in popular_amounts:
-            calc = queries.calculate_stars_price(amt, pricing)
+            calc = pricing_service.calculate_stars_price(amt, pricing)
             stars_packages.append({
                 "amount": amt,
                 "name": f"{amt} ⭐",
                 "price_uzs": calc["total_price_uzs"],
                 "discount_pct": calc["discount_percent"],
-                "formatted_price": f"{calc['total_price_uzs']:,}".replace(",", " ") + " so'm"
+                "formatted_price": calc["formatted_price"]
             })
 
         custom_calc = None
         if stars_amount and stars_amount > 0:
-            custom_calc = queries.calculate_stars_price(stars_amount, pricing)
+            custom_calc = pricing_service.calculate_stars_price(stars_amount, pricing)
 
-        # Premium packages
         try:
             prem_data = json.loads(pricing.premium_prices_json)
         except Exception:
@@ -317,28 +413,11 @@ async def get_products(stars_amount: Optional[int] = None):
             {"months": 12, "name": "Premium — 12 oy", "price_uzs": prem_data.get("12", 380000), "icon": "👑"}
         ]
 
-        # Gifts list
         try:
             gifts_list = json.loads(pricing.gifts_json) if pricing and pricing.gifts_json else []
         except Exception:
             gifts_list = []
-        if not gifts_list:
-            gifts_list = [
-                {"id": "bear", "name": "Teddy Bear", "price_uzs": 64000, "cost_uzs": 50000, "icon": "🧸", "type": "3d"},
-                {"id": "heart", "name": "Neon Heart", "price_uzs": 85000, "cost_uzs": 68000, "icon": "💖", "type": "3d"},
-                {"id": "rocket", "name": "Cosmo Rocket", "price_uzs": 120000, "cost_uzs": 95000, "icon": "🚀", "type": "3d"},
-                {"id": "star", "name": "Cosmic Star", "price_uzs": 60000, "cost_uzs": 45000, "icon": "⭐", "type": "classic"},
-                {"id": "ring", "name": "Diamond Ring", "price_uzs": 165000, "cost_uzs": 130000, "icon": "💍", "type": "3d"},
-                {"id": "trophy", "name": "Gold Trophy", "price_uzs": 195000, "cost_uzs": 155000, "icon": "🏆", "type": "vip"},
-                {"id": "yacht", "name": "Luxury Yacht", "price_uzs": 270000, "cost_uzs": 220000, "icon": "🛥️", "type": "vip"},
-                {"id": "crown", "name": "Ruby Crown", "price_uzs": 225000, "cost_uzs": 180000, "icon": "👑", "type": "vip"},
-                {"id": "medal", "name": "Star Medal", "price_uzs": 95000, "cost_uzs": 75000, "icon": "🎖️", "type": "classic"},
-                {"id": "hat", "name": "Magic Hat", "price_uzs": 78000, "cost_uzs": 60000, "icon": "🎩", "type": "classic"},
-                {"id": "eagle", "name": "Flying Eagle", "price_uzs": 110000, "cost_uzs": 88000, "icon": "🦅", "type": "3d"},
-                {"id": "lion", "name": "Golden Lion", "price_uzs": 175000, "cost_uzs": 140000, "icon": "🦁", "type": "vip"}
-            ]
 
-        # Active payment methods
         payment_setting = await session.get(PaymentSetting, 1)
         payment_methods = []
         card_info = None
@@ -347,11 +426,7 @@ async def get_products(stars_amount: Optional[int] = None):
                 c_num = getattr(payment_setting, "card_number", "8600 1234 5678 9012")
                 c_holder = getattr(payment_setting, "card_holder", "ANVAR S.")
                 b_name = getattr(payment_setting, "bank_name", "TBC Bank")
-                card_info = {
-                    "card_number": c_num,
-                    "card_holder": c_holder,
-                    "bank_name": b_name
-                }
+                card_info = {"card_number": c_num, "card_holder": c_holder, "bank_name": b_name}
                 payment_methods.append({
                     "id": "card",
                     "name": "Karta orqali to'lov",
@@ -368,9 +443,8 @@ async def get_products(stars_amount: Optional[int] = None):
             if payment_setting.autopaycard_active:
                 payment_methods.append({"id": "autopaycard", "name": "AutoPayCard (Karta)", "icon": "⚠️", "type": "backup"})
 
-        from app.services.fragment import pricing_engine
-        star_base_cost = pricing_engine.get_fragment_star_base_uzs()
-        margin = pricing.margin_percent if pricing and pricing.margin_percent is not None else 20.0
+        star_base_cost = float(pricing.star_unit_price_uzs or 180.0)
+        margin = float(pricing.margin_percent or 15.0)
         star_sell = round(star_base_cost * (1 + margin / 100), 2)
 
         return {
@@ -384,61 +458,51 @@ async def get_products(stars_amount: Optional[int] = None):
             "card_info": card_info
         }
 
+
 class TopupRequest(BaseModel):
     amount: float
     method: str # click, payme, autopaycard
 
+
 @app.post("/api/wallet/topup")
 async def topup_wallet(req: TopupRequest, user: User = Depends(get_current_user)):
+    """
+    Secure topup endpoint: generates official payment checkout link.
+    Prevents arbitrary client balance credit vulnerability.
+    """
     if req.amount < 1000:
         raise HTTPException(status_code=400, detail="Minimal to'ldirish summasi: 1 000 so'm")
 
-    async with AsyncSessionLocal() as session:
-        # In test / demo environment or payment gateway checkout:
-        # We credit balance immediately and record transaction
-        updated_user = await queries.update_user_balance(
-            session=session,
-            user_id=user.id,
-            amount=req.amount,
-            tx_type="topup",
-            method=req.method,
-            note=f"{req.method.upper()} orqali hamyon to'ldirildi"
-        )
+    dec_amount = Decimal(str(req.amount))
 
-        # Asynchronously send notification to user via bot
-        asyncio.create_task(
-            send_topup_notification(
-                bot=bot_instance,
+    # In local development mode with demo accounts, allow simulated credit
+    if settings.ENVIRONMENT in ("development", "test") and req.method == "test_demo":
+        async with AsyncSessionLocal() as session:
+            updated_user, tx = await wallet_service.credit_balance(
+                session=session,
                 user_id=user.id,
-                amount=req.amount,
-                method=req.method,
-                new_balance=updated_user.balance
+                amount=dec_amount,
+                tx_type="topup",
+                reference_type="dev_mock",
+                note=f"Test demo hisob to'ldirildi ({req.method})"
             )
-        )
+            await session.commit()
+            return {
+                "success": True,
+                "dev_mode": True,
+                "new_balance": round(float(updated_user.balance)),
+                "amount": float(dec_amount),
+                "method": req.method,
+                "message": f"[DEV] Hamyon to'ldirildi: +{dec_amount:,.0f} so'm"
+            }
 
-        return {
-            "success": True,
-            "new_balance": round(updated_user.balance),
-            "amount": req.amount,
-            "method": req.method,
-            "message": f"Hamyon muvaffaqiyatli to'ldirildi! (+{req.amount:,.0f} so'm)"
-        }
-
-class CheckoutLinkRequest(BaseModel):
-    amount: float
-    method: str # click, payme, autopaycard
-
-@app.post("/api/wallet/checkout-link")
-async def get_checkout_link(req: CheckoutLinkRequest, user: User = Depends(get_current_user)):
-    if req.amount < 1000:
-        raise HTTPException(status_code=400, detail="Minimal to'ldirish summasi: 1 000 so'm")
-
+    # Generate checkout link for the requested payment provider
     if req.method == "click":
-        url = generate_click_link(user.id, req.amount)
-        return {"success": True, "method": "click", "checkout_url": url, "amount": req.amount}
+        url = generate_click_link(user.id, float(dec_amount))
+        return {"success": True, "method": "click", "checkout_url": url, "amount": float(dec_amount)}
     elif req.method == "payme":
-        url = generate_payme_link(user.id, req.amount)
-        return {"success": True, "method": "payme", "checkout_url": url, "amount": req.amount}
+        url = generate_payme_link(user.id, float(dec_amount))
+        return {"success": True, "method": "payme", "checkout_url": url, "amount": float(dec_amount)}
     elif req.method == "autopaycard":
         async with AsyncSessionLocal() as session:
             ps = await session.get(PaymentSetting, 1)
@@ -447,10 +511,42 @@ async def get_checkout_link(req: CheckoutLinkRequest, user: User = Depends(get_c
                 "success": True,
                 "method": "autopaycard",
                 "instructions": f"Ushbu summani ko'rsatilgan Uzcard kartaga o'tkazing: **** **** **** {card_last4}",
-                "amount": req.amount
+                "amount": float(dec_amount)
             }
     else:
         raise HTTPException(status_code=400, detail="Noma'lum to'lov usuli")
+
+
+class CheckoutLinkRequest(BaseModel):
+    amount: float
+    method: str
+
+
+@app.post("/api/wallet/checkout-link")
+async def get_checkout_link(req: CheckoutLinkRequest, user: User = Depends(get_current_user)):
+    if req.amount < 1000:
+        raise HTTPException(status_code=400, detail="Minimal to'ldirish summasi: 1 000 so'm")
+
+    dec_amount = Decimal(str(req.amount))
+    if req.method == "click":
+        url = generate_click_link(user.id, float(dec_amount))
+        return {"success": True, "method": "click", "checkout_url": url, "amount": float(dec_amount)}
+    elif req.method == "payme":
+        url = generate_payme_link(user.id, float(dec_amount))
+        return {"success": True, "method": "payme", "checkout_url": url, "amount": float(dec_amount)}
+    elif req.method == "autopaycard":
+        async with AsyncSessionLocal() as session:
+            ps = await session.get(PaymentSetting, 1)
+            card_last4 = ps.autopaycard_last4 if ps else "6412"
+            return {
+                "success": True,
+                "method": "autopaycard",
+                "instructions": f"Ushbu summani ko'rsatilgan Uzcard kartaga o'tkazing: **** **** **** {card_last4}",
+                "amount": float(dec_amount)
+            }
+    else:
+        raise HTTPException(status_code=400, detail="Noma'lum to'lov usuli")
+
 
 # ================= OFFICIAL PAYMENT WEBHOOKS ================= #
 
@@ -478,6 +574,7 @@ async def click_webhook_handler(request: Request):
             result = {"error": -3, "error_note": "Action not found"}
         return JSONResponse(result)
 
+
 @app.post("/api/payments/payme")
 async def payme_webhook_handler(request: Request):
     auth_header = request.headers.get("authorization")
@@ -485,10 +582,7 @@ async def payme_webhook_handler(request: Request):
         return JSONResponse({
             "jsonrpc": "2.0",
             "id": None,
-            "error": {
-                "code": -32504,
-                "message": "Avtorizatsiya xatosi"
-            }
+            "error": {"code": -32504, "message": "Avtorizatsiya xatosi"}
         })
 
     try:
@@ -504,6 +598,7 @@ async def payme_webhook_handler(request: Request):
         result = await handle_payme_request(session, payload, bot=bot_instance)
         return JSONResponse(result)
 
+
 @app.post("/api/payments/autopaycard")
 async def autopaycard_webhook_handler(request: Request):
     try:
@@ -516,52 +611,81 @@ async def autopaycard_webhook_handler(request: Request):
         return JSONResponse(result)
 
 
+# ================= CHECKOUT & ORDERS ================= #
+
+class PriceLockRequest(BaseModel):
+    product_type: str
+    amount: int = 1
+
+
+@app.post("/api/checkout/price-lock")
+async def create_price_lock_endpoint(req: PriceLockRequest, user: User = Depends(get_current_user)):
+    """Creates a temporary price lock for checkout."""
+    async with AsyncSessionLocal() as session:
+        lock = await pricing_service.create_price_lock(
+            session=session,
+            product_type=req.product_type,
+            amount=req.amount,
+            user_id=user.id
+        )
+        now = datetime.now(timezone.utc)
+        time_left = max(0, int((lock.expires_at - now).total_seconds()))
+        return {
+            "success": True,
+            "lock_id": lock.id,
+            "product_type": lock.product_type,
+            "amount": lock.amount,
+            "total_price_uzs": float(lock.total_price),
+            "unit_price_uzs": float(lock.unit_price),
+            "expires_at": lock.expires_at.isoformat(),
+            "time_left_seconds": time_left
+        }
+
+
 class PurchaseRequest(BaseModel):
-    product_type: str # stars, premium, gift
+    product_type: str # stars, premium, gift, service
     item_title: str
     amount: int = 1
-    total_price: float
-    recipient_username: Optional[str] = None
+    recipient_username: str | None = None
+    promo_code: str | None = None
+    price_lock_id: str | None = None
+
 
 @app.post("/api/orders/create")
 async def create_order_endpoint(req: PurchaseRequest, user: User = Depends(get_current_user)):
+    """
+    Authoritative order creation endpoint.
+    Client-supplied price is strictly ignored; backend calculates authoritative price.
+    """
     async with AsyncSessionLocal() as session:
-        # Fetch fresh user to check balance
-        u = await queries.get_user_by_id(session, user.id)
-        if not u or u.balance < req.total_price:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Balansingizda mablag' yetarli emas! Joriy balans: {round(u.balance if u else 0):,} so'm"
+        try:
+            order, bonus, referrer = await order_service.create_order(
+                session=session,
+                user_id=user.id,
+                product_type=req.product_type,
+                item_title=req.item_title,
+                amount=req.amount,
+                recipient_username=req.recipient_username,
+                promo_code_str=req.promo_code,
+                price_lock_id=req.price_lock_id
             )
+        except InsufficientBalanceError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except PriceExpiredError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except GiftHubException as e:
+            raise HTTPException(status_code=e.status_code, detail=e.message)
 
-        pricing = await queries.get_pricing(session)
-        cost_price = req.total_price * 0.85 # default approx cost
-
-        if req.product_type == "stars":
-            calc = queries.calculate_stars_price(req.amount, pricing)
-            cost_price = calc["cost_total_uzs"]
-        elif req.product_type == "premium":
-            prem_base = {"3": 138000, "6": 205000, "12": 375000}
-            cost_price = prem_base.get(str(req.amount), req.total_price * 0.9)
-
-        order, bonus, referrer = await queries.create_order(
-            session=session,
-            user_id=user.id,
-            product_type=req.product_type,
-            item_title=req.item_title,
-            amount=req.amount,
-            total_price=req.total_price,
-            cost_price=cost_price,
-            recipient_username=req.recipient_username
-        )
-
-        # Trigger Fragment automated purchase & delivery
+        # Trigger Fragment automated delivery asynchronously
         from app.services.fragment import fragment_client
         asyncio.create_task(
             fragment_client.fulfill_order(order_id=order.id, bot=bot_instance)
         )
 
-        # Trigger background notifications
+        # Trigger notifications
+        u = await queries.get_user_by_id(session, user.id)
+        current_bal = float(u.balance) if u else 0.0
+
         asyncio.create_task(
             send_order_created_notification(
                 bot=bot_instance,
@@ -569,9 +693,9 @@ async def create_order_endpoint(req: PurchaseRequest, user: User = Depends(get_c
                 order_code=order.order_code,
                 item_title=order.item_title,
                 amount=order.amount,
-                total_price=order.total_price,
+                total_price=float(order.total_price),
                 status=order.status,
-                new_balance=u.balance - req.total_price,
+                new_balance=current_bal,
                 recipient_username=req.recipient_username,
                 buyer_username=user.username
             )
@@ -579,45 +703,39 @@ async def create_order_endpoint(req: PurchaseRequest, user: User = Depends(get_c
         asyncio.create_task(
             send_admin_order_alert(
                 bot=bot_instance,
-                admin_ids=config.ADMINS,
+                admin_ids=settings.ADMINS,
                 user_name=user.first_name,
                 user_id=user.id,
                 username=user.username,
                 order_code=order.order_code,
                 item_title=order.item_title,
                 amount=order.amount,
-                total_price=order.total_price,
-                cost_price=cost_price,
+                total_price=float(order.total_price),
+                cost_price=float(order.cost_price),
                 status=order.status,
                 recipient_username=req.recipient_username
             )
         )
-        if bonus > 0 and referrer:
-            asyncio.create_task(
-                send_referral_reward_notification(
-                    bot=bot_instance,
-                    referrer_id=referrer.id,
-                    buyer_name=user.first_name,
-                    bonus_amount=bonus,
-                    new_balance=referrer.balance
-                )
-            )
 
         return {
             "success": True,
             "order_code": order.order_code,
-            "new_balance": round(u.balance - req.total_price),
+            "order_id": order.id,
+            "product_type": order.product_type,
+            "item_title": order.item_title,
+            "total_price": float(order.total_price),
             "status": order.status,
-            "message": f"{req.item_title} muvaffaqiyatli xarid qilindi!"
+            "new_balance": round(current_bal)
         }
+
 
 @app.get("/api/orders/history")
 async def get_order_history(
-    status: Optional[str] = "all",
+    status: str | None = None,
     user: User = Depends(get_current_user)
 ):
     async with AsyncSessionLocal() as session:
-        orders = await queries.list_user_orders(session, user_id=user.id, status=status)
+        orders = await queries.list_user_orders(session, user.id, status=status)
         return [
             {
                 "id": o.id,
@@ -625,106 +743,221 @@ async def get_order_history(
                 "product_type": o.product_type,
                 "item_title": o.item_title,
                 "amount": o.amount,
-                "total_price": round(o.total_price),
-                "formatted_price": f"{round(o.total_price):,} so'm".replace(",", " "),
+                "total_price": round(float(o.total_price)),
                 "status": o.status,
+                "recipient_username": o.recipient_username,
                 "created_at": o.created_at.strftime("%d %b, %H:%M") if o.created_at else ""
             }
             for o in orders
         ]
 
+
 class PromoApplyRequest(BaseModel):
     code: str
-    order_total: Optional[float] = 0.0
+    order_total: float = 0.0
+    product_type: str = "all"
 
-@app.post("/api/promocodes/apply")
+
+@app.post("/api/promo/apply")
 async def apply_promocode_endpoint(req: PromoApplyRequest, user: User = Depends(get_current_user)):
     async with AsyncSessionLocal() as session:
-        result = await queries.apply_promo_code(
-            session=session,
-            code=req.code,
-            user_id=user.id,
-            order_total=req.order_total
-        )
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["detail"])
-
-        # Send Telegram notification via bot
-        asyncio.create_task(
-            send_promocode_notification(
-                bot=bot_instance,
+        try:
+            res = await promotion_service.apply_promo_code(
+                session=session,
+                code_str=req.code,
                 user_id=user.id,
-                code=req.code,
-                message=result.get("message", "Muvaffaqiyatli qo'llandi!"),
-                new_balance=result.get("new_balance")
+                order_total=Decimal(str(req.order_total)),
+                product_type=req.product_type
             )
-        )
-        return result
+            return res
+        except GiftHubException as e:
+            return {"success": False, "detail": e.message}
 
-# ================= ADMIN API ROUTES ================= #
 
-@app.get("/api/admin/dashboard")
-async def get_admin_dashboard(admin: User = Depends(get_current_admin)):
+@app.get("/api/referrals/analytics")
+async def get_referral_analytics_endpoint(user: User = Depends(get_current_user)):
     async with AsyncSessionLocal() as session:
-        from sqlalchemy import select, func
-        # New users count
-        now = datetime.utcnow()
+        analytics = await referral_service.get_referral_analytics(session, user.id)
+        return analytics
+
+
+# ================= IN-APP NOTIFICATIONS ================= #
+
+@app.get("/api/notifications")
+async def get_notifications_endpoint(user: User = Depends(get_current_user)):
+    async with AsyncSessionLocal() as session:
+        notifs = await notification_service.list_notifications(session, user.id)
+        return [
+            {
+                "id": n.id,
+                "type": n.type,
+                "title": n.title,
+                "message": n.message,
+                "related_entity": n.related_entity,
+                "is_read": n.is_read,
+                "created_at": n.created_at.strftime("%d %b, %H:%M") if n.created_at else ""
+            }
+            for n in notifs
+        ]
+
+
+@app.post("/api/notifications/{notification_id}/read")
+async def mark_notification_read_endpoint(notification_id: int, user: User = Depends(get_current_user)):
+    async with AsyncSessionLocal() as session:
+        ok = await notification_service.mark_as_read(session, notification_id, user.id)
+        return {"success": ok}
+
+
+@app.post("/api/notifications/read-all")
+async def mark_all_notifications_read_endpoint(user: User = Depends(get_current_user)):
+    async with AsyncSessionLocal() as session:
+        count = await notification_service.mark_all_as_read(session, user.id)
+        return {"success": True, "count": count}
+
+
+# ================= SUPPORT TICKETS ================= #
+
+class TicketCreateRequest(BaseModel):
+    subject: str
+    category: str = "other"
+    message: str
+    order_id: int | None = None
+
+
+@app.post("/api/support/tickets")
+async def create_ticket_endpoint(req: TicketCreateRequest, user: User = Depends(get_current_user)):
+    async with AsyncSessionLocal() as session:
+        ticket = await support_service.create_ticket(
+            session=session,
+            user_id=user.id,
+            subject=req.subject,
+            category=req.category,
+            initial_message=req.message,
+            order_id=req.order_id
+        )
+        return {"success": True, "ticket_id": ticket.id}
+
+
+@app.get("/api/support/tickets")
+async def list_user_tickets_endpoint(user: User = Depends(get_current_user)):
+    async with AsyncSessionLocal() as session:
+        tickets = await support_service.list_user_tickets(session, user.id)
+        return [
+            {
+                "id": t.id,
+                "subject": t.subject,
+                "category": t.category,
+                "status": t.status,
+                "order_id": t.order_id,
+                "created_at": t.created_at.strftime("%d %b, %H:%M") if t.created_at else ""
+            }
+            for t in tickets
+        ]
+
+
+@app.get("/api/support/tickets/{ticket_id}/messages")
+async def get_ticket_messages_endpoint(ticket_id: int, user: User = Depends(get_current_user)):
+    async with AsyncSessionLocal() as session:
+        ticket = await session.get(SupportTicket, ticket_id)
+        if not ticket or (ticket.user_id != user.id and user.role == "user" and user.id not in settings.ADMINS):
+            raise HTTPException(status_code=404, detail="Murojaat topilmadi")
+
+        from sqlalchemy import select
+        res = await session.execute(
+            select(TicketMessage).where(TicketMessage.ticket_id == ticket_id).order_by(TicketMessage.created_at)
+        )
+        messages = res.scalars().all()
+        return [
+            {
+                "id": m.id,
+                "sender_id": m.sender_id,
+                "sender_type": m.sender_type,
+                "text": m.text,
+                "created_at": m.created_at.strftime("%d %b, %H:%M") if m.created_at else ""
+            }
+            for m in messages
+        ]
+
+
+class TicketReplyRequest(BaseModel):
+    text: str
+
+
+@app.post("/api/support/tickets/{ticket_id}/reply")
+async def reply_ticket_endpoint(ticket_id: int, req: TicketReplyRequest, user: User = Depends(get_current_user)):
+    async with AsyncSessionLocal() as session:
+        ticket = await session.get(SupportTicket, ticket_id)
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Murojaat topilmadi")
+
+        sender_type = "admin" if (user.role != "user" or user.id in settings.ADMINS) else "user"
+        msg = await support_service.add_reply(
+            session=session,
+            ticket_id=ticket_id,
+            sender_id=user.id,
+            sender_type=sender_type,
+            text=req.text
+        )
+        return {"success": True, "message_id": msg.id}
+
+
+# ================= ADMIN APIS WITH RBAC ================= #
+
+@app.get("/api/admin/stats")
+async def get_admin_dashboard(admin: User = Depends(require_permission(Permission.ANALYTICS_READ))):
+    async with AsyncSessionLocal() as session:
+        from sqlalchemy import func, select
+        now = datetime.now(timezone.utc)
         week_ago = now - timedelta(days=7)
 
         users_total = (await session.execute(select(func.count(User.id)))).scalar() or 0
-        new_users_week = (await session.execute(
-            select(func.count(User.id)).where(User.created_at >= week_ago)
-        )).scalar() or 0
+        new_users_week = (await session.execute(select(func.count(User.id)).where(User.created_at >= week_ago))).scalar() or 0
 
-        # Total sales & profit
         sales_total = (await session.execute(
-            select(func.sum(Order.total_price)).where(Order.status == "done")
+            select(func.sum(Order.total_price)).where(Order.status.in_([OrderStatus.COMPLETED, "done"]))
         )).scalar() or 0.0
 
-        cost_total = (await session.execute(
-            select(func.sum(Order.cost_price)).where(Order.status == "done")
+        costs_total = (await session.execute(
+            select(func.sum(Order.cost_price)).where(Order.status.in_([OrderStatus.COMPLETED, "done"]))
         )).scalar() or 0.0
 
-        profit_total = sales_total - cost_total
+        profit_total = max(0.0, float(sales_total) - float(costs_total))
 
-        # Referrals sales count
         ref_sales_count = (await session.execute(
-            select(func.count(Order.id)).join(User, Order.user_id == User.id).where(
-                User.referrer_id.isnot(None), Order.status == "done"
-            )
+            select(func.count(Order.id))
+            .select_from(Order)
+            .join(User, Order.user_id == User.id)
+            .where(User.referrer_id.isnot(None), Order.status.in_([OrderStatus.COMPLETED, "done"]))
         )).scalar() or 0
 
-        # Product sales breakdown
         stars_sales = (await session.execute(
-            select(func.sum(Order.total_price)).where(Order.product_type == "stars", Order.status == "done")
+            select(func.sum(Order.total_price)).where(Order.product_type == "stars", Order.status.in_([OrderStatus.COMPLETED, "done"]))
         )).scalar() or 0.0
         stars_cost = (await session.execute(
-            select(func.sum(Order.cost_price)).where(Order.product_type == "stars", Order.status == "done")
+            select(func.sum(Order.cost_price)).where(Order.product_type == "stars", Order.status.in_([OrderStatus.COMPLETED, "done"]))
         )).scalar() or 0.0
 
         prem_sales = (await session.execute(
-            select(func.sum(Order.total_price)).where(Order.product_type == "premium", Order.status == "done")
+            select(func.sum(Order.total_price)).where(Order.product_type == "premium", Order.status.in_([OrderStatus.COMPLETED, "done"]))
         )).scalar() or 0.0
         prem_cost = (await session.execute(
-            select(func.sum(Order.cost_price)).where(Order.product_type == "premium", Order.status == "done")
+            select(func.sum(Order.cost_price)).where(Order.product_type == "premium", Order.status.in_([OrderStatus.COMPLETED, "done"]))
         )).scalar() or 0.0
 
         gifts_sales = (await session.execute(
-            select(func.sum(Order.total_price)).where(Order.product_type == "gift", Order.status == "done")
+            select(func.sum(Order.total_price)).where(Order.product_type == "gift", Order.status.in_([OrderStatus.COMPLETED, "done"]))
         )).scalar() or 0.0
         gifts_cost = (await session.execute(
-            select(func.sum(Order.cost_price)).where(Order.product_type == "gift", Order.status == "done")
+            select(func.sum(Order.cost_price)).where(Order.product_type == "gift", Order.status.in_([OrderStatus.COMPLETED, "done"]))
         )).scalar() or 0.0
 
-        # Fetch completed orders for sales charts (last 30 days)
         month_ago = now - timedelta(days=30)
         orders_q = await session.execute(
             select(Order.total_price, Order.created_at, Order.completed_at)
-            .where(Order.status == "done", Order.created_at >= month_ago)
+            .where(Order.status.in_([OrderStatus.COMPLETED, "done"]), Order.created_at >= month_ago)
         )
         done_orders = orders_q.all()
 
-        # 1. Kunlik (Bugungi kun - 4 soatlik intervallar)
         today_date = now.date()
         daily_chart = [
             {"label": "00-04", "start_h": 0, "end_h": 4, "sales": 0, "count": 0},
@@ -740,11 +973,10 @@ async def get_admin_dashboard(admin: User = Depends(get_current_admin)):
                 h = dt.hour
                 for slot in daily_chart:
                     if slot["start_h"] <= h < slot["end_h"]:
-                        slot["sales"] += round(row.total_price or 0)
+                        slot["sales"] += round(float(row.total_price or 0))
                         slot["count"] += 1
                         break
 
-        # 2. Haftalik (So'nggi 7 kun: Du, Se, Ch, Pa, Ju, Sh, Ya)
         uz_weekdays = ["Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"]
         weekly_chart = []
         for d in range(6, -1, -1):
@@ -755,7 +987,7 @@ async def get_admin_dashboard(admin: User = Depends(get_current_admin)):
             for row in done_orders:
                 dt = row.completed_at or row.created_at
                 if dt and dt.date() == target_dt:
-                    day_sales += round(row.total_price or 0)
+                    day_sales += round(float(row.total_price or 0))
                     day_count += 1
             weekly_chart.append({
                 "label": day_label,
@@ -764,7 +996,6 @@ async def get_admin_dashboard(admin: User = Depends(get_current_admin)):
                 "count": day_count
             })
 
-        # 3. Oylik (So'nggi 4 hafta)
         monthly_chart = []
         for w in range(3, -1, -1):
             start_date = (now - timedelta(days=(w+1)*7)).date()
@@ -775,7 +1006,7 @@ async def get_admin_dashboard(admin: User = Depends(get_current_admin)):
             for row in done_orders:
                 dt = row.completed_at or row.created_at
                 if dt and start_date < dt.date() <= end_date:
-                    week_sales += round(row.total_price or 0)
+                    week_sales += round(float(row.total_price or 0))
                     week_count += 1
             monthly_chart.append({
                 "label": week_label,
@@ -787,49 +1018,24 @@ async def get_admin_dashboard(admin: User = Depends(get_current_admin)):
         return {
             "users_total": users_total,
             "new_users_week": new_users_week,
-            "sales_total": round(sales_total),
-            "profit_total": round(profit_total),
+            "sales_total": round(float(sales_total)),
+            "profit_total": round(float(profit_total)),
             "ref_sales_count": ref_sales_count,
             "breakdown": [
-                {
-                    "name": "Stars (jami)",
-                    "sales": round(stars_sales),
-                    "cost": round(stars_cost),
-                    "profit": round(stars_sales - stars_cost)
-                },
-                {
-                    "name": "Premium (jami)",
-                    "sales": round(prem_sales),
-                    "cost": round(prem_cost),
-                    "profit": round(prem_sales - prem_cost)
-                },
-                {
-                    "name": "Sovg'alar (jami)",
-                    "sales": round(gifts_sales),
-                    "cost": round(gifts_cost),
-                    "profit": round(gifts_sales - gifts_cost)
-                }
+                {"name": "Stars (jami)", "sales": round(float(stars_sales)), "cost": round(float(stars_cost)), "profit": round(float(stars_sales) - float(stars_cost))},
+                {"name": "Premium (jami)", "sales": round(float(prem_sales)), "cost": round(float(prem_cost)), "profit": round(float(prem_sales) - float(prem_cost))},
+                {"name": "Sovg'alar (jami)", "sales": round(float(gifts_sales)), "cost": round(float(gifts_cost)), "profit": round(float(gifts_sales) - float(gifts_cost))}
             ],
-            "top_products": [
-                {"name": "100 ⭐ Stars", "count": 412},
-                {"name": "Premium — 3 oy", "count": 96},
-                {"name": "50 ⭐ Stars", "count": 88},
-                {"name": "Teddy Bear sovg'a", "count": 21}
-            ],
-            "charts": {
-                "daily": daily_chart,
-                "weekly": weekly_chart,
-                "monthly": monthly_chart
-            }
+            "charts": {"daily": daily_chart, "weekly": weekly_chart, "monthly": monthly_chart}
         }
 
+
 @app.get("/api/admin/pricing")
-async def get_admin_pricing(admin: User = Depends(get_current_admin)):
-    from app.services.fragment import pricing_engine
+async def get_admin_pricing(admin: User = Depends(require_permission(Permission.PRICING_READ))):
     async with AsyncSessionLocal() as session:
         pricing = await queries.get_pricing(session)
-        frag_star_base = pricing_engine.get_star_base_cost()
-        margin = pricing.margin_percent if pricing and pricing.margin_percent is not None else 20.0
+        frag_star_base = float(pricing.star_unit_price_uzs or 180.0)
+        margin = float(pricing.margin_percent or 15.0)
         unit_sell = frag_star_base * (1 + margin / 100)
 
         discounts = []
@@ -838,18 +1044,13 @@ async def get_admin_pricing(admin: User = Depends(get_current_admin)):
         except Exception:
             discounts = []
 
-        prem_bases = pricing_engine.get_premium_base_costs()
+        prem_bases = {"3": 138000, "6": 205000, "12": 375000}
         prem_prices = {}
         try:
             prem_prices = json.loads(pricing.premium_prices_json) if pricing.premium_prices_json else {}
         except Exception:
-            prem_prices = {}
-        
-        # Ensure default prices if empty
-        if not prem_prices:
             prem_prices = {"3": 143000, "6": 210000, "12": 380000}
 
-        # Calculate margins
         prem_margins = {}
         for k in ["3", "6", "12"]:
             base = prem_bases.get(k, 140000)
@@ -860,17 +1061,11 @@ async def get_admin_pricing(admin: User = Depends(get_current_admin)):
         try:
             gifts = json.loads(pricing.gifts_json) if pricing.gifts_json else []
         except Exception:
-            gifts = [
-                {"id": "bear", "name": "Teddy Bear", "price_uzs": 64000, "icon": "🧸"},
-                {"id": "heart", "name": "Neon Heart", "price_uzs": 85000, "icon": "💖"},
-                {"id": "rocket", "name": "Cosmo Rocket", "price_uzs": 120000, "icon": "🚀"}
-            ]
-
-        gifts_bases = pricing_engine.get_gifts_base_costs()
+            gifts = []
 
         return {
-            "stars_cost_ton": pricing.stars_cost_ton,
-            "ton_rate_uzs": pricing.ton_rate_uzs,
+            "stars_cost_ton": float(pricing.stars_cost_ton),
+            "ton_rate_uzs": float(pricing.ton_rate_uzs),
             "margin_percent": margin,
             "fragment_stars_base_uzs": frag_star_base,
             "star_unit_price_uzs": frag_star_base,
@@ -880,22 +1075,23 @@ async def get_admin_pricing(admin: User = Depends(get_current_admin)):
             "fragment_premium_bases": prem_bases,
             "premium_prices": prem_prices,
             "premium_margins": prem_margins,
-            "gifts": gifts,
-            "fragment_gifts_base_uzs": gifts_bases
+            "gifts": gifts
         }
+
 
 class PricingUpdateRequest(BaseModel):
     stars_cost_ton: float = 0.0021
     ton_rate_uzs: float = 14800.0
     margin_percent: float = 20.0
-    star_unit_price_uzs: Optional[float] = None
-    discounts: Optional[List[Dict[str, Any]]] = None
-    premium_prices: Optional[Dict[str, Any]] = None
-    premium_margins: Optional[Dict[str, Any]] = None
-    gifts: Optional[List[Dict[str, Any]]] = None
+    star_unit_price_uzs: float | None = None
+    discounts: list[dict[str, Any]] | None = None
+    premium_prices: dict[str, Any] | None = None
+    premium_margins: dict[str, Any] | None = None
+    gifts: list[dict[str, Any]] | None = None
+
 
 @app.post("/api/admin/pricing")
-async def update_admin_pricing(req: PricingUpdateRequest, admin: User = Depends(get_current_admin)):
+async def update_admin_pricing(req: PricingUpdateRequest, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))):
     async with AsyncSessionLocal() as session:
         disc_str = json.dumps(req.discounts) if req.discounts is not None else None
         prem_str = json.dumps(req.premium_prices) if req.premium_prices is not None else None
@@ -915,18 +1111,23 @@ async def update_admin_pricing(req: PricingUpdateRequest, admin: User = Depends(
             admin_id=admin.id,
             admin_username=admin.username,
             action="Narx sozlamalarini yangiladi",
+            entity_type="pricing",
             details=f"1 Stars: {req.star_unit_price_uzs} UZS, Marja: {req.margin_percent}%"
         )
         return {"success": True, "message": "Barcha narxlar muvaffaqiyatli saqlandi!"}
 
+
 @app.get("/api/admin/orders")
 async def get_admin_orders(
-    search: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
+    product_type: str | None = None,
     limit: int = 100,
-    admin: User = Depends(get_current_admin)
+    offset: int = 0,
+    admin: User = Depends(require_permission(Permission.ORDERS_READ))
 ):
     async with AsyncSessionLocal() as session:
-        orders = await queries.list_all_orders(session, search=search, limit=limit)
+        orders = await queries.list_all_orders(session, search=search, status=status, product_type=product_type, limit=limit, offset=offset)
         result = []
         for o in orders:
             u = await session.get(User, o.user_id)
@@ -938,8 +1139,8 @@ async def get_admin_orders(
                 "product_type": o.product_type,
                 "item_title": o.item_title,
                 "amount": o.amount,
-                "total_price": round(o.total_price),
-                "cost_price": round(o.cost_price),
+                "total_price": round(float(o.total_price)),
+                "cost_price": round(float(o.cost_price)),
                 "status": o.status,
                 "recipient_username": o.recipient_username,
                 "fulfillment_status": o.fulfillment_status or "pending",
@@ -950,22 +1151,30 @@ async def get_admin_orders(
             })
         return result
 
+
 class OrderStatusUpdate(BaseModel):
-    status: str # done, cancel, pending
+    status: str
+    reason: str | None = None
+
 
 @app.post("/api/admin/orders/{order_id}/status")
 async def update_order_status_endpoint(
     order_id: int,
     req: OrderStatusUpdate,
-    admin: User = Depends(get_current_admin)
+    admin: User = Depends(require_permission(Permission.ORDERS_UPDATE))
 ):
     async with AsyncSessionLocal() as session:
-        order = await queries.update_order_status(session, order_id, req.status)
+        order = await queries.update_order_status(
+            session=session,
+            order_id=order_id,
+            new_status=req.status,
+            admin_id=admin.id,
+            reason=req.reason
+        )
         if not order:
             raise HTTPException(status_code=404, detail="Buyurtma topilmadi")
 
-        # Send notification to user about status change (done or cancel with refund)
-        refund_amount = order.total_price if req.status == "cancel" else 0.0
+        refund_amount = float(order.total_price) if req.status in ("cancel", OrderStatus.CANCELLED, OrderStatus.REFUNDED) else 0.0
         asyncio.create_task(
             send_order_status_update_notification(
                 bot=bot_instance,
@@ -976,36 +1185,115 @@ async def update_order_status_endpoint(
                 refund_amount=refund_amount
             )
         )
+        return {"success": True, "status": order.status}
 
+
+class RefundRequest(BaseModel):
+    reason: str
+
+
+@app.post("/api/admin/orders/{order_id}/refund")
+async def refund_order_endpoint(
+    order_id: int,
+    req: RefundRequest,
+    admin: User = Depends(require_permission(Permission.ORDERS_REFUND))
+):
+    """Issues an idempotent refund with traceable wallet ledger transaction and audit log."""
+    async with AsyncSessionLocal() as session:
+        try:
+            order = await order_service.transition_order_status(
+                session=session,
+                order_id=order_id,
+                new_status_raw=OrderStatus.REFUNDED,
+                admin_id=admin.id,
+                reason=req.reason
+            )
+            # Notify customer
+            asyncio.create_task(
+                send_order_status_update_notification(
+                    bot=bot_instance,
+                    user_id=order.user_id,
+                    order_code=order.order_code,
+                    item_title=order.item_title,
+                    new_status="refunded",
+                    refund_amount=float(order.total_price)
+                )
+            )
+            return {"success": True, "status": order.status, "refund_amount": float(order.total_price)}
+        except GiftHubException as e:
+            raise HTTPException(status_code=e.status_code, detail=e.message)
+
+
+@app.post("/api/admin/orders/{order_id}/retry-fulfillment")
+async def retry_fulfillment_endpoint(
+    order_id: int,
+    admin: User = Depends(require_permission(Permission.ORDERS_UPDATE))
+):
+    """Manually retries automated order fulfillment."""
+    async with AsyncSessionLocal() as session:
         await queries.log_admin_action(
             session=session,
             admin_id=admin.id,
             admin_username=admin.username,
-            action=f"Buyurtma holatini o'zgartirdi: {order.order_code}",
-            details=f"Yangi holat: {req.status}"
+            action="Yetkazib berishni qayta ishga tushirdi",
+            entity_type="order",
+            entity_id=str(order_id)
         )
-        return {"success": True, "status": order.status}
+        res = await fulfillment_service.fulfill_order_automated(session=session, order_id=order_id, bot=bot_instance)
+        return res
+
+
+class BalanceAdjustRequest(BaseModel):
+    amount: float
+    reason: str
+
+
+@app.post("/api/admin/users/{user_id}/adjust-balance")
+async def adjust_user_balance_endpoint(
+    user_id: int,
+    req: BalanceAdjustRequest,
+    admin: User = Depends(require_permission(Permission.ADMINS_MANAGE))
+):
+    """Manually adjusts user balance with required reason and immutable audit log."""
+    async with AsyncSessionLocal() as session:
+        user, tx = await wallet_service.adjust_balance_admin(
+            session=session,
+            admin_id=admin.id,
+            user_id=user_id,
+            amount=Decimal(str(req.amount)),
+            reason=req.reason,
+            admin_username=admin.username
+        )
+        await session.commit()
+        return {
+            "success": True,
+            "user_id": user.id,
+            "new_balance": float(user.balance),
+            "amount_adjusted": req.amount
+        }
+
 
 @app.post("/api/admin/orders/{order_id}/fulfill-fragment")
 async def fulfill_order_fragment_endpoint(
     order_id: int,
-    admin: User = Depends(get_current_admin)
+    admin: User = Depends(require_permission(Permission.ORDERS_UPDATE))
 ):
     from app.services.fragment import fragment_client
     res = await fragment_client.fulfill_order(order_id=order_id, bot=bot_instance)
     return res
 
+
 @app.post("/api/admin/orders/{order_id}/mark-fulfilled")
 async def mark_order_fulfilled_endpoint(
     order_id: int,
-    admin: User = Depends(get_current_admin)
+    admin: User = Depends(require_permission(Permission.ORDERS_UPDATE))
 ):
     async with AsyncSessionLocal() as session:
         order = await queries.update_order_fulfillment(
             session=session,
             order_id=order_id,
             fulfillment_status="fulfilled",
-            status="done"
+            status=OrderStatus.COMPLETED
         )
         if not order:
             raise HTTPException(status_code=404, detail="Buyurtma topilmadi")
@@ -1018,8 +1306,9 @@ async def mark_order_fulfilled_endpoint(
         )
         return {"success": True, "fulfillment_status": "fulfilled"}
 
+
 @app.get("/api/admin/fragment/settings")
-async def get_fragment_settings_endpoint(admin: User = Depends(get_current_admin)):
+async def get_fragment_settings_endpoint(admin: User = Depends(require_permission(Permission.SETTINGS_READ))):
     from app.services.fragment import fragment_client
     async with AsyncSessionLocal() as session:
         s = await queries.get_fragment_settings(session)
@@ -1031,27 +1320,28 @@ async def get_fragment_settings_endpoint(admin: User = Depends(get_current_admin
             "ton_wallet_mnemonic_masked": "••••••••••••••••••••" if s.ton_wallet_mnemonic else "",
             "tonapi_key": s.tonapi_key,
             "network": s.network,
-            "min_ton_balance": s.min_ton_balance,
+            "min_ton_balance": float(s.min_ton_balance or 1.0),
             "simulation_mode": s.simulation_mode,
             "wallet_balance_ton": balance
         }
 
+
 class FragmentSettingsUpdate(BaseModel):
-    is_auto_buy: Optional[bool] = None
-    ton_wallet_address: Optional[str] = None
-    ton_wallet_mnemonic: Optional[str] = None
-    tonapi_key: Optional[str] = None
-    network: Optional[str] = None
-    min_ton_balance: Optional[float] = None
-    simulation_mode: Optional[bool] = None
+    is_auto_buy: bool | None = None
+    ton_wallet_address: str | None = None
+    ton_wallet_mnemonic: str | None = None
+    tonapi_key: str | None = None
+    network: str | None = None
+    min_ton_balance: float | None = None
+    simulation_mode: bool | None = None
+
 
 @app.post("/api/admin/fragment/settings")
 async def update_fragment_settings_endpoint(
     req: FragmentSettingsUpdate,
-    admin: User = Depends(get_current_admin)
+    admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))
 ):
     async with AsyncSessionLocal() as session:
-        # If mnemonic is masked with dots, do not overwrite existing
         mnemonic = req.ton_wallet_mnemonic
         if mnemonic and "•••" in mnemonic:
             mnemonic = None
@@ -1071,17 +1361,18 @@ async def update_fragment_settings_endpoint(
 
 @app.get("/api/admin/users")
 async def get_admin_users(
-    search: Optional[str] = None,
-    admin: User = Depends(get_current_admin)
+    search: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    admin: User = Depends(require_permission(Permission.USERS_READ))
 ):
     async with AsyncSessionLocal() as session:
-        users = await queries.list_users(session, search=search)
-        from sqlalchemy import select, func
+        users = await queries.list_users(session, search=search, limit=limit, offset=offset)
+        from sqlalchemy import func, select
         result = []
         for u in users:
-            # count user's orders and total purchase
             q = await session.execute(
-                select(func.count(Order.id), func.sum(Order.total_price)).where(Order.user_id == u.id, Order.status == "done")
+                select(func.count(Order.id), func.sum(Order.total_price)).where(Order.user_id == u.id, Order.status.in_([OrderStatus.COMPLETED, "done"]))
             )
             count, total = q.first()
             result.append({
@@ -1089,16 +1380,17 @@ async def get_admin_users(
                 "first_name": u.first_name,
                 "username": f"@{u.username}" if u.username else str(u.id),
                 "role": u.role,
-                "balance": round(u.balance),
+                "balance": round(float(u.balance)),
                 "orders_count": count or 0,
-                "total_spent": round(total or 0.0),
+                "total_spent": round(float(total or 0.0)),
                 "referrals_count": u.referrals_count,
                 "created_at": u.created_at.strftime("%d %b %Y") if u.created_at else ""
             })
         return result
 
+
 @app.get("/api/admin/channels")
-async def get_admin_channels(admin: User = Depends(get_current_admin)):
+async def get_admin_channels(admin: User = Depends(require_permission(Permission.SETTINGS_READ))):
     async with AsyncSessionLocal() as session:
         channels = await queries.list_channels(session, active_only=False)
         return [
@@ -1109,27 +1401,28 @@ async def get_admin_channels(admin: User = Depends(get_current_admin)):
                 "req_type": c.req_type,
                 "is_active": c.is_active,
                 "is_detected": c.is_detected,
-                "created_at": getattr(c, "created_at", None).strftime("%d %b, %H:%M") if getattr(c, "created_at", None) else ""
+                "created_at": ""
             }
             for c in channels
         ]
 
+
 class ChannelCreateRequest(BaseModel):
     username_or_link: str
-    title: Optional[str] = None
-    req_type: str = "ordinary" # ordinary, join_request, external
+    title: str | None = None
+    req_type: str = "ordinary"
     is_detected: bool = False
+
 
 @app.post("/api/admin/channels")
 async def create_channel_endpoint(
     req: ChannelCreateRequest,
-    admin: User = Depends(get_current_admin)
+    admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))
 ):
     async with AsyncSessionLocal() as session:
         link = req.username_or_link.strip()
         title = (req.title or "").strip()
 
-        # If title is empty, auto-detect title from Telegram
         if not title and bot_instance:
             try:
                 target = link
@@ -1139,13 +1432,11 @@ async def create_channel_endpoint(
                     target = f"@{target}"
                 chat = await bot_instance.get_chat(target)
                 title = chat.title or chat.full_name or link
-            except Exception as err:
-                logger.warning(f"Could not auto-fetch title for {link}: {err}")
+            except Exception:
                 title = link
         elif not title:
             title = link
 
-        # Smart detection of req_type if left as default ordinary
         final_req_type = req.req_type
         if final_req_type == "ordinary":
             if "/+" in link or "joinchat" in link or link.startswith("+"):
@@ -1169,11 +1460,9 @@ async def create_channel_endpoint(
         )
         return {"success": True, "channel_id": ch.id, "title": title, "req_type": ch.req_type}
 
+
 @app.delete("/api/admin/channels/{channel_id}")
-async def delete_channel_endpoint(
-    channel_id: int,
-    admin: User = Depends(get_current_admin)
-):
+async def delete_channel_endpoint(channel_id: int, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))):
     async with AsyncSessionLocal() as session:
         await queries.delete_channel(session, channel_id)
         await queries.log_admin_action(
@@ -1184,73 +1473,48 @@ async def delete_channel_endpoint(
         )
         return {"success": True}
 
+
 @app.post("/api/admin/channels/{channel_id}/toggle")
-async def toggle_channel_endpoint(
-    channel_id: int,
-    admin: User = Depends(get_current_admin)
-):
+async def toggle_channel_endpoint(channel_id: int, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))):
     async with AsyncSessionLocal() as session:
         ch = await session.get(ChannelRequirement, channel_id)
         if not ch:
             raise HTTPException(status_code=404, detail="Kanal topilmadi")
         ch.is_active = not ch.is_active
         await session.commit()
-        await queries.log_admin_action(
-            session=session,
-            admin_id=admin.id,
-            admin_username=admin.username,
-            action=f"Kanal holatini o'zgartirdi (ID: {channel_id}, active: {ch.is_active})"
-        )
         return {"success": True, "is_active": ch.is_active}
+
 
 class ChannelConfirmRequest(BaseModel):
     req_type: str = "ordinary"
 
+
 @app.post("/api/admin/channels/{channel_id}/confirm")
-async def confirm_channel_endpoint(
-    channel_id: int,
-    req: ChannelConfirmRequest,
-    admin: User = Depends(get_current_admin)
-):
+async def confirm_channel_endpoint(channel_id: int, req: ChannelConfirmRequest, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))):
     async with AsyncSessionLocal() as session:
         ch = await queries.confirm_detected_channel(session, channel_id, req.req_type)
         if not ch:
             raise HTTPException(status_code=404, detail="Kanal topilmadi")
-        await queries.log_admin_action(
-            session=session,
-            admin_id=admin.id,
-            admin_username=admin.username,
-            action=f"Aniqlangan kanalni tasdiqladi va faollashtirdi: ID {channel_id}",
-            details=f"{ch.title} ({ch.username_or_link}, {req.req_type})"
-        )
         return {"success": True, "channel": {"id": ch.id, "title": ch.title, "req_type": ch.req_type}}
- 
+
+
 class ChannelTypeUpdateRequest(BaseModel):
     req_type: str
 
+
 @app.post("/api/admin/channels/{channel_id}/type")
-async def update_channel_type_endpoint(
-    channel_id: int,
-    req: ChannelTypeUpdateRequest,
-    admin: User = Depends(get_current_admin)
-):
+async def update_channel_type_endpoint(channel_id: int, req: ChannelTypeUpdateRequest, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))):
     async with AsyncSessionLocal() as session:
         ch = await queries.update_channel_type(session, channel_id, req.req_type)
         if not ch:
             raise HTTPException(status_code=404, detail="Kanal topilmadi")
-        await queries.log_admin_action(
-            session=session,
-            admin_id=admin.id,
-            admin_username=admin.username,
-            action=f"Kanal shart turini o'zgartirdi: ID {channel_id}",
-            details=f"{ch.title} ({ch.username_or_link}) -> {req.req_type}"
-        )
         return {"success": True, "channel": {"id": ch.id, "title": ch.title, "req_type": ch.req_type}}
+
 
 # ================= ADMIN PROMOCODES ================= #
 
 @app.get("/api/admin/promocodes")
-async def get_admin_promocodes(admin: User = Depends(get_current_admin)):
+async def get_admin_promocodes(admin: User = Depends(require_permission(Permission.PRICING_READ))):
     async with AsyncSessionLocal() as session:
         promos = await queries.list_promo_codes(session)
         return [
@@ -1258,26 +1522,28 @@ async def get_admin_promocodes(admin: User = Depends(get_current_admin)):
                 "id": p.id,
                 "code": p.code,
                 "reward_type": p.reward_type,
-                "reward_value": p.reward_value,
+                "reward_value": float(p.reward_value),
                 "max_uses": p.max_uses,
                 "current_uses": p.current_uses,
-                "min_order_amount": p.min_order_amount,
+                "min_order_amount": float(p.min_order_amount),
                 "is_active": p.is_active,
                 "created_at": p.created_at.strftime("%d %b %Y") if p.created_at else ""
             }
             for p in promos
         ]
 
+
 class PromoCreateRequest(BaseModel):
     code: str
-    reward_type: str = "discount_percent" # discount_percent, balance_bonus
+    reward_type: str = "discount_percent"
     reward_value: float = 10.0
     max_uses: int = 100
     min_order_amount: float = 0.0
     is_active: bool = True
 
+
 @app.post("/api/admin/promocodes")
-async def create_admin_promocode(req: PromoCreateRequest, admin: User = Depends(get_current_admin)):
+async def create_admin_promocode(req: PromoCreateRequest, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))):
     async with AsyncSessionLocal() as session:
         try:
             promo = await queries.create_promo_code(
@@ -1294,44 +1560,37 @@ async def create_admin_promocode(req: PromoCreateRequest, admin: User = Depends(
                 admin_id=admin.id,
                 admin_username=admin.username,
                 action="Yangi promo-kod yaratdi",
+                entity_type="promo",
+                entity_id=str(promo.id),
                 details=f"{promo.code} ({promo.reward_type}: {promo.reward_value})"
             )
             return {"success": True, "promo_id": promo.id}
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.delete("/api/admin/promocodes/{promo_id}")
-async def delete_admin_promocode(promo_id: int, admin: User = Depends(get_current_admin)):
+async def delete_admin_promocode(promo_id: int, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))):
     async with AsyncSessionLocal() as session:
         deleted = await queries.delete_promo_code(session, promo_id)
         if not deleted:
             raise HTTPException(status_code=404, detail="Promo-kod topilmadi")
-        await queries.log_admin_action(
-            session=session,
-            admin_id=admin.id,
-            admin_username=admin.username,
-            action="Promo-kodni o'chirdi",
-            details=f"Promo ID: {promo_id}"
-        )
         return {"success": True}
 
+
 @app.post("/api/admin/promocodes/{promo_id}/toggle")
-async def toggle_admin_promocode(promo_id: int, admin: User = Depends(get_current_admin)):
+async def toggle_admin_promocode(promo_id: int, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))):
     async with AsyncSessionLocal() as session:
         promo = await queries.toggle_promo_code(session, promo_id)
         if not promo:
             raise HTTPException(status_code=404, detail="Promo-kod topilmadi")
-        await queries.log_admin_action(
-            session=session,
-            admin_id=admin.id,
-            admin_username=admin.username,
-            action="Promo-kod holatini o'zgartirdi",
-            details=f"{promo.code} faol: {promo.is_active}"
-        )
         return {"success": True, "is_active": promo.is_active}
 
+
+# ================= ADMIN PAYMENT SETTINGS ================= #
+
 @app.get("/api/admin/payments")
-async def get_payment_settings_endpoint(admin: User = Depends(get_current_admin)):
+async def get_payment_settings_endpoint(admin: User = Depends(require_permission(Permission.PAYMENTS_READ))):
     async with AsyncSessionLocal() as session:
         p = await session.get(PaymentSetting, 1)
         return {
@@ -1343,26 +1602,28 @@ async def get_payment_settings_endpoint(admin: User = Depends(get_current_admin)
             "bank_name": getattr(p, "bank_name", "TBC Bank") if p else "TBC Bank",
             "autopaycard_active": p.autopaycard_active if p else False,
             "autopaycard_last4": p.autopaycard_last4 if p else "6412",
-            "autopaycard_email": p.autopaycard_email if p else "payments.stellar@gmail.com",
-            "autopaycard_webhook_url": p.autopaycard_webhook_url if p else "https://stellar-bot.uz/webhook/autopaycard"
+            "autopaycard_email": p.autopaycard_email if p else "payments.gifthub@gmail.com",
+            "autopaycard_webhook_url": p.autopaycard_webhook_url if p else "https://gifthub.uz/webhook/autopaycard"
         }
+
 
 class PaymentSettingsUpdate(BaseModel):
     click_active: bool = True
     payme_active: bool = True
     card_active: bool = True
-    card_number: Optional[str] = "8600 1234 5678 9012"
-    card_holder: Optional[str] = "ANVAR S."
-    bank_name: Optional[str] = "TBC Bank"
+    card_number: str | None = "8600 1234 5678 9012"
+    card_holder: str | None = "ANVAR S."
+    bank_name: str | None = "TBC Bank"
     autopaycard_active: bool = False
-    autopaycard_api_key: Optional[str] = None
-    autopaycard_last4: Optional[str] = None
-    autopaycard_email: Optional[str] = None
+    autopaycard_api_key: str | None = None
+    autopaycard_last4: str | None = None
+    autopaycard_email: str | None = None
+
 
 @app.post("/api/admin/payments")
 async def update_payment_settings_endpoint(
     req: PaymentSettingsUpdate,
-    admin: User = Depends(get_current_admin)
+    admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))
 ):
     async with AsyncSessionLocal() as session:
         p = await session.get(PaymentSetting, 1)
@@ -1386,17 +1647,8 @@ async def update_payment_settings_endpoint(
         if req.autopaycard_email is not None:
             p.autopaycard_email = req.autopaycard_email
         await session.commit()
-
-        await queries.log_admin_action(
-            session=session,
-            admin_id=admin.id,
-            admin_username=admin.username,
-            action="To'lov tizimlari va karta sozlamalarini yangiladi",
-            details=f"Click: {p.click_active}, Payme: {p.payme_active}, Karta: {p.card_active} ({p.card_number})"
-        )
         return {"success": True}
 
-# ================= PAYMENT CARDS API ================= #
 
 class PaymentCardCreate(BaseModel):
     card_number: str
@@ -1405,15 +1657,17 @@ class PaymentCardCreate(BaseModel):
     card_type: str = "UZCARD"
     is_active: bool = True
 
+
 class PaymentCardUpdate(BaseModel):
-    card_number: Optional[str] = None
-    card_holder: Optional[str] = None
-    bank_name: Optional[str] = None
-    card_type: Optional[str] = None
-    is_active: Optional[bool] = None
+    card_number: str | None = None
+    card_holder: str | None = None
+    bank_name: str | None = None
+    card_type: str | None = None
+    is_active: bool | None = None
+
 
 @app.get("/api/admin/cards")
-async def get_admin_cards_endpoint(admin: User = Depends(get_current_admin)):
+async def get_admin_cards_endpoint(admin: User = Depends(require_permission(Permission.PAYMENTS_READ))):
     async with AsyncSessionLocal() as session:
         cards = await queries.list_payment_cards(session)
         return [
@@ -1429,8 +1683,9 @@ async def get_admin_cards_endpoint(admin: User = Depends(get_current_admin)):
             for c in cards
         ]
 
+
 @app.post("/api/admin/cards")
-async def create_admin_card_endpoint(req: PaymentCardCreate, admin: User = Depends(get_current_admin)):
+async def create_admin_card_endpoint(req: PaymentCardCreate, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))):
     async with AsyncSessionLocal() as session:
         c = await queries.create_payment_card(
             session=session,
@@ -1440,17 +1695,11 @@ async def create_admin_card_endpoint(req: PaymentCardCreate, admin: User = Depen
             card_type=req.card_type,
             is_active=req.is_active
         )
-        await queries.log_admin_action(
-            session=session,
-            admin_id=admin.id,
-            admin_username=admin.username,
-            action="Yangi bank kartasi qo'shdi",
-            details=f"Karta: {c.bank_name} ({c.card_number}) - {c.card_holder}"
-        )
         return {"success": True, "id": c.id}
 
+
 @app.put("/api/admin/cards/{card_id}")
-async def update_admin_card_endpoint(card_id: int, req: PaymentCardUpdate, admin: User = Depends(get_current_admin)):
+async def update_admin_card_endpoint(card_id: int, req: PaymentCardUpdate, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))):
     async with AsyncSessionLocal() as session:
         c = await queries.update_payment_card(
             session=session,
@@ -1465,32 +1714,27 @@ async def update_admin_card_endpoint(card_id: int, req: PaymentCardUpdate, admin
             raise HTTPException(status_code=404, detail="Karta topilmadi")
         return {"success": True}
 
+
 @app.delete("/api/admin/cards/{card_id}")
-async def delete_admin_card_endpoint(card_id: int, admin: User = Depends(get_current_admin)):
+async def delete_admin_card_endpoint(card_id: int, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))):
     async with AsyncSessionLocal() as session:
         ok = await queries.delete_payment_card(session, card_id)
         if not ok:
             raise HTTPException(status_code=404, detail="Karta topilmadi")
-        await queries.log_admin_action(
-            session=session,
-            admin_id=admin.id,
-            admin_username=admin.username,
-            action="Bank kartasini o'chirdi",
-            details=f"ID: {card_id}"
-        )
         return {"success": True}
 
 
 @app.get("/api/admin/referral")
-async def get_referral_settings_endpoint(admin: User = Depends(get_current_admin)):
+async def get_referral_settings_endpoint(admin: User = Depends(require_permission(Permission.SETTINGS_READ))):
     async with AsyncSessionLocal() as session:
         r = await session.get(ReferralSetting, 1)
         return {
-            "bonus_percent": r.bonus_percent if r else 5.0,
-            "min_purchase_uzs": r.min_purchase_uzs if r else 20000.0,
+            "bonus_percent": float(r.bonus_percent) if r else 5.0,
+            "min_purchase_uzs": float(r.min_purchase_uzs) if r else 20000.0,
             "auto_reward": r.auto_reward if r else True,
             "require_purchase": r.require_purchase if r else True
         }
+
 
 class ReferralSettingsUpdate(BaseModel):
     bonus_percent: float
@@ -1498,33 +1742,24 @@ class ReferralSettingsUpdate(BaseModel):
     auto_reward: bool
     require_purchase: bool
 
+
 @app.post("/api/admin/referral")
-async def update_referral_settings_endpoint(
-    req: ReferralSettingsUpdate,
-    admin: User = Depends(get_current_admin)
-):
+async def update_referral_settings_endpoint(req: ReferralSettingsUpdate, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))):
     async with AsyncSessionLocal() as session:
         r = await session.get(ReferralSetting, 1)
         if not r:
             r = ReferralSetting(id=1)
             session.add(r)
-        r.bonus_percent = req.bonus_percent
-        r.min_purchase_uzs = req.min_purchase_uzs
+        r.bonus_percent = Decimal(str(req.bonus_percent))
+        r.min_purchase_uzs = Decimal(str(req.min_purchase_uzs))
         r.auto_reward = req.auto_reward
         r.require_purchase = req.require_purchase
         await session.commit()
-
-        await queries.log_admin_action(
-            session=session,
-            admin_id=admin.id,
-            admin_username=admin.username,
-            action="Referal sozlamalarini yangiladi",
-            details=f"Bonus: {req.bonus_percent}%, Min xarid: {req.min_purchase_uzs} so'm"
-        )
         return {"success": True}
 
+
 @app.get("/api/admin/admins")
-async def get_admins_list(admin: User = Depends(get_current_admin)):
+async def get_admins_list(admin: User = Depends(require_permission(Permission.ADMINS_READ))):
     async with AsyncSessionLocal() as session:
         admins = await queries.list_admins(session)
         return [
@@ -1538,26 +1773,24 @@ async def get_admins_list(admin: User = Depends(get_current_admin)):
             for a in admins
         ]
 
+
 class AddAdminRequest(BaseModel):
-    identifier: str # either user_id or @username
-    role: str # super_admin, price_admin, support_admin, marketing_admin
+    identifier: str
+    role: str
+
 
 @app.post("/api/admin/admins")
-async def add_admin_endpoint(req: AddAdminRequest, admin: User = Depends(get_current_admin)):
+async def add_admin_endpoint(req: AddAdminRequest, admin: User = Depends(require_permission(Permission.ADMINS_MANAGE))):
     async with AsyncSessionLocal() as session:
         target_user = None
         ident = req.identifier.strip()
-
         if ident.isdigit():
             target_user = await queries.get_user_by_id(session, int(ident))
         else:
             target_user = await queries.get_user_by_username(session, ident)
 
         if not target_user:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Foydalanuvchi topilmadi! U avval botga yozgan/ro'yxatdan o'tgan bo'lishi kerak: {ident}"
-            )
+            raise HTTPException(status_code=404, detail=f"Foydalanuvchi topilmadi: {ident}")
 
         updated = await queries.set_user_role(session, target_user.id, req.role)
         await queries.log_admin_action(
@@ -1565,51 +1798,108 @@ async def add_admin_endpoint(req: AddAdminRequest, admin: User = Depends(get_cur
             admin_id=admin.id,
             admin_username=admin.username,
             action=f"Yangi admin tayinladi: @{updated.username or updated.id}",
+            entity_type="admin",
+            entity_id=str(updated.id),
             details=f"Rol: {req.role}"
         )
         return {"success": True, "message": f"@{updated.username or updated.id} ga '{req.role}' roli berildi!"}
 
+
 @app.delete("/api/admin/admins/{user_id}")
-async def revoke_admin_endpoint(user_id: int, admin: User = Depends(get_current_admin)):
+async def revoke_admin_endpoint(user_id: int, admin: User = Depends(require_permission(Permission.ADMINS_MANAGE))):
     async with AsyncSessionLocal() as session:
-        if str(user_id) in config.ADMINS and admin.id != user_id:
+        if user_id in settings.ADMINS and admin.id != user_id:
             raise HTTPException(status_code=400, detail="Bosh adminni olib tashlab bo'lmaydi!")
         await queries.set_user_role(session, user_id, "user")
         await queries.log_admin_action(
             session=session,
             admin_id=admin.id,
             admin_username=admin.username,
-            action=f"Admin huquqini bekor qildi: ID {user_id}"
+            action=f"Admin huquqini bekor qildi: ID {user_id}",
+            entity_type="admin",
+            entity_id=str(user_id)
         )
         return {"success": True}
 
+
 @app.get("/api/admin/audit-logs")
-async def get_audit_logs(admin: User = Depends(get_current_admin)):
+async def get_audit_logs(admin: User = Depends(require_permission(Permission.ADMINS_READ))):
     async with AsyncSessionLocal() as session:
         logs = await queries.list_audit_logs(session, limit=50)
         return [
             {
-                "id": l.id,
-                "admin": f"@{l.admin_username}" if l.admin_username else f"ID {l.admin_id}",
-                "action": l.action,
-                "details": l.details,
-                "created_at": l.created_at.strftime("%d %b, %H:%M") if l.created_at else ""
+                "id": log_item.id,
+                "admin": f"@{log_item.admin_username}" if log_item.admin_username else f"ID {log_item.admin_id}",
+                "action": log_item.action,
+                "entity_type": log_item.entity_type,
+                "details": log_item.details,
+                "created_at": log_item.created_at.strftime("%d %b, %H:%M") if log_item.created_at else ""
             }
-            for l in logs
+            for log_item in logs
         ]
 
+
+# ================= ADMIN SUPPORT TICKETS ================= #
+
+@app.get("/api/admin/support/tickets")
+async def list_admin_support_tickets(
+    status: str | None = None,
+    limit: int = 50,
+    admin: User = Depends(require_permission(Permission.SUPPORT_READ))
+):
+    async with AsyncSessionLocal() as session:
+        tickets = await support_service.list_all_tickets(session, status=status, limit=limit)
+        return [
+            {
+                "id": t.id,
+                "user_id": t.user_id,
+                "subject": t.subject,
+                "category": t.category,
+                "status": t.status,
+                "order_id": t.order_id,
+                "assigned_admin_id": t.assigned_admin_id,
+                "created_at": t.created_at.strftime("%d %b, %H:%M") if t.created_at else "",
+                "updated_at": t.updated_at.strftime("%d %b, %H:%M") if t.updated_at else ""
+            }
+            for t in tickets
+        ]
+
+
+class AdminTicketStatusUpdate(BaseModel):
+    status: str
+
+
+@app.post("/api/admin/support/tickets/{ticket_id}/status")
+async def update_admin_ticket_status(
+    ticket_id: int,
+    req: AdminTicketStatusUpdate,
+    admin: User = Depends(require_permission(Permission.SUPPORT_REPLY))
+):
+    async with AsyncSessionLocal() as session:
+        ticket = await support_service.update_status(
+            session=session,
+            ticket_id=ticket_id,
+            status=req.status,
+            assigned_admin_id=admin.id
+        )
+        return {"success": True, "status": ticket.status}
+
+
+# ================= BROADCAST ENDPOINTS ================= #
+
 class BroadcastRequest(BaseModel):
-    segment: str = "all" # all, non_buyers, active, referral
-    mode: str = "write" # write, post_link, forward, postbot
-    text: Optional[str] = None
-    photo_url: Optional[str] = None
-    button_text: Optional[str] = None
-    button_url: Optional[str] = None
-    buttons: Optional[List[Dict[str, str]]] = None # [{"text": "...", "url": "..."}]
-    post_link: Optional[str] = None # e.g. https://t.me/channel/123
-    forward_mode: bool = False # True = forward_message, False = copy_message
-    postbot_code: Optional[str] = None
-    draft_id: Optional[int] = None
+    segment: str = "all"
+    mode: str = "write"
+    text: str | None = None
+    photo_url: str | None = None
+    button_text: str | None = None
+    button_url: str | None = None
+    buttons: list[dict[str, str]] | None = None
+    post_link: str | None = None
+    forward_mode: bool = False
+    postbot_code: str | None = None
+    draft_id: int | None = None
+
 
 latest_broadcast_status = {
     "is_running": False,
@@ -1620,16 +1910,17 @@ latest_broadcast_status = {
     "completed_at": None
 }
 
+
 @app.get("/api/admin/broadcast/status")
-async def get_broadcast_status(admin: User = Depends(get_current_admin)):
+async def get_broadcast_status(admin: User = Depends(require_permission(Permission.BROADCAST_CREATE))):
     return latest_broadcast_status
 
+
 @app.get("/api/admin/broadcast/latest-draft")
-async def get_latest_broadcast_draft_endpoint(admin: User = Depends(get_current_admin)):
+async def get_latest_broadcast_draft_endpoint(admin: User = Depends(require_permission(Permission.BROADCAST_CREATE))):
     async with AsyncSessionLocal() as session:
-        res = await session.execute(
-            select(BroadcastDraft).order_by(BroadcastDraft.id.desc()).limit(1)
-        )
+        from sqlalchemy import select
+        res = await session.execute(select(BroadcastDraft).order_by(BroadcastDraft.id.desc()).limit(1))
         d = res.scalars().first()
         if not d:
             return {"has_draft": False}
@@ -1648,30 +1939,28 @@ async def get_latest_broadcast_draft_endpoint(admin: User = Depends(get_current_
             }
         }
 
+
 @app.post("/api/admin/broadcast")
-async def send_broadcast_endpoint(req: BroadcastRequest, admin: User = Depends(get_current_admin)):
+async def send_broadcast_endpoint(req: BroadcastRequest, admin: User = Depends(require_permission(Permission.BROADCAST_SEND))):
     async with AsyncSessionLocal() as session:
         recipients = await queries.get_broadcast_recipients(session, req.segment)
-
-        # Log action
         await queries.log_admin_action(
             session=session,
             admin_id=admin.id,
             admin_username=admin.username,
             action=f"Broadcast boshlandi: {len(recipients)} ta foydalanuvchiga",
+            entity_type="broadcast",
             details=f"Segment: {req.segment}, Rejim: {req.mode}"
         )
-
-        # Non-blocking async queue delivery with rate limit ~30/sec
         asyncio.create_task(run_broadcast_queue(recipients, req, admin_id=admin.id))
-
         return {
             "success": True,
             "recipients_count": len(recipients),
-            "message": f"Broadcast {len(recipients)} ta foydalanuvchiga yuborilmoqda... Tugagach Telegramingizga hisobot yuboriladi!"
+            "message": f"Broadcast {len(recipients)} ta foydalanuvchiga yuborilmoqda..."
         }
 
-async def run_broadcast_queue(recipients: List[int], req: BroadcastRequest, admin_id: Optional[int] = None):
+
+async def run_broadcast_queue(recipients: list[int], req: BroadcastRequest, admin_id: int | None = None):
     global latest_broadcast_status
     if not bot_instance:
         return
@@ -1685,10 +1974,9 @@ async def run_broadcast_queue(recipients: List[int], req: BroadcastRequest, admi
         "completed_at": None
     }
 
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
+    from aiogram.exceptions import TelegramForbiddenError
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-    # Construct multiple inline buttons if provided
     inline_keyboard = []
     if req.buttons:
         for b in req.buttons:
@@ -1697,13 +1985,12 @@ async def run_broadcast_queue(recipients: List[int], req: BroadcastRequest, admi
             if t and u and (u.startswith("https://") or u.startswith("http://") or u.startswith("tg://")):
                 inline_keyboard.append([InlineKeyboardButton(text=t, url=u)])
     elif req.button_text:
-        b_url = req.button_url or config.WEB_APP_URL
+        b_url = req.button_url or settings.WEB_APP_URL
         if b_url.startswith("https://") or b_url.startswith("http://"):
             inline_keyboard.append([InlineKeyboardButton(text=req.button_text, url=b_url)])
 
     reply_markup = InlineKeyboardMarkup(inline_keyboard=inline_keyboard) if inline_keyboard else None
 
-    # Parse channel post link if provided
     post_info = None
     if req.post_link:
         try:
@@ -1720,78 +2007,52 @@ async def run_broadcast_queue(recipients: List[int], req: BroadcastRequest, admi
                     chat_ref = f"@{chat_id_or_user}" if not chat_id_or_user.startswith("@") else chat_id_or_user
                 post_info = (chat_ref, msg_id)
         except Exception as e:
-            logger.warning(f"Failed to parse broadcast post link ({req.post_link}): {e}")
-
-    if not post_info and req.draft_id:
-        async with AsyncSessionLocal() as session:
-            draft = await session.get(BroadcastDraft, req.draft_id)
-            if draft and draft.forward_chat_id and draft.forward_message_id:
-                post_info = (draft.forward_chat_id, draft.forward_message_id)
+            logger.warning(f"Broadcast post link parse error: {e}")
 
     for uid in recipients:
         try:
             if post_info:
                 chat_ref, msg_id = post_info
                 if req.forward_mode:
-                    await bot_instance.forward_message(
-                        chat_id=uid,
-                        from_chat_id=chat_ref,
-                        message_id=msg_id
-                    )
+                    await bot_instance.forward_message(chat_id=uid, from_chat_id=chat_ref, message_id=msg_id)
                 else:
-                    await bot_instance.copy_message(
-                        chat_id=uid,
-                        from_chat_id=chat_ref,
-                        message_id=msg_id,
-                        reply_markup=reply_markup
-                    )
+                    await bot_instance.copy_message(chat_id=uid, from_chat_id=chat_ref, message_id=msg_id, reply_markup=reply_markup)
             elif req.photo_url and req.photo_url.startswith("http"):
-                await bot_instance.send_photo(
-                    chat_id=uid,
-                    photo=req.photo_url,
-                    caption=req.text or "",
-                    reply_markup=reply_markup
-                )
+                await bot_instance.send_photo(chat_id=uid, photo=req.photo_url, caption=req.text or "", reply_markup=reply_markup)
             elif req.text:
-                await bot_instance.send_message(
-                    chat_id=uid,
-                    text=req.text,
-                    reply_markup=reply_markup
-                )
+                await bot_instance.send_message(chat_id=uid, text=req.text, reply_markup=reply_markup)
             latest_broadcast_status["sent"] += 1
-            await asyncio.sleep(0.04) # ~25-30 messages per second rate limiter
+            await asyncio.sleep(0.04) # ~25-30 msgs/sec
         except TelegramForbiddenError:
             latest_broadcast_status["blocked"] += 1
-        except Exception as e:
+        except Exception:
             latest_broadcast_status["failed"] += 1
 
     latest_broadcast_status["is_running"] = False
-    latest_broadcast_status["completed_at"] = datetime.utcnow().strftime("%d %b %Y, %H:%M")
+    latest_broadcast_status["completed_at"] = datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M")
 
-    # Send receipt directly to the admin in Telegram
     if admin_id and bot_instance:
-        report_text = (
-            f"📢 <b>Broadcast xabarnomasi yakunlandi!</b>\n\n"
-            f"👥 <b>Jami rejalashtirilgan:</b> {latest_broadcast_status['total']} ta\n"
-            f"✅ <b>Muvaffaqiyatli yetkazildi:</b> {latest_broadcast_status['sent']} ta\n"
-            f"🚫 <b>Botni bloklagan:</b> {latest_broadcast_status['blocked']} ta\n"
-            f"⚠️ <b>Xatoliklar:</b> {latest_broadcast_status['failed']} ta\n"
-            f"⏱ <b>Vaqt:</b> {latest_broadcast_status['completed_at']}"
+        report = (
+            f"📢 <b>GiftHub Broadcast yakunlandi!</b>\n\n"
+            f"👥 Jami: {latest_broadcast_status['total']}\n"
+            f"✅ Yetkazildi: {latest_broadcast_status['sent']}\n"
+            f"🚫 Bloklagan: {latest_broadcast_status['blocked']}\n"
+            f"⚠️ Xatolar: {latest_broadcast_status['failed']}\n"
+            f"⏱ Vaqt: {latest_broadcast_status['completed_at']}"
         )
         try:
-            await bot_instance.send_message(chat_id=admin_id, text=report_text)
+            await bot_instance.send_message(chat_id=admin_id, text=report)
         except Exception:
             pass
 
+
 @app.get("/api/admin/export/orders.csv")
-async def export_orders_csv(admin: User = Depends(get_current_admin)):
+async def export_orders_csv(admin: User = Depends(require_permission(Permission.ORDERS_READ))):
     async with AsyncSessionLocal() as session:
         orders = await queries.list_all_orders(session, limit=1000)
-
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerow(["ID", "Buyurtma kodi", "User ID", "Mahsulot", "Miqdor", "Summa (UZS)", "Tannarx (UZS)", "Holat", "Sana"])
-
         for o in orders:
             writer.writerow([
                 o.id,
@@ -1799,18 +2060,18 @@ async def export_orders_csv(admin: User = Depends(get_current_admin)):
                 o.user_id,
                 o.item_title,
                 o.amount,
-                round(o.total_price),
-                round(o.cost_price),
+                round(float(o.total_price)),
+                round(float(o.cost_price)),
                 o.status,
                 o.created_at.strftime("%Y-%m-%d %H:%M:%S") if o.created_at else ""
             ])
-
         output.seek(0)
         return Response(
             content=output.getvalue(),
             media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=stellar_orders.csv"}
+            headers={"Content-Disposition": "attachment; filename=gifthub_orders.csv"}
         )
+
 
 # ================= CUSTOM SERVICES API ================= #
 
@@ -1823,25 +2084,27 @@ class CreateServiceRequest(BaseModel):
     description: str = ""
     is_active: bool = True
 
+
 class UpdateServiceRequest(BaseModel):
-    name: Optional[str] = None
-    price_uzs: Optional[float] = None
-    cost_uzs: Optional[float] = None
-    category: Optional[str] = None
-    icon: Optional[str] = None
-    description: Optional[str] = None
-    is_active: Optional[bool] = None
+    name: str | None = None
+    price_uzs: float | None = None
+    cost_uzs: float | None = None
+    category: str | None = None
+    icon: str | None = None
+    description: str | None = None
+    is_active: bool | None = None
+
 
 @app.get("/api/admin/services")
-async def api_admin_list_services():
+async def api_admin_list_services(admin: User = Depends(require_permission(Permission.PRICING_READ))):
     async with AsyncSessionLocal() as session:
         services = await queries.list_custom_services(session=session, active_only=False)
         return [
             {
                 "id": s.id,
                 "name": s.name,
-                "price_uzs": s.price_uzs,
-                "cost_uzs": s.cost_uzs,
+                "price_uzs": float(s.price_uzs),
+                "cost_uzs": float(s.cost_uzs),
                 "category": s.category,
                 "icon": s.icon,
                 "description": s.description,
@@ -1851,8 +2114,9 @@ async def api_admin_list_services():
             for s in services
         ]
 
+
 @app.post("/api/admin/services")
-async def api_admin_create_service(req: CreateServiceRequest):
+async def api_admin_create_service(req: CreateServiceRequest, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))):
     if not req.name.strip():
         raise HTTPException(status_code=400, detail="Xizmat nomi kiritilishi shart")
     async with AsyncSessionLocal() as session:
@@ -1868,8 +2132,9 @@ async def api_admin_create_service(req: CreateServiceRequest):
         )
         return {"success": True, "id": s.id, "message": "Xizmat muvaffaqiyatli qo'shildi"}
 
+
 @app.put("/api/admin/services/{service_id}")
-async def api_admin_update_service(service_id: int, req: UpdateServiceRequest):
+async def api_admin_update_service(service_id: int, req: UpdateServiceRequest, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))):
     async with AsyncSessionLocal() as session:
         s = await queries.update_custom_service(
             session=session,
@@ -1886,48 +2151,62 @@ async def api_admin_update_service(service_id: int, req: UpdateServiceRequest):
             raise HTTPException(status_code=404, detail="Xizmat topilmadi")
         return {"success": True, "message": "Xizmat muvaffaqiyatli yangilandi"}
 
+
 @app.delete("/api/admin/services/{service_id}")
-async def api_admin_delete_service(service_id: int):
+async def api_admin_delete_service(service_id: int, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))):
     async with AsyncSessionLocal() as session:
         ok = await queries.delete_custom_service(session=session, service_id=service_id)
         if not ok:
             raise HTTPException(status_code=404, detail="Xizmat topilmadi")
         return {"success": True, "message": "Xizmat o'chirildi"}
 
-# ================= HTML FRONTEND SERVING ================= #
+
+# ================= FRONTEND MOUNTING ================= #
 
 @app.get("/app", response_class=HTMLResponse)
 async def serve_user_app():
-    user_app_path = os.path.join(config.BASE_DIR, "web", "user", "index.html")
+    user_app_path = os.path.join(settings.BASE_DIR, "web", "user", "index.html")
     if os.path.exists(user_app_path):
         with open(user_app_path, "r", encoding="utf-8") as f:
             return f.read()
-    # Fallback to mockup if not yet generated
-    mockup_path = os.path.join(config.BASE_DIR, "stellar-bot-mockup.html")
-    with open(mockup_path, "r", encoding="utf-8") as f:
-        return f.read()
+    return HTMLResponse("<h2>GiftHub Web App fayli topilmadi.</h2>", status_code=404)
+
 
 @app.get("/admin", response_class=HTMLResponse)
 async def serve_admin_app():
-    admin_app_path = os.path.join(config.BASE_DIR, "web", "admin", "index.html")
+    admin_app_path = os.path.join(settings.BASE_DIR, "web", "admin", "index.html")
     if os.path.exists(admin_app_path):
         with open(admin_app_path, "r", encoding="utf-8") as f:
             return f.read()
-    mockup_path = os.path.join(config.BASE_DIR, "stellar-bot-admin-mockup.html")
-    with open(mockup_path, "r", encoding="utf-8") as f:
-        return f.read()
+    return HTMLResponse("<h2>GiftHub Admin Panel fayli topilmadi.</h2>", status_code=404)
+
 
 @app.get("/")
 async def root_redirect():
     return HTMLResponse("""
-    <html>
-      <head><title>Stellar Bot</title></head>
-      <body style="background:#080C0A;color:#EFFBF4;font-family:sans-serif;text-align:center;padding:50px;">
-        <h2>⭐ Stellar Bot Xizmati</h2>
-        <p>Telegram Stars, Premium va Sovg'alar platformasi</p>
-        <div style="margin-top:20px;">
-          <a href="/app" style="color:#12E88B;margin-right:20px;font-size:16px;">Web App (User)</a>
-          <a href="/admin" style="color:#BFFFDD;font-size:16px;">Admin Panel</a>
+    <!DOCTYPE html>
+    <html lang="uz">
+      <head>
+        <meta charset="UTF-8">
+        <title>GiftHub — Digital Commerce Platform</title>
+        <style>
+          body { background:#080C0A; color:#EFFBF4; font-family:-apple-system,BlinkMacSystemFont,sans-serif; text-align:center; padding:60px 20px; }
+          .card { max-width:480px; margin:0 auto; background:#121A16; border:1px solid #22302A; border-radius:20px; padding:40px 30px; }
+          h1 { color:#12E88B; margin-bottom:10px; font-size:28px; }
+          p { color:#8AA69A; font-size:15px; margin-bottom:30px; }
+          .btn { display:inline-block; padding:12px 24px; border-radius:12px; font-weight:600; text-decoration:none; margin:8px; font-size:14px; }
+          .btn-primary { background:#12E88B; color:#0A100D; }
+          .btn-secondary { background:#1D2A24; color:#BFFFDD; border:1px solid #2A3C34; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>⭐ GiftHub</h1>
+          <p>Telegram Stars, Premium obuna va Raqamli sovg'alar platformasi</p>
+          <div>
+            <a href="/app" class="btn btn-primary">Foydalanuvchi Do'koni (Web App)</a>
+            <a href="/admin" class="btn btn-secondary">Admin Boshqaruv Paneli</a>
+          </div>
         </div>
       </body>
     </html>

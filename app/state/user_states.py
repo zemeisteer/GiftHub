@@ -1,5 +1,6 @@
 from aiogram.fsm.state import State, StatesGroup
 
+
 class StarsPurchaseState(StatesGroup):
     entering_amount = State()      # Agar "✍️ Boshqa miqdor" tanlansa
     entering_recipient = State()   # Kimga (@username)

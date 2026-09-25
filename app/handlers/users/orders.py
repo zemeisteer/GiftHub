@@ -1,11 +1,12 @@
 import logging
-from aiogram import Router, F
-from aiogram.types import CallbackQuery
-from aiogram.fsm.context import FSMContext
 
-from database.db import AsyncSessionLocal
+from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery
+
+from app.keyboards.shop_keyboards import get_orders_keyboard
 from database import queries
-from app.keyboards.shop_keyboards import get_orders_keyboard, get_back_to_main_keyboard
+from database.db import AsyncSessionLocal
 
 router = Router()
 logger = logging.getLogger(__name__)

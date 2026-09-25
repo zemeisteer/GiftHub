@@ -1,8 +1,15 @@
-from aiogram import Router, F
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from database.db import AsyncSessionLocal
-from database import queries
+from aiogram import F, Router
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
+
+from app.models.broadcast import BroadcastDraft
 from data import config
+from database import queries
+from database.db import AsyncSessionLocal
 
 router = Router()
 
@@ -161,9 +168,10 @@ async def cb_send_broadcast_flow(callback: CallbackQuery):
     tag = parts[0]
     arg = parts[1] if len(parts) > 1 else ""
 
-    from database.models import BroadcastDraft
-    from app.web.server import run_broadcast_queue, BroadcastRequest
     import asyncio
+
+    from app.web.server import BroadcastRequest
+    from database.models import BroadcastDraft
 
     target_chat_id = callback.message.chat.id
     target_msg_id = None

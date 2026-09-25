@@ -1,16 +1,16 @@
 import urllib.parse
-from typing import List, Dict, Any, Optional
-from aiogram.types import (
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    WebAppInfo,
-    ReplyKeyboardMarkup,
-    KeyboardButton,
-    KeyboardButtonRequestUsers
-)
-from data import config
+from typing import Any
 
-def get_shop_main_menu(is_admin: bool = False, services_count: int = 0, services: Optional[list] = None) -> InlineKeyboardMarkup:
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    KeyboardButtonRequestUsers,
+    ReplyKeyboardMarkup,
+)
+
+
+def get_shop_main_menu(is_admin: bool = False, services_count: int = 0, services: list | None = None) -> InlineKeyboardMarkup:
     # Barqaror va o'zgarmas tugma nomi (qo'shimcha xizmat qo'shilganda o'zgarib ketmaydi)
     services_btn = InlineKeyboardButton(text="⚡ Qo'shimcha Xizmatlar", callback_data="shop:services")
 
@@ -67,7 +67,7 @@ def get_gate_keyboard(channels: list) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def get_stars_keyboard(packages: List[Dict[str, Any]]) -> InlineKeyboardMarkup:
+def get_stars_keyboard(packages: list[dict[str, Any]]) -> InlineKeyboardMarkup:
     buttons = []
     row = []
     for pkg in packages:
@@ -94,7 +94,7 @@ def get_stars_keyboard(packages: List[Dict[str, Any]]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def get_recipient_keyboard(my_username: Optional[str] = None) -> InlineKeyboardMarkup:
+def get_recipient_keyboard(my_username: str | None = None) -> InlineKeyboardMarkup:
     buttons = []
     if my_username:
         clean_user = my_username.lstrip("@")
@@ -148,7 +148,7 @@ def get_confirm_purchase_keyboard(confirm_data: str) -> InlineKeyboardMarkup:
     ])
 
 
-def get_premium_keyboard(premium_prices: Dict[str, Any]) -> InlineKeyboardMarkup:
+def get_premium_keyboard(premium_prices: dict[str, Any]) -> InlineKeyboardMarkup:
     buttons = []
     durations = [
         ("3", "💎 3 oylik Premium"),
@@ -169,7 +169,7 @@ def get_premium_keyboard(premium_prices: Dict[str, Any]) -> InlineKeyboardMarkup
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def get_gifts_keyboard(gifts: List[Dict[str, Any]]) -> InlineKeyboardMarkup:
+def get_gifts_keyboard(gifts: list[dict[str, Any]]) -> InlineKeyboardMarkup:
     buttons = []
     for g in gifts:
         icon = g.get("icon", "🎁")
@@ -228,8 +228,8 @@ def get_topup_amounts_keyboard() -> InlineKeyboardMarkup:
 
 def get_payment_methods_keyboard(
     amount: int,
-    click_url: Optional[str] = None,
-    payme_url: Optional[str] = None,
+    click_url: str | None = None,
+    payme_url: str | None = None,
     card_active: bool = True
 ) -> InlineKeyboardMarkup:
     buttons = []

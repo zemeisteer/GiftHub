@@ -1,9 +1,11 @@
 import logging
-from typing import List, Tuple, Any
+from typing import Any
+
 from aiogram import Bot
 from sqlalchemy.ext.asyncio import AsyncSession
-from database import queries
+
 from data import config
+from database import queries
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +13,7 @@ async def verify_user_subscriptions(
     bot: Bot | None,
     user_id: int,
     session: AsyncSession
-) -> Tuple[bool, List[Any]]:
+) -> tuple[bool, list[Any]]:
     """
     Checks if a user is subscribed to all mandatory channels.
     Returns (all_passed: bool, missing_channels: list).

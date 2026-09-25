@@ -1,23 +1,23 @@
 import logging
-from aiogram import Router, F, Bot
-from aiogram.types import Message, CallbackQuery
-from aiogram.fsm.context import FSMContext
 
-from database.db import AsyncSessionLocal
-from database.models import Transaction, User
-from database import queries
-from data import config
-from app.state.user_states import BalanceTopupState
+from aiogram import Bot, F, Router
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
+
 from app.keyboards.shop_keyboards import (
-    get_wallet_keyboard,
-    get_topup_amounts_keyboard,
-    get_payment_methods_keyboard,
-    get_receipt_upload_keyboard,
     get_admin_receipt_approval_keyboard,
-    get_back_to_main_keyboard
+    get_back_to_main_keyboard,
+    get_payment_methods_keyboard,
+    get_topup_amounts_keyboard,
+    get_wallet_keyboard,
 )
+from app.state.user_states import BalanceTopupState
 from app.web.payments.click import generate_click_link
 from app.web.payments.payme import generate_payme_link
+from data import config
+from database import queries
+from database.db import AsyncSessionLocal
+from database.models import Transaction
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -350,7 +350,7 @@ async def cb_admin_reject_receipt(callback: CallbackQuery, bot: Bot):
 @router.callback_query(F.data == "wallet:history")
 async def cb_wallet_history(callback: CallbackQuery):
     user_id = callback.from_user.id
-    from sqlalchemy import select, desc
+    from sqlalchemy import desc, select
     async with AsyncSessionLocal() as session:
         res = await session.execute(
             select(Transaction).where(Transaction.user_id == user_id).order_by(desc(Transaction.created_at)).limit(8)

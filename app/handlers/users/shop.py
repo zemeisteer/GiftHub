@@ -1,29 +1,38 @@
 import json
 import logging
-from typing import Optional
-from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.fsm.context import FSMContext
 
-from database.db import AsyncSessionLocal
-from database import queries
-from data import config
-from app.state.user_states import StarsPurchaseState, PremiumPurchaseState, GiftPurchaseState, ServicePurchaseState
+from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    ReplyKeyboardRemove,
+)
+
 from app.keyboards.shop_keyboards import (
-    get_shop_main_menu,
-    get_stars_keyboard,
-    get_recipient_keyboard,
-    get_user_request_keyboard,
+    get_back_to_main_keyboard,
     get_confirm_purchase_keyboard,
-    get_premium_keyboard,
     get_gifts_keyboard,
     get_insufficient_balance_keyboard,
-    get_back_to_main_keyboard,
-    get_services_keyboard,
+    get_premium_keyboard,
+    get_recipient_keyboard,
     get_service_detail_keyboard,
-    get_service_purchase_confirm_keyboard
+    get_service_purchase_confirm_keyboard,
+    get_services_keyboard,
+    get_shop_main_menu,
+    get_stars_keyboard,
+    get_user_request_keyboard,
 )
 from app.services.fragment import pricing_engine
+from app.state.user_states import (
+    ServicePurchaseState,
+    StarsPurchaseState,
+)
+from data import config
+from database import queries
+from database.db import AsyncSessionLocal
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -264,7 +273,8 @@ async def cb_gift_package(callback: CallbackQuery, state: FSMContext):
 
     price = float(matched.get("price_uzs", 75000))
     cost = float(matched.get("cost_uzs", 65000))
-    name = f"{matched.get('icon', '🎁')} {matched.get('name', 'Sovg\'a')}"
+    matched_name = matched.get('name', "Sovg'a")
+    name = f"{matched.get('icon', '🎁')} {matched_name}"
 
     await state.update_data(
         product_type="gift",
@@ -370,7 +380,7 @@ async def cancel_recipient_selection(message: Message, state: FSMContext):
     async with AsyncSessionLocal() as session:
         user = await queries.get_user_by_id(session, user_id)
         balance = user.balance if user else 0.0
-        from app.handlers.users.start import check_admin_status, build_main_menu_text
+        from app.handlers.users.start import build_main_menu_text, check_admin_status
         is_admin = await check_admin_status(user_id, session)
         services = await queries.list_custom_services(session, active_only=True)
 
@@ -507,6 +517,7 @@ async def cb_execute_purchase(callback: CallbackQuery, state: FSMContext):
     # Trigger Fragment auto-fulfillment in background for Stars, Premium, Gifts
     if product_type in ["stars", "premium", "gift"]:
         import asyncio
+
         from app.services.fragment import fragment_client
         asyncio.create_task(
             fragment_client.fulfill_order(order_id=order.id, bot=callback.bot)

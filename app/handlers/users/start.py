@@ -1,15 +1,16 @@
 import logging
-from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
-from aiogram.filters.command import CommandStart, CommandObject
-from aiogram.fsm.context import FSMContext
+from typing import Optional
 
-from database.db import AsyncSessionLocal
-from database import queries
-from app.keyboards.shop_keyboards import get_shop_main_menu, get_gate_keyboard
-from app.keyboards.reply import get_reply_main_keyboard
+from aiogram import F, Router
+from aiogram.filters.command import CommandObject, CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
+
+from app.keyboards.shop_keyboards import get_gate_keyboard, get_shop_main_menu
 from app.utils.subscription import verify_user_subscriptions
 from data import config
+from database import queries
+from database.db import AsyncSessionLocal
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ def build_main_menu_text(first_name: str, balance: float, user_id: int, services
 
     return (
         f"Assalomu alaykum, <b>{first_name}</b>!\n\n"
-        f"⭐ <b>GiftHub (Stellar)</b> — Telegram Stars, Telegram Premium va yangi raqamli xizmatlarni "
+        f"🎁 <b>GiftHub</b> — Telegram Stars, Telegram Premium va yangi raqamli xizmatlarni "
         f"eng qulay narxlarda xarid qilish platformasiga xush kelibsiz.{srv_line}\n\n"
         f"💰 Balansingiz: <b>{balance:,.0f} so'm</b>\n"
         f"🆔 Telegram ID: <code>{user_id}</code>\n\n"

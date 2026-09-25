@@ -1,10 +1,10 @@
-from aiogram import Router, F
-from aiogram.types import ChatMemberUpdated, ChatJoinRequest
+from aiogram import Router
 from aiogram.enums import ChatMemberStatus
-from database.db import AsyncSessionLocal
-from database import queries
-from database.models import ChannelRequirement
+from aiogram.types import ChatJoinRequest, ChatMemberUpdated
+
 from data import config
+from database import queries
+from database.db import AsyncSessionLocal
 
 router = Router()
 

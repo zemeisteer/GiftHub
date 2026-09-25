@@ -1,6 +1,7 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from app.keyboards.shop_keyboards import get_shop_main_menu, get_gate_keyboard
-from data import config
+from aiogram.types import InlineKeyboardMarkup
+
+from app.keyboards.shop_keyboards import get_shop_main_menu
+
 
 def get_main_menu_keyboard(is_admin: bool = False, services_count: int = 0) -> InlineKeyboardMarkup:
     """To'liq native Telegram Inline menyu tugmalari"""

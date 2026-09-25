@@ -1,15 +1,15 @@
 import hashlib
 import logging
-from typing import Dict, Any, Optional
+from typing import Any
 from urllib.parse import urlencode
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from data import config
-from database.models import User, ClickTransaction
-from database import queries
 from app.utils.notifications import send_topup_notification
+from data import config
+from database import queries
+from database.models import ClickTransaction
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ CLICK_TRANSACTION_NOT_FOUND = -6
 CLICK_ERROR_FAILED = -8
 CLICK_TRANSACTION_CANCELLED = -9
 
-def generate_click_link(user_id: int, amount: float, return_url: Optional[str] = None) -> str:
+def generate_click_link(user_id: int, amount: float, return_url: str | None = None) -> str:
     params = {
         "service_id": config.CLICK_SERVICE_ID,
         "merchant_id": config.CLICK_MERCHANT_ID,
@@ -38,7 +38,7 @@ def generate_click_link(user_id: int, amount: float, return_url: Optional[str] =
 
     return f"https://my.click.uz/services/pay?{urlencode(params)}"
 
-def verify_click_signature(data: Dict[str, Any]) -> bool:
+def verify_click_signature(data: dict[str, Any]) -> bool:
     click_trans_id = str(data.get("click_trans_id", ""))
     service_id = str(data.get("service_id", ""))
     secret_key = config.CLICK_SECRET_KEY
@@ -58,7 +58,7 @@ def verify_click_signature(data: Dict[str, Any]) -> bool:
 
     return expected_sign.lower() == received_sign.lower()
 
-async def process_click_prepare(session: AsyncSession, data: Dict[str, Any]) -> Dict[str, Any]:
+async def process_click_prepare(session: AsyncSession, data: dict[str, Any]) -> dict[str, Any]:
     click_trans_id = int(data.get("click_trans_id", 0))
     service_id = int(data.get("service_id", 0))
     merchant_trans_id = str(data.get("merchant_trans_id", ""))
@@ -134,7 +134,7 @@ async def process_click_prepare(session: AsyncSession, data: Dict[str, Any]) -> 
         "error_note": "Success"
     }
 
-async def process_click_complete(session: AsyncSession, data: Dict[str, Any], bot=None) -> Dict[str, Any]:
+async def process_click_complete(session: AsyncSession, data: dict[str, Any], bot=None) -> dict[str, Any]:
     click_trans_id = int(data.get("click_trans_id", 0))
     merchant_trans_id = str(data.get("merchant_trans_id", ""))
     merchant_prepare_id = int(data.get("merchant_prepare_id", 0))

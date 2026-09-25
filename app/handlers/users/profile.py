@@ -1,13 +1,14 @@
 import logging
-from aiogram import Router, F, Bot
-from aiogram.types import Message, CallbackQuery
-from aiogram.fsm.context import FSMContext
 
-from database.db import AsyncSessionLocal
-from database import queries
-from data import config
+from aiogram import Bot, F, Router
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
+
+from app.keyboards.shop_keyboards import get_back_to_main_keyboard, get_profile_keyboard
 from app.state.user_states import PromoCodeState
-from app.keyboards.shop_keyboards import get_profile_keyboard, get_back_to_main_keyboard
+from data import config
+from database import queries
+from database.db import AsyncSessionLocal
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -79,8 +80,9 @@ async def process_promo_code_text(message: Message, state: FSMContext):
     await state.clear()
 
     if res.get("success"):
+        success_msg = res.get('message', "Promo-kod muvaffaqiyatli qo'llandi!")
         await message.answer(
-            f"{res.get('message', 'Promo-kod muvaffaqiyatli qo\'llandi!')}",
+            f"{success_msg}",
             reply_markup=get_back_to_main_keyboard()
         )
     else:

@@ -1,19 +1,20 @@
 import logging
-from typing import Dict, Any
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from data import config
-from database.models import PaymentSetting, User
-from database import queries
 from app.utils.notifications import send_topup_notification
+from data import config
+from database import queries
+from database.models import PaymentSetting
 
 logger = logging.getLogger(__name__)
 
 async def handle_autopaycard_webhook(
     session: AsyncSession,
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     bot=None
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     # 1. Check if AutoPayCard is active
     payment_setting = await session.get(PaymentSetting, 1)
     if not payment_setting or not payment_setting.autopaycard_active:

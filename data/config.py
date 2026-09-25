@@ -1,57 +1,40 @@
-from environs import Env
 import os
+from app.core.config import settings
 
-env = Env()
-env.read_env()
-
-BOT_TOKEN = env.str("BOT_TOKEN")
-ADMINS = env.list("ADMINS")
-IP = env.str("IP")
-PORT = env.int("PORT")
-TELEGRAM_API_SERVER = env.str("TELEGRAM_API_SERVER")
-TELEGRAM_PROXY = env.str("TELEGRAM_PROXY")
-
-WEB_APP_URL = env.str("WEB_APP_URL")
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = settings.BASE_DIR
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 
-ADMIN_APP_URL = env.str("ADMIN_APP_URL")
-WEB_HOST = env.str("WEB_HOST")
-WEB_PORT = env.int("WEB_PORT")
+BOT_TOKEN = settings.BOT_TOKEN
+ADMINS = [str(x) for x in settings.ADMINS]
+IP = settings.IP
+PORT = settings.PORT
+TELEGRAM_API_SERVER = settings.TELEGRAM_API_SERVER
+TELEGRAM_PROXY = settings.TELEGRAM_PROXY
+
+WEB_APP_URL = settings.WEB_APP_URL
+ADMIN_APP_URL = settings.ADMIN_APP_URL
+WEB_HOST = settings.WEB_HOST
+WEB_PORT = settings.WEB_PORT
+
+DB_URL = settings.DB_URL
+REDIS_URL = settings.REDIS_URL
+
+SUPPORT_URL = settings.SUPPORT_URL
+NEWS_CHANNEL_URL = settings.NEWS_CHANNEL_URL
+
+CLICK_SERVICE_ID = settings.CLICK_SERVICE_ID
+CLICK_MERCHANT_ID = settings.CLICK_MERCHANT_ID
+CLICK_SECRET_KEY = settings.CLICK_SECRET_KEY
+
+PAYME_MERCHANT_ID = settings.PAYME_MERCHANT_ID
+PAYME_SECRET_KEY = settings.PAYME_SECRET_KEY
+
+AUTOPAYCARD_API_KEY = settings.AUTOPAYCARD_API_KEY
+
 
 def get_web_app_url() -> str:
-    try:
-        fresh_env = Env()
-        fresh_env.read_env(ENV_PATH, override=True)
-        return fresh_env.str("WEB_APP_URL", WEB_APP_URL)
-    except Exception:
-        return WEB_APP_URL
+    return settings.WEB_APP_URL
+
 
 def get_admin_app_url() -> str:
-    try:
-        fresh_env = Env()
-        fresh_env.read_env(ENV_PATH, override=True)
-        return fresh_env.str("ADMIN_APP_URL", ADMIN_APP_URL)
-    except Exception:
-        return ADMIN_APP_URL
-
-# Qo'llab-quvvatlash va Kanal sozlamalari
-SUPPORT_URL = env.str("SUPPORT_URL")
-NEWS_CHANNEL_URL = env.str("NEWS_CHANNEL_URL")
-
-# Database sozlamalari
-DB_URL = env.str("DB_URL")
-
-# Click Merchant sozlamalari
-CLICK_SERVICE_ID = env.str("CLICK_SERVICE_ID")
-CLICK_MERCHANT_ID = env.str("CLICK_MERCHANT_ID")
-CLICK_SECRET_KEY = env.str("CLICK_SECRET_KEY")
-
-# Payme Merchant sozlamalari
-PAYME_MERCHANT_ID = env.str("PAYME_MERCHANT_ID")
-PAYME_SECRET_KEY = env.str("PAYME_SECRET_KEY")
-
-# AutoPayCard sozlamalari
-AUTOPAYCARD_API_KEY = env.str("AUTOPAYCARD_API_KEY")
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return settings.ADMIN_APP_URL

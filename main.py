@@ -1,31 +1,38 @@
 import asyncio
 import logging
-import uvicorn
-from data import config
-from aiogram.client.default import DefaultBotProperties
-from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.enums import ParseMode
-from aiogram import Bot, Dispatcher
-from aiogram.exceptions import TelegramUnauthorizedError
-
-from database.db import init_db
-from middlewares import setup_middlewares
-from app import handlers
-from app.utils.notify_admins import notify_admins
-from app.utils.set_bot_commands import set_bot_commands
-from app.utils.misc.logging import setup_logger
-from app.web.server import app as fastapi_app, set_bot
 import socket
-from aiohttp.resolver import DefaultResolver
+
+import uvicorn
+from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import TelegramAPIServer
+from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramUnauthorizedError
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiohttp.resolver import DefaultResolver
 
-# Direct reliable IP addresses for Telegram Bot API (bypasses ISP timeout / IPv6 unreachability)
-TELEGRAM_FAST_IPS = ["149.154.167.99", "149.154.167.222", "149.154.166.120"]
+from app import handlers
+from app.utils.misc.logging import setup_logger
+from app.utils.notify_admins import notify_admins
+from app.utils.set_bot_commands import set_bot_commands
+from app.web.server import app as fastapi_app
+from app.web.server import set_bot
+from data import config
+from database.db import init_db
+from middlewares import setup_middlewares
+
+TELEGRAM_FAST_IPS = ["149.154.166.110", "149.154.167.99", "149.154.167.222", "149.154.166.120"]
 
 class DirectTelegramResolver(DefaultResolver):
     async def resolve(self, host: str, port: int = 0, family: int = socket.AF_INET):
         if host == "api.telegram.org":
+            try:
+                res = await super().resolve(host, port, family)
+                if res:
+                    return res
+            except Exception:
+                pass
             return [
                 {"hostname": host, "host": ip, "port": port, "family": socket.AF_INET, "proto": 0, "flags": 0}
                 for ip in TELEGRAM_FAST_IPS
@@ -48,12 +55,15 @@ elif config.TELEGRAM_PROXY:
 else:
     bot_session = DirectTelegramSession()
 
+from app.core.redis import get_fsm_storage
+from app.services.worker import run_worker_loop
+
 bot = Bot(
     token=config.BOT_TOKEN,
     session=bot_session,
     default=DefaultBotProperties(parse_mode=ParseMode.HTML)
 )
-storage = MemoryStorage()
+storage = get_fsm_storage()
 dp = Dispatcher(storage=storage)
 
 async def start_web_server():
@@ -95,7 +105,7 @@ async def start_bot():
 
 async def main():
     setup_logger()
-    logging.info("🚀 GiftHub (Stellar) Bot to'liq Inline rejimida tayyorlanmoqda...")
+    logging.info("🚀 GiftHub Platform ishga tushirilmoqda...")
 
     # Initialize Database
     await init_db()
@@ -111,10 +121,11 @@ async def main():
     logging.info(f"🌐 Web App URL: {config.WEB_APP_URL}")
     logging.info(f"🌐 Admin Panel URL: {config.ADMIN_APP_URL}")
 
-    # Concurrently run Web App and Telegram Bot polling
+    # Concurrently run Web App, Telegram Bot polling, and background worker
     await asyncio.gather(
         start_web_server(),
-        start_bot()
+        start_bot(),
+        run_worker_loop(bot=bot)
     )
 
 if __name__ == "__main__":

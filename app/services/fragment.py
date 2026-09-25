@@ -6,7 +6,7 @@ platformasi orqali hisoblash va avtomatlashtirish uchun xizmat qiladi.
 """
 
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -41,15 +41,15 @@ class FragmentPricingEngine:
         return cls.FRAGMENT_STAR_BASE_UZS
 
     @classmethod
-    def get_premium_base_costs(cls) -> Dict[str, float]:
+    def get_premium_base_costs(cls) -> dict[str, float]:
         return cls.FRAGMENT_PREMIUM_BASE_UZS.copy()
 
     @classmethod
-    def get_gifts_base_costs(cls) -> Dict[str, float]:
+    def get_gifts_base_costs(cls) -> dict[str, float]:
         return cls.FRAGMENT_GIFTS_BASE_UZS.copy()
 
     @classmethod
-    def calculate_gift(cls, gift_id: str, margin_uzs: float = 14000.0, custom_price: Optional[float] = None) -> Dict[str, Any]:
+    def calculate_gift(cls, gift_id: str, margin_uzs: float = 14000.0, custom_price: float | None = None) -> dict[str, Any]:
         base_cost = cls.FRAGMENT_GIFTS_BASE_UZS.get(gift_id, 50000.0)
         final_price = custom_price if (custom_price and custom_price > 0) else (base_cost + margin_uzs)
         return {
@@ -65,8 +65,8 @@ class FragmentPricingEngine:
         cls,
         amount: int,
         margin_percent: float,
-        discounts: Optional[List[Dict[str, Any]]] = None
-    ) -> Dict[str, Any]:
+        discounts: list[dict[str, Any]] | None = None
+    ) -> dict[str, Any]:
         """
         Ixtiyoriy miqdordagi Stars (masalan 105 ta) uchun Fragment tannarxi + marja bo'yicha hisoblaydi.
         """
@@ -103,7 +103,7 @@ class FragmentPricingEngine:
         cls,
         months: int,
         margin_uzs: float = 5000.0
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Fragment Premium tannarxi + belgilangan marja (so'mda).
         Masalan: 138 000 + 5 000 = 143 000 so'm.
@@ -122,12 +122,13 @@ class FragmentPricingEngine:
 
 
 import urllib.parse
-import asyncio
-import httpx
 from datetime import datetime
-from database.db import AsyncSessionLocal
+
+import httpx
+
 from database import queries
-from database.models import Order, FragmentSetting
+from database.db import AsyncSessionLocal
+from database.models import FragmentSetting, Order
 
 # Fragment Telegram Stars & Premium official contract addresses on TON Mainnet
 FRAGMENT_STARS_CONTRACT = "EQCA14o1-VWhsuGhpqhkoPt6vJWZwuoBmms43Sy0GC9DDC36"
@@ -176,7 +177,7 @@ class FragmentService:
             logger.warning(f"TON balansini olishda xatolik: {e}")
         return 0.0
 
-    async def create_stars_invoice(self, recipient: str, stars_amount: int) -> Dict[str, Any]:
+    async def create_stars_invoice(self, recipient: str, stars_amount: int) -> dict[str, Any]:
         """
         Fragment orqali Stars xarid qilish uchun invoice va to'lov rekvizitlarini yaratadi.
         """
@@ -199,7 +200,7 @@ class FragmentService:
             "fragment_url": f"https://fragment.com/stars?recipient={clean_user}&quantity={stars_amount}"
         }
 
-    async def create_premium_invoice(self, recipient: str, months: int) -> Dict[str, Any]:
+    async def create_premium_invoice(self, recipient: str, months: int) -> dict[str, Any]:
         """
         Fragment orqali Telegram Premium xarid qilish uchun invoice yaratadi.
         """
@@ -228,7 +229,7 @@ class FragmentService:
         ton_amount: float,
         comment: str,
         setting: FragmentSetting
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         TON tranzaksiyasini botning hamyonidan Fragment smart kontraktiga yuboradi.
         Agar mnemonic to'ldirilmagan bo'lsa yoki simulation rejimida bo'lsa, xavfsiz simulyatsiya qiladi.
@@ -262,7 +263,7 @@ class FragmentService:
                 "error": str(e)
             }
 
-    async def fulfill_order(self, order_id: int, bot=None) -> Dict[str, Any]:
+    async def fulfill_order(self, order_id: int, bot=None) -> dict[str, Any]:
         """
         Buyurtmani Fragment orqali bajarish bo'yicha markaziy avtomatlashtirilgan jarayon.
         """
