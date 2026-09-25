@@ -11,9 +11,10 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, sta
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.database import AsyncSessionLocal
+from app.core.database import AsyncSessionLocal, get_db
 from app.core.exceptions import (
     GiftHubException,
     InsufficientBalanceError,
@@ -100,8 +101,8 @@ async def maintenance_mode_middleware(request: Request, call_next):
                             "detail": "Platforma texnik ta'mirlash rejimida. Tez orada qayta ishga tushadi."
                         }
                     )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Maintenance rejimi tekshiruvida xatolik: {e}")
     return await call_next(request)
 
 
@@ -150,56 +151,100 @@ async def telegram_webhook(
 
 
 
-# ================= HEALTH & READINESS ================= #
+# ================= HEALTH & PRODUCTION READINESS (Req 6 & Req 7) ================= #
 
+@app.get("/health/live")
 @app.get("/health")
-async def health_check():
-    """Liveness probe."""
+async def liveness_probe():
+    """Liveness probe: verifies application process is running and event loop is responsive."""
     return {
         "status": "healthy",
+        "live": True,
         "app": "GiftHub",
         "environment": settings.ENVIRONMENT,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
+@app.get("/health/ready")
 @app.get("/ready")
-async def readiness_check():
-    """Readiness probe verifying database and redis connectivity."""
-    db_ok = False
-    redis_ok = False
+async def readiness_probe():
+    """
+    Readiness probe: deeply evaluates critical dependencies (PostgreSQL, Redis, Workers, Providers).
+    Returns 200 OK if service is ready to accept traffic, or 503 if any critical dependency is unavailable.
+    """
+    import time
+    from sqlalchemy import text
+    from app.core.redis import get_redis_client
+    from app.services.worker import get_worker_status
+    from app.services.providers.circuit_breaker import circuit_breaker
 
-    # Check Database
+    db_ok = False
+    db_latency_ms = None
+    redis_ok = False
+    redis_latency_ms = None
+
+    # 1. PostgreSQL / Database Probe
+    t0 = time.perf_counter()
     try:
-        from sqlalchemy import text
         async with AsyncSessionLocal() as session:
             await session.execute(text("SELECT 1"))
             db_ok = True
+            db_latency_ms = round((time.perf_counter() - t0) * 1000, 2)
     except Exception as e:
-        logger.error(f"Readiness DB probe failed: {e}")
+        logger.error(f"Readiness probe: Database connectivity failed: {e}")
 
-    # Check Redis
-    from app.core.redis import get_redis_client
+    # 2. Redis Probe
     r_client = get_redis_client()
     if r_client:
+        t0 = time.perf_counter()
         try:
             pong = await r_client.ping()
             redis_ok = bool(pong)
-        except Exception:
+            redis_latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        except Exception as e:
+            logger.warning(f"Readiness probe: Redis ping failed: {e}")
             redis_ok = False
     else:
-        # If Redis is not configured in local environment, treat as optional
-        redis_ok = True if settings.ENVIRONMENT != "production" else False
+        # In non-production, Redis may be optional fallback
+        redis_ok = (settings.ENVIRONMENT != "production")
 
-    is_ready = db_ok and (redis_ok or settings.ENVIRONMENT != "production")
-    status_code = status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE
+    # 3. Worker Status
+    worker_status = get_worker_status()
+
+    # 4. Critical Provider Circuit Breakers
+    fragment_circuit = circuit_breaker.get_state("fragment").value
+    fragment_ok = (fragment_circuit != "OPEN")
+
+    is_prod = (settings.ENVIRONMENT == "production")
+    critical_ok = db_ok and (redis_ok if is_prod else True)
+
+    status_code = status.HTTP_200_OK if critical_ok else status.HTTP_503_SERVICE_UNAVAILABLE
     return JSONResponse(
         status_code=status_code,
         content={
-            "status": "ready" if is_ready else "not_ready",
-            "database": "connected" if db_ok else "disconnected",
-            "redis": "connected" if redis_ok else "disconnected",
-            "environment": settings.ENVIRONMENT
+            "status": "ready" if critical_ok else "not_ready",
+            "environment": settings.ENVIRONMENT,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "dependencies": {
+                "database": {
+                    "status": "healthy" if db_ok else "unhealthy",
+                    "latency_ms": db_latency_ms
+                },
+                "redis": {
+                    "status": "healthy" if redis_ok else "unhealthy",
+                    "latency_ms": redis_latency_ms,
+                    "required": is_prod
+                },
+                "worker": {
+                    "status": "running" if worker_status["is_running"] else "idle",
+                    "details": worker_status
+                },
+                "fragment_provider": {
+                    "status": "operational" if fragment_ok else "degraded",
+                    "circuit": fragment_circuit
+                }
+            }
         }
     )
 
@@ -211,8 +256,8 @@ async def get_bot_info():
         try:
             me = await bot_instance.get_me()
             uname = me.username
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Bot info olishda ogohlantirish: {e}")
     return {"username": uname or "gifthub_bot"}
 
 
@@ -447,82 +492,81 @@ async def check_gate_channels(user: User = Depends(get_current_user)):
 
 
 @app.get("/api/products")
-async def get_products(stars_amount: int | None = None):
+async def get_products(stars_amount: int | None = None, session: AsyncSession = Depends(get_db)):
     """Returns calculated product packages for Stars, Premium, and Gifts with authoritative pricing."""
-    async with AsyncSessionLocal() as session:
-        pricing = await queries.get_pricing(session)
+    pricing = await queries.get_pricing(session)
 
-        popular_amounts = [50, 100, 250, 500, 1000]
-        stars_packages = []
-        for amt in popular_amounts:
-            calc = pricing_service.calculate_stars_price(amt, pricing)
-            stars_packages.append({
-                "amount": amt,
-                "name": f"{amt} ⭐",
-                "price_uzs": calc["total_price_uzs"],
-                "discount_pct": calc["discount_percent"],
-                "formatted_price": calc["formatted_price"]
+    popular_amounts = [50, 100, 250, 500, 1000]
+    stars_packages = []
+    for amt in popular_amounts:
+        calc = pricing_service.calculate_stars_price(amt, pricing)
+        stars_packages.append({
+            "amount": amt,
+            "name": f"{amt} ⭐",
+            "price_uzs": calc["total_price_uzs"],
+            "discount_pct": calc["discount_percent"],
+            "formatted_price": calc["formatted_price"]
+        })
+
+    custom_calc = None
+    if stars_amount and stars_amount > 0:
+        custom_calc = pricing_service.calculate_stars_price(stars_amount, pricing)
+
+    try:
+        prem_data = json.loads(pricing.premium_prices_json)
+    except Exception:
+        prem_data = {"3": 142000, "6": 210000, "12": 380000}
+
+    premium_packages = [
+        {"months": 3, "name": "Premium — 3 oy", "price_uzs": prem_data.get("3", 142000), "icon": "💎"},
+        {"months": 6, "name": "Premium — 6 oy", "price_uzs": prem_data.get("6", 210000), "icon": "💎"},
+        {"months": 12, "name": "Premium — 12 oy", "price_uzs": prem_data.get("12", 380000), "icon": "👑"}
+    ]
+
+    try:
+        gifts_list = json.loads(pricing.gifts_json) if pricing and pricing.gifts_json else []
+    except Exception:
+        gifts_list = []
+
+    payment_setting = await session.get(PaymentSetting, 1)
+    payment_methods = []
+    card_info = None
+    if payment_setting:
+        if getattr(payment_setting, "card_active", True):
+            c_num = getattr(payment_setting, "card_number", "8600 1234 5678 9012")
+            c_holder = getattr(payment_setting, "card_holder", "ANVAR S.")
+            b_name = getattr(payment_setting, "bank_name", "TBC Bank")
+            card_info = {"card_number": c_num, "card_holder": c_holder, "bank_name": b_name}
+            payment_methods.append({
+                "id": "card",
+                "name": "Karta orqali to'lov",
+                "icon": "💳",
+                "type": "card",
+                "card_number": c_num,
+                "card_holder": c_holder,
+                "bank_name": b_name
             })
+        if payment_setting.click_active:
+            payment_methods.append({"id": "click", "name": "Click", "icon": "💳", "type": "official"})
+        if payment_setting.payme_active:
+            payment_methods.append({"id": "payme", "name": "Payme", "icon": "💳", "type": "official"})
+        if payment_setting.autopaycard_active:
+            payment_methods.append({"id": "autopaycard", "name": "AutoPayCard (Karta)", "icon": "⚠️", "type": "backup"})
 
-        custom_calc = None
-        if stars_amount and stars_amount > 0:
-            custom_calc = pricing_service.calculate_stars_price(stars_amount, pricing)
+    star_base_cost = float(pricing.star_unit_price_uzs or 180.0)
+    margin = float(pricing.margin_percent or 15.0)
+    star_sell = round(star_base_cost * (1 + margin / 100), 2)
 
-        try:
-            prem_data = json.loads(pricing.premium_prices_json)
-        except Exception:
-            prem_data = {"3": 142000, "6": 210000, "12": 380000}
-
-        premium_packages = [
-            {"months": 3, "name": "Premium — 3 oy", "price_uzs": prem_data.get("3", 142000), "icon": "💎"},
-            {"months": 6, "name": "Premium — 6 oy", "price_uzs": prem_data.get("6", 210000), "icon": "💎"},
-            {"months": 12, "name": "Premium — 12 oy", "price_uzs": prem_data.get("12", 380000), "icon": "👑"}
-        ]
-
-        try:
-            gifts_list = json.loads(pricing.gifts_json) if pricing and pricing.gifts_json else []
-        except Exception:
-            gifts_list = []
-
-        payment_setting = await session.get(PaymentSetting, 1)
-        payment_methods = []
-        card_info = None
-        if payment_setting:
-            if getattr(payment_setting, "card_active", True):
-                c_num = getattr(payment_setting, "card_number", "8600 1234 5678 9012")
-                c_holder = getattr(payment_setting, "card_holder", "ANVAR S.")
-                b_name = getattr(payment_setting, "bank_name", "TBC Bank")
-                card_info = {"card_number": c_num, "card_holder": c_holder, "bank_name": b_name}
-                payment_methods.append({
-                    "id": "card",
-                    "name": "Karta orqali to'lov",
-                    "icon": "💳",
-                    "type": "card",
-                    "card_number": c_num,
-                    "card_holder": c_holder,
-                    "bank_name": b_name
-                })
-            if payment_setting.click_active:
-                payment_methods.append({"id": "click", "name": "Click", "icon": "💳", "type": "official"})
-            if payment_setting.payme_active:
-                payment_methods.append({"id": "payme", "name": "Payme", "icon": "💳", "type": "official"})
-            if payment_setting.autopaycard_active:
-                payment_methods.append({"id": "autopaycard", "name": "AutoPayCard (Karta)", "icon": "⚠️", "type": "backup"})
-
-        star_base_cost = float(pricing.star_unit_price_uzs or 180.0)
-        margin = float(pricing.margin_percent or 15.0)
-        star_sell = round(star_base_cost * (1 + margin / 100), 2)
-
-        return {
-            "stars_unit_cost_uzs": star_base_cost,
-            "stars_unit_sell_uzs": star_sell,
-            "stars_packages": stars_packages,
-            "custom_stars_calc": custom_calc,
-            "premium_packages": premium_packages,
-            "gifts": gifts_list,
-            "payment_methods": payment_methods,
-            "card_info": card_info
-        }
+    return {
+        "stars_unit_cost_uzs": star_base_cost,
+        "stars_unit_sell_uzs": star_sell,
+        "stars_packages": stars_packages,
+        "custom_stars_calc": custom_calc,
+        "premium_packages": premium_packages,
+        "gifts": gifts_list,
+        "payment_methods": payment_methods,
+        "card_info": card_info
+    }
 
 
 class TopupRequest(BaseModel):
@@ -2108,8 +2152,8 @@ async def run_broadcast_queue(recipients: list[int], req: BroadcastRequest, admi
         )
         try:
             await bot_instance.send_message(chat_id=admin_id, text=report)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Adminga ({admin_id}) broadcast xulosasini yuborishda xatolik: {e}")
 
 
 @app.get("/api/admin/export/orders.csv")

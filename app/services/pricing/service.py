@@ -123,8 +123,8 @@ class PricingService:
                         "cost_total_decimal": base_cost,
                         "formatted_price": f"{int(sell_price):,} so'm".replace(",", " ")
                     }
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"telegram_premium_json ni o'qishda xatolik: {e}")
 
         sell_price = base_cost + Decimal("5000.00")
         return {
@@ -145,8 +145,8 @@ class PricingService:
                 parsed = json.loads(pricing.gifts_json)
                 if parsed:
                     gifts_list = parsed
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"gifts_json ni o'qishda xatolik: {e}")
 
         for g in gifts_list:
             if g.get("id") == gift_id:

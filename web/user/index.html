@@ -383,18 +383,35 @@
   .chip.active{background:linear-gradient(135deg,var(--green-1),var(--green-2));color:#05130C;border-color:transparent;}
 
   .order-row{
-    display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;
   }
   .order-icon{width:38px;height:38px;border-radius:10px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
-  .order-info{flex:1;min-width:0;}
+  .order-info{flex:1;min-width:140px;}
   .order-title{font-size:13px;font-weight:600;}
   .order-date{font-size:11px;color:var(--text-faint);margin-top:2px;}
-  .order-right{text-align:right;}
+  .order-right{text-align:right;flex-shrink:0;}
   .order-amt{font-size:13px;font-weight:700;}
   .status{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;margin-top:4px;display:inline-block;}
   .status.done{background:rgba(18,232,139,.14);color:var(--green-1);}
   .status.pending{background:rgba(255,138,101,.14);color:var(--warn);}
   .status.cancel{background:rgba(255,107,107,.14);color:var(--danger);}
+
+  .order-actions{width:100%;display:flex;justify-content:flex-end;gap:6px;margin-top:4px;}
+  .order-btn-sm{
+    background:var(--surface-2);border:1px solid var(--line);color:var(--text);
+    padding:4px 9px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;
+    transition:all 0.15s ease;display:inline-flex;align-items:center;gap:4px;
+  }
+  .order-btn-sm:hover{border-color:var(--green-1);color:var(--green-1);}
+  .order-btn-sm.buy-again{
+    background:rgba(18,232,139,.12);border-color:rgba(18,232,139,.35);color:var(--green-1);
+  }
+
+  .rcp-chip{
+    padding:4px 9px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line);
+    font-size:11px;color:var(--text);cursor:pointer;white-space:nowrap;transition:all 0.15s ease;
+  }
+  .rcp-chip:hover{border-color:var(--green-1);background:rgba(18,232,139,.08);}
 
   .empty{
     display:flex;flex-direction:column;align-items:center;text-align:center;
@@ -1244,7 +1261,16 @@
 
     <!-- Friend receiver input -->
     <div id="rcpFriendBox" style="display:none;margin-bottom:14px;">
+      <!-- Saved Recipients Quick Select (Req 15) -->
+      <div id="savedRecipientsSection" style="margin-bottom:8px;display:none;">
+        <div style="font-size:11px;font-weight:600;color:var(--text-dim);margin-bottom:4px;">⭐ Saqlangan qabul qiluvchilar:</div>
+        <div id="savedRecipientsChips" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;"></div>
+      </div>
       <input type="text" id="recipientInput" class="field-input" placeholder="@username yoki Telegram ID (masalan: 123456789)" style="margin-bottom:6px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <input type="checkbox" id="chkSaveRecipient" style="cursor:pointer;accent-color:var(--green-1);">
+        <label for="chkSaveRecipient" style="font-size:11.5px;color:var(--text-dim);cursor:pointer;">Ushbu qabul qiluvchini saqlab qo'yish</label>
+      </div>
       <div style="font-size:11.5px;color:var(--text-dim);line-height:1.4;">
         💡 <b>Do'stingizda username yo'qmi?</b> Unda uning Telegram ID raqamini kiriting (ID ni @userinfobot orqali bilish mumkin).
       </div>
@@ -1259,6 +1285,31 @@
     <div style="display:flex;gap:10px;margin-top:10px;">
       <button class="topup-btn" id="confirmBuyBtn" style="flex:1;justify-content:center;">Xarid qilish</button>
       <button class="topup-btn" onclick="closeModal()" style="background:var(--surface-2);color:var(--text);border:1px solid var(--line);">Bekor qilish</button>
+    </div>
+  </div>
+</div>
+
+<!-- RECEIPT MODAL (Req 16) -->
+<div class="modal-overlay" id="receiptModal" style="display:none;">
+  <div class="modal-box" style="max-width:380px;background:var(--surface);border-radius:24px;padding:22px;border:1px solid var(--line);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid var(--line);padding-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:22px;">🎁</span>
+        <div>
+          <div style="font-size:15px;font-weight:800;font-family:'Sora',sans-serif;">GiftHub Chek</div>
+          <div style="font-size:10.5px;color:var(--text-dim);" id="rcpNumber">GH-000000</div>
+        </div>
+      </div>
+      <button class="order-btn-sm" onclick="closeReceiptModal()">✕</button>
+    </div>
+
+    <div id="receiptContent" style="font-size:12.5px;line-height:1.6;color:var(--text);">
+      <div style="text-align:center;padding:20px;color:var(--text-dim);">Chek yuklanmoqda...</div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:18px;">
+      <button class="topup-btn" onclick="copyReceiptText()" style="flex:1;justify-content:center;font-size:12.5px;padding:10px;">📋 Nusxa olish</button>
+      <button class="topup-btn" onclick="closeReceiptModal()" style="background:var(--surface-2);color:var(--text);border:1px solid var(--line);font-size:12.5px;padding:10px 16px;">Yopish</button>
     </div>
   </div>
 </div>
@@ -1432,7 +1483,38 @@
       boxSelf.style.display = 'none';
       boxFriend.style.display = 'block';
       if(input) input.focus();
+      loadSavedRecipients();
     }
+  }
+
+  async function loadSavedRecipients() {
+    if(!currentUser) return;
+    try {
+      const res = await fetch(`/api/v1/recipients?user_id=${currentUser.id}`, { headers: authHeaders() });
+      if(!res.ok) return;
+      const data = await res.json();
+      const sec = document.getElementById('savedRecipientsSection');
+      const container = document.getElementById('savedRecipientsChips');
+      if(!sec || !container) return;
+
+      if(data.recipients && data.recipients.length > 0) {
+        sec.style.display = 'block';
+        container.innerHTML = data.recipients.map(r => `
+          <div class="rcp-chip" onclick="selectSavedRecipient('${r.recipient_username}')">
+            👤 @${r.recipient_username}
+          </div>
+        `).join('');
+      } else {
+        sec.style.display = 'none';
+      }
+    } catch(e) {
+      console.warn("loadSavedRecipients error:", e);
+    }
+  }
+
+  function selectSavedRecipient(username) {
+    const input = document.getElementById('recipientInput');
+    if(input) input.value = '@' + username.replace('@', '');
   }
 
   function updateUserUI() {
@@ -1809,6 +1891,28 @@
       recipient = currentUser?.username ? ('@' + currentUser.username) : (currentUser ? String(currentUser.id) : null);
     }
 
+    // Explicit confirmation before purchase (Req 15)
+    const formattedPrice = Number(currentProductToBuy.price).toLocaleString('ru-RU') + " UZS";
+    const confirmPrompt = `Xaridni tasdiqlaysizmi?\n\nMahsulot: ${currentProductToBuy.title}\nQabul qiluvchi: ${recipient}\nTo'lov summasi: ${formattedPrice}\n\nDavom ettirilsinmi?`;
+    if(!confirm(confirmPrompt)) return;
+
+    // Optional save recipient (Req 15)
+    const chkSave = document.getElementById('chkSaveRecipient');
+    if(chkSave && chkSave.checked && recipientMode === 'friend' && currentUser) {
+      try {
+        await fetch('/api/v1/recipients', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            user_id: currentUser.id,
+            recipient_username: recipient.replace('@', '')
+          })
+        });
+      } catch(e) {
+        console.warn("Save recipient failed silently:", e);
+      }
+    }
+
     try {
       const res = await fetch('/api/orders/create', {
         method: 'POST',
@@ -1978,17 +2082,124 @@
             <div class="order-icon">${icon}</div>
             <div class="order-info">
               <div class="order-title">${o.item_title}</div>
-              <div class="order-date">${o.created_at} · ${o.order_code}</div>
+              <div class="order-date">${o.created_at} · <b style="color:var(--green-1);font-family:monospace;">${o.order_code}</b></div>
             </div>
             <div class="order-right">
               <div class="order-amt">${o.formatted_price}</div>
               <div class="status ${stClass}">${stText}</div>
+            </div>
+            <div class="order-actions">
+              <button class="order-btn-sm" type="button" onclick="openReceiptModal('${o.order_code}')">🧾 Chek</button>
+              <button class="order-btn-sm buy-again" type="button" onclick="buyAgain('${o.order_code}')">🔁 Qayta olish</button>
             </div>
           </div>
         `;
       }).join('');
       renderAppleEmojis(cont);
     } catch(e){ console.error(e); }
+  }
+
+  // ================= RECEIPT & BUY AGAIN (Req 14 & Req 16) ================= //
+  let activeReceiptData = null;
+
+  async function openReceiptModal(orderCode) {
+    const modal = document.getElementById('receiptModal');
+    const content = document.getElementById('receiptContent');
+    const numEl = document.getElementById('rcpNumber');
+    if(!modal) return;
+    modal.style.display = 'flex';
+    if(numEl) numEl.innerText = orderCode;
+    if(content) content.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim);">Yuklanmoqda...</div>';
+
+    try {
+      const res = await fetch(`/api/v1/orders/${encodeURIComponent(orderCode)}/receipt`, { headers: authHeaders() });
+      if(!res.ok) throw new Error("Receipt fetch error: " + res.status);
+      const data = await res.json();
+      const r = data.receipt;
+      activeReceiptData = r;
+
+      const paidDate = r.paid_at ? new Date(r.paid_at).toLocaleString('uz-UZ') : (r.date ? new Date(r.date).toLocaleString('uz-UZ') : 'Noma\'lum');
+      const currency = r.financials?.currency || 'UZS';
+      const totalFormatted = (r.financials?.total_price_uzs || 0).toLocaleString('ru-RU') + ' ' + currency;
+      const unitPriceFormatted = (r.financials?.unit_price_uzs || 0).toLocaleString('ru-RU') + ' ' + currency;
+
+      content.innerHTML = `
+        <div style="background:var(--surface-2);border-radius:12px;padding:12px 14px;margin-bottom:12px;border:1px solid var(--line);">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="color:var(--text-dim);">To'lov sanasi:</span>
+            <b>${paidDate}</b>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="color:var(--text-dim);">Mahsulot:</span>
+            <b style="color:var(--green-1);">${r.product?.item_title || 'Raqamli mahsulot'}</b>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="color:var(--text-dim);">Miqdori:</span>
+            <b>${r.product?.quantity || 1} dona</b>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="color:var(--text-dim);">Qabul qiluvchi:</span>
+            <b>@${r.delivery?.recipient_username || 'O\'zim'}</b>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="color:var(--text-dim);">Dona narxi:</span>
+            <b>${unitPriceFormatted}</b>
+          </div>
+          <div style="display:flex;justify-content:space-between;border-top:1px dashed var(--line);padding-top:8px;margin-top:4px;">
+            <span style="font-weight:700;">Jami summa:</span>
+            <b style="font-size:15px;color:var(--green-1);font-family:'Sora',sans-serif;">${totalFormatted}</b>
+          </div>
+        </div>
+
+        <div style="font-size:11.5px;color:var(--text-dim);background:var(--surface-2);padding:10px 12px;border-radius:10px;border:1px solid var(--line);">
+          <div>To'lov usuli: <b>${(r.payment?.provider || r.payment?.method || 'balans').toUpperCase()}</b></div>
+          <div>Holati: <b style="color:var(--green-1);">${(r.payment?.status || 'completed').toUpperCase()}</b></div>
+          ${r.delivery?.tx_hash ? `<div style="margin-top:4px;word-break:break-all;">Fragment TX: <code style="font-size:10px;color:var(--mint);">${r.delivery.tx_hash}</code></div>` : ''}
+        </div>
+      `;
+      renderAppleEmojis(content);
+    } catch(e) {
+      console.error(e);
+      if(content) content.innerHTML = '<div style="color:var(--danger);text-align:center;padding:20px;">Chekni yuklab bo\'lmadi.</div>';
+    }
+  }
+
+  function closeReceiptModal() {
+    const modal = document.getElementById('receiptModal');
+    if(modal) modal.style.display = 'none';
+  }
+
+  function copyReceiptText() {
+    if(!activeReceiptData) return;
+    const r = activeReceiptData;
+    const text = `🧾 GiftHub Rasmiy Cheki\nChek: #${r.receipt_number}\nMahsulot: ${r.product?.item_title}\nQabul qiluvchi: @${r.delivery?.recipient_username || 'O\'zim'}\nSumma: ${(r.financials?.total_price_uzs || 0).toLocaleString('ru-RU')} ${r.financials?.currency || 'UZS'}\nHolati: ${r.payment?.status}\nSana: ${r.paid_at || r.date}`;
+    navigator.clipboard.writeText(text).then(() => {
+      showToast("Chek ma'lumotlari nusxalandi!");
+    }).catch(() => {
+      fallbackCopyCard(text);
+    });
+  }
+
+  async function buyAgain(orderCode) {
+    try {
+      showToast("Narx hisoblanmoqda...");
+      const res = await fetch(`/api/v1/orders/${encodeURIComponent(orderCode)}/buy-again-details`, { headers: authHeaders() });
+      if(!res.ok) throw new Error("Buy again details error: " + res.status);
+      const data = await res.json();
+
+      openBuyModal(data.product_type, data.item_title, data.current_total_price_uzs, data.amount);
+
+      if(data.recipient_username) {
+        setRecipientMode('friend');
+        const input = document.getElementById('recipientInput');
+        if(input) input.value = '@' + data.recipient_username.replace('@', '');
+      }
+
+      showToast(`🔁 ${data.item_title} uchun joriy narx yuklandi!`);
+    } catch(e) {
+      console.error("buyAgain error:", e);
+      alert("Qayta xarid ma'lumotlarini yuklashda xatolik yuz berdi!");
+    }
   }
 
   // Navigation

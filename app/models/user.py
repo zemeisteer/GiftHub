@@ -43,6 +43,7 @@ class User(Base):
     transactions = relationship("Transaction", back_populates="user")
     support_tickets = relationship("SupportTicket", back_populates="user")
     notifications = relationship("InAppNotification", back_populates="user")
+    saved_recipients = relationship("SavedRecipient", back_populates="user", cascade="all, delete-orphan")
 
     @property
     def telegram_id(self) -> int:

@@ -284,8 +284,8 @@ async def cb_admin_approve_receipt(callback: CallbackQuery, bot: Bot):
     )
     try:
         await callback.message.edit_caption(caption=new_caption, reply_markup=None)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"To'lov cheki xabari sarlavhasini o'zgartirishda ogohlantirish: {e}")
 
     # Notify target user
     try:
@@ -326,8 +326,8 @@ async def cb_admin_reject_receipt(callback: CallbackQuery, bot: Bot):
     )
     try:
         await callback.message.edit_caption(caption=new_caption, reply_markup=None)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"To'lov cheki xabari sarlavhasini o'zgartirishda ogohlantirish: {e}")
 
     try:
         await bot.send_message(

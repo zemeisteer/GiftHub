@@ -12,6 +12,7 @@ from app.models.order import (
     CheckoutIdempotency,
     Order,
     OrderStatus,
+    OrderStatusHistory,
     normalize_status,
     validate_order_transition,
 )
@@ -26,6 +27,7 @@ from app.models.payment import (
 from app.models.pricing import PriceLock, PricingSetting
 from app.models.promo import PromoCode, PromoCodeUsage, PromoRedemption
 from app.models.provider import CircuitState, ProviderHealth, ProviderStatus
+from app.models.recipient import SavedRecipient
 from app.models.reconciliation import (
     DiscrepancyType,
     ReconciliationDiscrepancy,
@@ -58,6 +60,7 @@ __all__ = [
     "InAppNotification",
     "Order",
     "OrderStatus",
+    "OrderStatusHistory",
     "OutboxEvent",
     "OutboxStatus",
     "PaymeTransaction",
@@ -78,6 +81,7 @@ __all__ = [
     "RiskAudit",
     "RiskSeverity",
     "RiskType",
+    "SavedRecipient",
     "SupportTicket",
     "TicketMessage",
     "TicketStatus",

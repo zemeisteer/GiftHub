@@ -231,8 +231,8 @@ async def cb_admin_order_mark_done(callback: CallbackQuery, bot: Bot):
                         f"Xaridingiz uchun rahmat!"
                     )
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Foydalanuvchiga buyurtma bajarilgani haqida xabar yuborishda xatolik ({order.user_id}): {e}")
 
     await callback.answer("✅ Buyurtma bajarildi deb belgilandi!", show_alert=True)
     await cb_admin_orders(callback)
@@ -253,8 +253,8 @@ async def cb_admin_order_cancel(callback: CallbackQuery, bot: Bot):
                         f"💰 <b>{order.total_price:,.0f} so'm</b> mablag' hisobingizga qaytarildi."
                     )
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Foydalanuvchiga buyurtma bekor qilingani haqida xabar yuborishda xatolik ({order.user_id}): {e}")
 
     await callback.answer("❌ Buyurtma bekor qilindi va pul qaytarildi!", show_alert=True)
     await cb_admin_orders(callback)
@@ -346,8 +346,8 @@ async def cb_admin_service_order_cancel(callback: CallbackQuery, bot: Bot):
                     f"💰 <b>{order.total_price:,.0f} so'm</b> mablag' hisobingizga qaytarildi."
                 )
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Foydalanuvchiga buyurtma bekor qilingani haqida xabar yuborishda xatolik ({order.user_id}): {e}")
 
     await callback.answer("❌ Buyurtma bekor qilindi va mablag' qaytarildi!", show_alert=True)
     try:
@@ -355,8 +355,8 @@ async def cb_admin_service_order_cancel(callback: CallbackQuery, bot: Bot):
             f"❌ <b>Buyurtma #{order.order_code} bekor qilindi.</b>\n"
             f"Mijoz hisobiga <b>{order.total_price:,.0f} so'm</b> qaytarildi."
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Admin xabarini tahrirlashda ogohlantirish: {e}")
 
 
 @router.message(AdminDeliverServiceState.waiting_for_link, F.text)

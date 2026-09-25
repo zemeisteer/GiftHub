@@ -39,6 +39,14 @@ class CircuitBreaker:
             }
         return self._states[provider_name]
 
+    def get_state(self, provider_name: str) -> CircuitState:
+        """Returns the current circuit state for the specified provider."""
+        st = self._get_or_init_state(provider_name)
+        try:
+            return CircuitState(st["state"])
+        except Exception:
+            return CircuitState.CLOSED
+
     def can_execute(self, provider_name: str) -> bool:
         """Checks if a call to the provider is permitted."""
         st = self._get_or_init_state(provider_name)

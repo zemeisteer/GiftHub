@@ -24,10 +24,32 @@ logger = get_logger("GiftHubWorker")
 _async_queue = asyncio.Queue()
 _shutdown_event = asyncio.Event()
 
+_worker_stats = {
+    "is_running": False,
+    "last_heartbeat": None,
+    "cycle_count": 0,
+    "tasks_processed": 0
+}
+
+
+def get_worker_status() -> dict[str, Any]:
+    """Returns background worker health and heartbeat status."""
+    hb = _worker_stats["last_heartbeat"]
+    sec_since = (datetime.now(timezone.utc) - hb).total_seconds() if hb else None
+    is_alive = _worker_stats["is_running"] and (sec_since is not None and sec_since < 60)
+    return {
+        "is_running": is_alive,
+        "last_heartbeat": hb.isoformat() if hb else None,
+        "seconds_since_heartbeat": round(sec_since, 1) if sec_since is not None else None,
+        "cycle_count": _worker_stats["cycle_count"],
+        "queue_size": _async_queue.qsize()
+    }
+
 
 def stop_worker():
     """Signals background worker to stop gracefully."""
     _shutdown_event.set()
+    _worker_stats["is_running"] = False
 
 
 async def enqueue_task(task_type: str, payload: dict[str, Any]):
@@ -139,6 +161,9 @@ async def run_worker_loop(bot=None):
     cycle_counter = 0
 
     while not _shutdown_event.is_set():
+        _worker_stats["is_running"] = True
+        _worker_stats["last_heartbeat"] = datetime.now(timezone.utc)
+        _worker_stats["cycle_count"] = cycle_counter
         try:
             # 1. Process in-memory tasks if any
             try:

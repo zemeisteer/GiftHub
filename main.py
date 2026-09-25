@@ -37,8 +37,8 @@ class DirectTelegramResolver(DefaultResolver):
                 res = await super().resolve(host, port, family)
                 if res:
                     return res
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug(f"DirectTelegramResolver DNS resolution fallback ({e})")
             return [
                 {"hostname": host, "host": ip, "port": port, "family": socket.AF_INET, "proto": 0, "flags": 0}
                 for ip in TELEGRAM_FAST_IPS
@@ -124,6 +124,29 @@ async def start_bot():
         logging.error(f"Bot ishga tushish xatosi: {e}")
 
 
+async def cleanup_resources():
+    """Performs graceful resource disposal inside the running event loop (Req 4)."""
+    logging.info("🛑 Graceful shutdown boshlandi: resurslar to'xtatilmoqda...")
+    stop_worker()
+    if bot and bot.session:
+        try:
+            await bot.session.close()
+            logging.info("✅ Telegram Bot sessiyasi yopildi.")
+        except Exception as e:
+            logging.warning(f"Bot sessiyasini yopishda xatolik: {e}")
+    try:
+        from app.core.redis import close_redis
+        await close_redis()
+    except Exception as e:
+        logging.warning(f"Redis ulanishini yopishda xatolik: {e}")
+    try:
+        await engine.dispose()
+        logging.info("✅ Ma'lumotlar bazasi pooli yopildi.")
+    except Exception as e:
+        logging.warning(f"Database engine dispose xatoligi: {e}")
+    logging.info("🏁 GiftHub resurslari to'liq va xavfsiz to'xtatildi.")
+
+
 async def main(mode: str = "combined"):
     setup_logger()
     logging.info(f"🚀 GiftHub Platform ishga tushirilmoqda (Mode: {mode})...")
@@ -142,37 +165,48 @@ async def main(mode: str = "combined"):
     logging.info(f"🌐 Web App URL: {config.WEB_APP_URL}")
     logging.info(f"🌐 Admin Panel URL: {config.ADMIN_APP_URL}")
 
-    # Mode selection (Req 11)
-    if mode == "api":
-        logging.info("Starting standalone API server mode...")
-        await start_web_server()
-    elif mode == "bot":
-        logging.info("Starting standalone Bot polling mode...")
-        await start_bot()
-    elif mode == "worker":
-        logging.info("Starting standalone Worker mode...")
-        await run_worker_loop(bot=bot)
-    else: # combined (Default for development)
-        logging.info("Starting combined runtime mode (API + Bot + Worker)...")
-        await asyncio.gather(
-            start_web_server(),
-            start_bot(),
-            run_worker_loop(bot=bot)
-        )
+    shutdown_event = asyncio.Event()
 
+    def _sig_handler():
+        logging.info("To'xtatish signali qabul qilindi, shutdown boshlandi...")
+        shutdown_event.set()
 
-def handle_signals():
-    """Registers graceful shutdown hooks (Req 12)."""
-    def _sig_handler(sig, frame):
-        logging.info(f"Signal {sig} received, initiating graceful shutdown...")
-        stop_worker()
-        sys.exit(0)
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, _sig_handler)
+        except (NotImplementedError, AttributeError):
+            # Windows platform compatibility
+            signal.signal(sig, lambda s, f: shutdown_event.set())
 
+    tasks = []
     try:
-        signal.signal(signal.SIGINT, _sig_handler)
-        signal.signal(signal.SIGTERM, _sig_handler)
-    except Exception:
-        pass
+        if mode == "api":
+            logging.info("Starting standalone API server mode...")
+            tasks.append(asyncio.create_task(start_web_server()))
+        elif mode == "bot":
+            logging.info("Starting standalone Bot polling mode...")
+            tasks.append(asyncio.create_task(start_bot()))
+        elif mode == "worker":
+            logging.info("Starting standalone Worker mode...")
+            tasks.append(asyncio.create_task(run_worker_loop(bot=bot)))
+        else: # combined (Default for development)
+            logging.info("Starting combined runtime mode (API + Bot + Worker)...")
+            tasks.append(asyncio.create_task(start_web_server()))
+            tasks.append(asyncio.create_task(start_bot()))
+            tasks.append(asyncio.create_task(run_worker_loop(bot=bot)))
+
+        shutdown_waiter = asyncio.create_task(shutdown_event.wait())
+        done, pending = await asyncio.wait(
+            tasks + [shutdown_waiter],
+            return_when=asyncio.FIRST_COMPLETED
+        )
+        for t in pending:
+            t.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+    finally:
+        await cleanup_resources()
 
 
 if __name__ == "__main__":
@@ -184,15 +218,8 @@ if __name__ == "__main__":
         help="Runtime mode: combined (all-in-one), api (FastAPI only), bot (Aiogram only), worker (Background jobs only)"
     )
     args = parser.parse_args()
-    handle_signals()
 
     try:
         asyncio.run(main(mode=args.mode))
     except (KeyboardInterrupt, SystemExit):
-        logging.info("Shutting down GiftHub gracefully...")
-    finally:
-        try:
-            asyncio.run(bot.session.close())
-            asyncio.run(engine.dispose())
-        except Exception:
-            pass
+        logging.info("GiftHub to'xtatildi.")

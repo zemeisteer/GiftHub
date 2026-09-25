@@ -27,8 +27,8 @@ async def on_bot_chat_member_updated(event: ChatMemberUpdated):
                 exported = await bot.export_chat_invite_link(chat.id)
                 if exported:
                     invite_link = exported
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Kanal taklif havolasini olishda ogohlantirish ({chat.id}): {e}")
 
         is_join_req = ("+" in invite_link) or ("joinchat" in invite_link)
         is_group = chat.type in ["group", "supergroup"]
@@ -61,8 +61,8 @@ async def on_bot_chat_member_updated(event: ChatMemberUpdated):
                         f"⚙️ <i>Admin paneldan majburiy a'zolik turini tanlab, 'Tayyor' tugmasini bosing!</i>"
                     )
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Adminga ({admin_id_str}) yangi kanal bildirishnomasini yuborishda xatolik: {e}")
 
 @router.chat_join_request()
 async def on_chat_join_request(event: ChatJoinRequest):
@@ -77,5 +77,5 @@ async def on_chat_join_request(event: ChatJoinRequest):
                 user_id=event.from_user.id,
                 chat_id=event.chat.id
             )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Join request yozishda xatolik (user: {event.from_user.id}, chat: {event.chat.id}): {e}")

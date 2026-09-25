@@ -59,6 +59,9 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+get_db = get_db_session
+
+
 @asynccontextmanager
 async def async_session_scope() -> AsyncGenerator[AsyncSession, None]:
     """Async context manager for background workers and services."""

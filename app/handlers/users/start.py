@@ -80,8 +80,8 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext)
         try:
             rm_msg = await message.answer("🔄", reply_markup=ReplyKeyboardRemove())
             await rm_msg.delete()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Klaviaturani tozalash xabarida ogohlantirish: {e}")
 
         gate_text = (
             f"Assalomu alaykum, <b>{first_name}</b>!\n\n"
@@ -100,8 +100,8 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext)
     try:
         rm_msg = await message.answer("🔄", reply_markup=ReplyKeyboardRemove())
         await rm_msg.delete()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Klaviaturani tozalash xabarida ogohlantirish: {e}")
 
     await message.answer(
         text=welcome_text,
@@ -231,8 +231,8 @@ async def cb_check_subscription(callback: CallbackQuery, state: FSMContext):
             await callback.message.edit_reply_markup(
                 reply_markup=get_gate_keyboard(missing_channels)
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Kanal tekshirish tugmalarini yangilashda ogohlantirish: {e}")
         return
 
     await callback.answer("✅ A'zolik tasdiqlandi!")

@@ -237,8 +237,8 @@ async def cb_send_broadcast_flow(callback: CallbackQuery):
                     f"⚠️ Xatoliklar: <b>{failed}</b>"
                 )
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Broadcast xulosasini adminga yuborishda xatolik ({callback.from_user.id}): {e}")
 
     asyncio.create_task(_send_copy_queue())
 

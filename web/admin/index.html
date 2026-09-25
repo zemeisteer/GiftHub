@@ -750,6 +750,14 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
         Statistika
       </div>
+      <div class="nav-item" data-view="system-health">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Tizim Holati
+      </div>
+      <div class="nav-item" data-view="problem-orders">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Muammoli Buyurtmalar
+      </div>
       <div class="nav-item" data-view="price">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
         Narxlar
@@ -817,6 +825,8 @@
     <!-- Horizontal Quick Nav for Mobile -->
     <div class="quick-nav">
       <div class="q-pill active" data-view="dash">Statistika</div>
+      <div class="q-pill" data-view="system-health">Tizim Holati</div>
+      <div class="q-pill" data-view="problem-orders">Muammolar</div>
       <div class="q-pill" data-view="price">Narxlar</div>
       <div class="q-pill" data-view="services">Xizmatlar</div>
       <div class="q-pill" data-view="orders">Buyurtmalar</div>
@@ -954,7 +964,10 @@
           <h1>Narxlarni Boshqarish</h1>
           <p>Telegram Stars, Premium obunalari va Sovg'alar narxlarini belgilash</p>
         </div>
-        <button class="btn btn-primary" onclick="savePricing()">💾 Barcha narxlarni saqlash</button>
+        <div class="topbar-actions" style="display:flex;gap:10px;">
+          <button class="btn btn-secondary" onclick="openPricePreviewModal()">👁️ Narx o'zgarishini ko'rish (Preview)</button>
+          <button class="btn btn-primary" onclick="savePricing()">💾 Barcha narxlarni saqlash</button>
+        </div>
       </div>
 
       <div class="tabs-bar">
@@ -1630,6 +1643,252 @@
         <button class="btn btn-primary" onclick="openAddServiceModal()">＋ Yangi xizmat qo'shish</button>
       </div>
     </section>
+
+    <!-- 13. VIEW: SYSTEM HEALTH & DEPENDENCY MONITORING (Req 8) -->
+    <section class="view-pane" id="system-health">
+      <div class="topbar">
+        <div class="page-title-box">
+          <h1>Tizim Holati va Salomatlik (System Health)</h1>
+          <p>GiftHub bot, PostgreSQL, Redis, Workerlar, To'lov provayderlari va navbat ko'rsatkichlari</p>
+        </div>
+        <div class="topbar-actions" style="display:flex;gap:10px;">
+          <button class="btn btn-secondary" onclick="loadSystemHealth(this)">↻ Qayta tekshirish</button>
+        </div>
+      </div>
+
+      <!-- Overall Status Banner -->
+      <div class="card" id="healthOverallBanner" style="background:linear-gradient(135deg,rgba(16,185,129,0.12) 0%,rgba(0,176,255,0.08) 100%);border:1px solid rgba(16,185,129,0.3);margin-bottom:20px;padding:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <div id="healthOverallIcon" style="width:44px;height:44px;border-radius:12px;background:var(--success-bg);color:var(--success);display:flex;align-items:center;justify-content:center;font-size:24px;">🟢</div>
+            <div>
+              <div id="healthOverallTitle" style="font-size:17px;font-weight:800;color:var(--text);">Tizim To'liq Barqaror (Healthy)</div>
+              <div id="healthOverallSub" style="font-size:12.5px;color:var(--text-muted);">Barcha asosiy komponentlar va integratsiyalar faol ishlamoqda.</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <span class="badge-tag up" id="healthEnvBadge" style="font-size:11px;">PROD</span>
+            <span style="font-size:12px;color:var(--text-faint);" id="healthLastChecked">Hozirgina</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Core Dependencies Grid -->
+      <div class="stat-grid" style="grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px;margin-bottom:20px;">
+        <!-- Bot Card -->
+        <div class="stat-card" style="position:relative;overflow:hidden;">
+          <div class="stat-head">
+            <span class="stat-label">Telegram Bot</span>
+            <div class="stat-icon-wrap">🤖</div>
+          </div>
+          <div style="margin:10px 0 6px;">
+            <div style="font-size:18px;font-weight:800;display:flex;align-items:center;gap:8px;">
+              <span id="healthBotStatus">Ishlamoqda</span>
+              <span class="badge-tag up" id="healthBotBadge">OK</span>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);display:flex;flex-direction:column;gap:3px;" id="healthBotDetails">
+            <div>Username: <b id="healthBotUsername">@gifthub_bot</b></div>
+            <div>Ulanish: <b id="healthBotMode">Polling / Webhook</b></div>
+          </div>
+        </div>
+
+        <!-- PostgreSQL Card -->
+        <div class="stat-card">
+          <div class="stat-head">
+            <span class="stat-label">PostgreSQL Database</span>
+            <div class="stat-icon-wrap">🐘</div>
+          </div>
+          <div style="margin:10px 0 6px;">
+            <div style="font-size:18px;font-weight:800;display:flex;align-items:center;gap:8px;">
+              <span id="healthDbStatus">Ulangan</span>
+              <span class="badge-tag up" id="healthDbBadge">OK</span>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);display:flex;flex-direction:column;gap:3px;" id="healthDbDetails">
+            <div>Javob tezligi: <b id="healthDbLatency">1.2 ms</b></div>
+            <div>Drayver: <b id="healthDbDriver">AsyncPG / SQLAlchemy</b></div>
+          </div>
+        </div>
+
+        <!-- Redis Card -->
+        <div class="stat-card">
+          <div class="stat-head">
+            <span class="stat-label">Redis Cache & FSM</span>
+            <div class="stat-icon-wrap">⚡</div>
+          </div>
+          <div style="margin:10px 0 6px;">
+            <div style="font-size:18px;font-weight:800;display:flex;align-items:center;gap:8px;">
+              <span id="healthRedisStatus">Ulangan</span>
+              <span class="badge-tag up" id="healthRedisBadge">OK</span>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);display:flex;flex-direction:column;gap:3px;" id="healthRedisDetails">
+            <div>Ping tezligi: <b id="healthRedisLatency">0.8 ms</b></div>
+            <div>FSM Storage: <b>RedisStorage</b></div>
+          </div>
+        </div>
+
+        <!-- Background Workers Card -->
+        <div class="stat-card">
+          <div class="stat-head">
+            <span class="stat-label">Asinxron Workerlar</span>
+            <div class="stat-icon-wrap">⚙️</div>
+          </div>
+          <div style="margin:10px 0 6px;">
+            <div style="font-size:18px;font-weight:800;display:flex;align-items:center;gap:8px;">
+              <span id="healthWorkerStatus">Faol</span>
+              <span class="badge-tag up" id="healthWorkerBadge">ACTIVE</span>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);display:flex;flex-direction:column;gap:3px;" id="healthWorkerDetails">
+            <div>Heartbeat: <b id="healthWorkerHeartbeat">Hozirgina</b></div>
+            <div>Bajarilgan ishlar: <b id="healthWorkerJobs">0 ta</b></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Second Row: Providers, Queues, DLQ -->
+      <div class="grid-2" style="gap:16px;">
+        <!-- Payment & Fulfillment Integrations -->
+        <div class="card">
+          <h3 class="card-title" style="margin-bottom:14px;">Integratsiyalar va Provayderlar Holati</h3>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surface);border-radius:var(--radius-md);border:1px solid var(--line);">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span style="font-size:18px;">💎</span>
+                <div>
+                  <div style="font-weight:700;">Fragment & TON API</div>
+                  <div style="font-size:11.5px;color:var(--text-muted);">Circuit Breaker: <b id="healthFragCircuit" style="color:var(--success);">CLOSED (Sog'lom)</b></div>
+                </div>
+              </div>
+              <span class="badge-tag up" id="healthFragBadge">Barqaror</span>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surface);border-radius:var(--radius-md);border:1px solid var(--line);">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span style="font-size:18px;">💳</span>
+                <div>
+                  <div style="font-weight:700;">Click To'lov Tizimi</div>
+                  <div style="font-size:11.5px;color:var(--text-muted);">Webhook endpoint & imzo tekshiruvi</div>
+                </div>
+              </div>
+              <span class="badge-tag up" id="healthClickBadge">Faol</span>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surface);border-radius:var(--radius-md);border:1px solid var(--line);">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span style="font-size:18px;">💳</span>
+                <div>
+                  <div style="font-weight:700;">Payme Integratsiyasi</div>
+                  <div style="font-size:11.5px;color:var(--text-muted);">JSON-RPC 2.0 protokoli</div>
+                </div>
+              </div>
+              <span class="badge-tag up" id="healthPaymeBadge">Faol</span>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surface);border-radius:var(--radius-md);border:1px solid var(--line);">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span style="font-size:18px;">💳</span>
+                <div>
+                  <div style="font-weight:700;">Uzum Bank & Autopay</div>
+                  <div style="font-size:11.5px;color:var(--text-muted);">P2P karta va Checkout to'lovlari</div>
+                </div>
+              </div>
+              <span class="badge-tag up" id="healthUzumBadge">Faol</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Queues & Failed Jobs -->
+        <div class="card">
+          <h3 class="card-title" style="margin-bottom:14px;">Navbatlar (Queues) va Xatolar (DLQ)</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+            <div style="background:var(--surface);padding:14px;border-radius:var(--radius-md);border:1px solid var(--line);text-align:center;">
+              <div style="font-size:12px;color:var(--text-muted);font-weight:600;">Faol Navbat Chuqurligi</div>
+              <div id="healthQueueDepth" style="font-size:26px;font-weight:800;color:var(--primary);margin:6px 0;">0</div>
+              <div style="font-size:11px;color:var(--text-faint);">Kutilayotgan hodisalar</div>
+            </div>
+            <div style="background:var(--surface);padding:14px;border-radius:var(--radius-md);border:1px solid var(--line);text-align:center;">
+              <div style="font-size:12px;color:var(--text-muted);font-weight:600;">Dead-Letter Queue (DLQ)</div>
+              <div id="healthDlqCount" style="font-size:26px;font-weight:800;color:var(--danger);margin:6px 0;">0</div>
+              <div style="font-size:11px;color:var(--text-faint);">Tugagan xatolar soni</div>
+            </div>
+          </div>
+
+          <div style="background:var(--surface);padding:14px;border-radius:var(--radius-md);border:1px solid var(--line);">
+            <div style="font-weight:700;font-size:13px;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+              <span>⚠️</span> Muammoli Buyurtmalar Tezkor Holati
+            </div>
+            <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;" id="healthProblemOrdersSummary">
+              Muammoli buyurtmalar tekshirilmoqda...
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="switchView('problem-orders')">Muammoli buyurtmalar paneliga o'tish →</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 14. VIEW: PROBLEM ORDERS DASHBOARD (Req 9) -->
+    <section class="view-pane" id="problem-orders">
+      <div class="topbar">
+        <div class="page-title-box">
+          <h1>⚠️ Muammoli Buyurtmalar Boshqaruvi</h1>
+          <p>Yetkazib berilmagan, qotib qolgan yoki qaytarilishi kerak bo'lgan buyurtmalar monitoringi</p>
+        </div>
+        <div class="topbar-actions" style="display:flex;gap:10px;">
+          <button class="btn btn-secondary" onclick="loadProblemOrders(this)">↻ Yangilash</button>
+        </div>
+      </div>
+
+      <!-- Problem Categories Tabs with Counter Badges -->
+      <div class="tabs-bar" style="margin-bottom:18px;overflow-x:auto;">
+        <div class="tab-item active" onclick="switchProblemCategory('', this)">
+          Barchasi <span class="badge-status pending" id="countAllProblems">0</span>
+        </div>
+        <div class="tab-item" onclick="switchProblemCategory('paid_not_fulfilled', this)">
+          ⚠️ To'langan, yetkazilmagan <span class="badge-status pending" id="countPaidNotFulfilled">0</span>
+        </div>
+        <div class="tab-item" onclick="switchProblemCategory('stuck_processing', this)">
+          ⏳ Qotib qolgan <span class="badge-status pending" id="countStuckProcessing">0</span>
+        </div>
+        <div class="tab-item" onclick="switchProblemCategory('payment_mismatch', this)">
+          ⚖️ Summa mos emas <span class="badge-status cancel" id="countPaymentMismatch">0</span>
+        </div>
+        <div class="tab-item" onclick="switchProblemCategory('failed_fulfillment', this)">
+          ❌ Yetkazish xatosi <span class="badge-status cancel" id="countFailedFulfillment">0</span>
+        </div>
+        <div class="tab-item" onclick="switchProblemCategory('pending_refund', this)">
+          🔄 Qaytarish kutilmoqda <span class="badge-status pending" id="countPendingRefund">0</span>
+        </div>
+      </div>
+
+      <!-- Problem Orders Table Card -->
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Buyurtma ID</th>
+                <th>Mijoz & Qabul qiluvchi</th>
+                <th>Mahsulot</th>
+                <th>Summa & Valyuta</th>
+                <th>Holat</th>
+                <th>Muammo Tafsiloti</th>
+                <th>Amallar</th>
+              </tr>
+            </thead>
+            <tbody id="problemOrdersTableBody">
+              <tr>
+                <td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted);">
+                  Yuklanmoqda...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </main>
 <!-- Card Modal -->
 <div class="modal-backdrop" id="cardModal">
@@ -1801,6 +2060,67 @@
   </div>
 </div>
 
+<!-- Price Change Preview Modal (Req 17) -->
+<div class="modal-backdrop" id="pricePreviewModal">
+  <div class="modal-card" style="max-width:760px;width:95%;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="margin:0;font-size:18px;">👁️ Narxlar O'zgarishi Simulyatsiyasi (Preview)</h3>
+      <button class="btn btn-secondary btn-sm" onclick="closePricePreviewModal()">✕</button>
+    </div>
+    <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;">
+      Quyidagi jadval kiritilgan yangi parametrlar (Stars tannarxi, marja va TON kursi) bo'yicha yakuniy sotish narxlarining o'zgarishini ko'rsatadi. Tasdiqlashdan oldin tekshirib oling:
+    </p>
+
+    <div class="table-responsive" style="max-height:360px;overflow-y:auto;margin-bottom:18px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Kategoriya</th>
+            <th>Mahsulot</th>
+            <th>Amaldagi Narx</th>
+            <th>Yangi Narx (Preview)</th>
+            <th>Farq (UZS / %)</th>
+          </tr>
+        </thead>
+        <tbody id="pricePreviewTableBody">
+          <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);">Yuklanmoqda...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+      <div style="font-size:12px;color:var(--text-faint);">
+        💡 Narxlar faqat yangi buyurtmalarga tatbiq etiladi. Tarixiy buyurtmalar narxi o'zgarmaydi.
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-secondary" onclick="closePricePreviewModal()">Yopish</button>
+        <button class="btn btn-primary" onclick="confirmSavePricing()">✓ Tasdiqlash va Saqlash</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Admin Order Audit & Timeline Modal (Req 13) -->
+<div class="modal-backdrop" id="adminOrderAuditModal">
+  <div class="modal-card" style="max-width:680px;width:95%;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div>
+        <h3 style="margin:0;font-size:18px;" id="auditModalTitle">Buyurtma Auditi & Tarixi</h3>
+        <div style="font-size:12px;color:var(--text-muted);" id="auditModalSubtitle">GH-XXXXXX</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="closeOrderAuditModal()">✕</button>
+    </div>
+
+    <div id="auditTimelineContainer" style="margin-bottom:18px;display:flex;flex-direction:column;gap:12px;">
+      <div style="text-align:center;padding:24px;color:var(--text-muted);">Tarix yuklanmoqda...</div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:10px;">
+      <button class="btn btn-secondary" onclick="closeOrderAuditModal()">Yopish</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast Box -->
 <div class="toast-box" id="toastBox">
   <span>✅</span> <span id="toastMsg">Amal bajarildi!</span>
@@ -1898,6 +2218,8 @@
 
   function loadViewData(viewId) {
     if(viewId === 'dash') loadDashboard();
+    if(viewId === 'system-health') loadSystemHealth();
+    if(viewId === 'problem-orders') loadProblemOrders();
     if(viewId === 'price') loadPricing();
     if(viewId === 'orders') loadAdminOrders();
     if(viewId === 'users') loadAdminUsers();
@@ -1923,6 +2245,387 @@
         }
       }
     } catch(e){}
+  }
+
+  // ================= 1B. SYSTEM HEALTH & AUDIT (Req 8) ================= //
+  async function loadSystemHealth(btn) {
+    let spinBtn = (btn && btn instanceof HTMLElement) ? (btn.tagName === 'BUTTON' ? btn : btn.closest('button')) : null;
+    if(spinBtn) spinBtn.classList.add('refresh-spinning');
+    try {
+      const res = await fetch('/api/v1/admin/health/system', { headers: adminHeaders() });
+      if(!res.ok) throw new Error("Health API error: " + res.status);
+      const data = await res.json();
+
+      // Banner update
+      const banner = document.getElementById('healthOverallBanner');
+      const icon = document.getElementById('healthOverallIcon');
+      const title = document.getElementById('healthOverallTitle');
+      const sub = document.getElementById('healthOverallSub');
+      const env = document.getElementById('healthEnvBadge');
+      const lastCheck = document.getElementById('healthLastChecked');
+
+      if(env) env.innerText = (data.database?.type || 'Postgres').toUpperCase();
+      if(lastCheck) lastCheck.innerText = new Date().toLocaleTimeString('uz-UZ');
+
+      if(data.overall_status === 'healthy') {
+        if(banner) banner.style.borderColor = 'rgba(16,185,129,0.3)';
+        if(icon) { icon.innerText = '🟢'; icon.style.color = 'var(--success)'; icon.style.background = 'var(--success-bg)'; }
+        if(title) title.innerText = "Tizim To'liq Barqaror (Healthy)";
+        if(sub) sub.innerText = "Barcha asosiy komponentlar, Redis, PostgreSQL va to'lov shlyuzlari faol.";
+      } else if(data.overall_status === 'degraded') {
+        if(banner) banner.style.borderColor = 'rgba(245,158,11,0.4)';
+        if(icon) { icon.innerText = '🟡'; icon.style.color = 'var(--warn)'; icon.style.background = 'var(--warn-bg)'; }
+        if(title) title.innerText = "Tizim Qisman Pasaygan (Degraded)";
+        if(sub) sub.innerText = "Ayrim tashqi xizmatlar yoki navbatlarda yuklama mavjud.";
+      } else {
+        if(banner) banner.style.borderColor = 'rgba(239,68,68,0.4)';
+        if(icon) { icon.innerText = '🔴'; icon.style.color = 'var(--danger)'; icon.style.background = 'var(--danger-bg)'; }
+        if(title) title.innerText = "Kritik Xatolik (Critical)";
+        if(sub) sub.innerText = "Asosiy bog'liqliklarda uzilish aniqlandi! Qayta tekshiring.";
+      }
+
+      // Bot Card
+      const botStatus = document.getElementById('healthBotStatus');
+      const botBadge = document.getElementById('healthBotBadge');
+      const botUser = document.getElementById('healthBotUsername');
+      const botMode = document.getElementById('healthBotMode');
+      if(botStatus) botStatus.innerText = data.bot?.status === 'running' ? 'Ishlamoqda' : (data.bot?.status || 'Noma\'lum');
+      if(botBadge) {
+        botBadge.innerText = data.bot?.status === 'running' ? 'OK' : 'OFFLINE';
+        botBadge.className = data.bot?.status === 'running' ? 'badge-tag up' : 'badge-tag down';
+      }
+      if(botUser) botUser.innerText = data.bot?.username ? '@' + data.bot.username : ('@' + botUsername);
+      if(botMode) botMode.innerText = data.bot?.mode || 'Polling / Webhook';
+
+      // PostgreSQL Card
+      const dbStatus = document.getElementById('healthDbStatus');
+      const dbBadge = document.getElementById('healthDbBadge');
+      const dbLatency = document.getElementById('healthDbLatency');
+      const dbDriver = document.getElementById('healthDbDriver');
+      if(dbStatus) dbStatus.innerText = data.database?.connected ? 'Ulangan' : 'Uzilgan';
+      if(dbBadge) {
+        dbBadge.innerText = data.database?.connected ? 'OK' : 'ERROR';
+        dbBadge.className = data.database?.connected ? 'badge-tag up' : 'badge-tag down';
+      }
+      if(dbLatency) dbLatency.innerText = (data.database?.latency_ms || 1.2) + ' ms';
+      if(dbDriver) dbDriver.innerText = (data.database?.type || 'PostgreSQL') + ' / AsyncEngine';
+
+      // Redis Card
+      const redisStatus = document.getElementById('healthRedisStatus');
+      const redisBadge = document.getElementById('healthRedisBadge');
+      const redisLatency = document.getElementById('healthRedisLatency');
+      if(redisStatus) redisStatus.innerText = data.redis?.connected ? 'Ulangan' : 'Offline';
+      if(redisBadge) {
+        redisBadge.innerText = data.redis?.connected ? 'OK' : 'WARN';
+        redisBadge.className = data.redis?.connected ? 'badge-tag up' : 'badge-tag down';
+      }
+      if(redisLatency) redisLatency.innerText = (data.redis?.latency_ms ? data.redis.latency_ms + ' ms' : '0.8 ms');
+
+      // Workers Card
+      const wStatus = document.getElementById('healthWorkerStatus');
+      const wBadge = document.getElementById('healthWorkerBadge');
+      const wHeartbeat = document.getElementById('healthWorkerHeartbeat');
+      const wJobs = document.getElementById('healthWorkerJobs');
+      if(wStatus) wStatus.innerText = data.workers?.status === 'running' ? 'Faol' : (data.workers?.status || 'Faol');
+      if(wBadge) {
+        wBadge.innerText = data.workers?.status === 'running' ? 'ACTIVE' : 'IDLE';
+        wBadge.className = 'badge-tag up';
+      }
+      if(wHeartbeat) wHeartbeat.innerText = data.workers?.last_heartbeat ? new Date(data.workers.last_heartbeat).toLocaleTimeString('uz-UZ') : 'Hozirgina';
+      if(wJobs) wJobs.innerText = (data.workers?.jobs_processed || 0) + ' ta vazifa';
+
+      // Providers
+      const fragCircuit = document.getElementById('healthFragCircuit');
+      const fragBadge = document.getElementById('healthFragBadge');
+      if(fragCircuit && data.fulfillment_providers?.fragment) {
+        const cState = data.fulfillment_providers.fragment.circuit_breaker;
+        fragCircuit.innerText = cState === 'CLOSED' ? 'CLOSED (Sog\'lom)' : (cState + ' (Cheklov)');
+        fragCircuit.style.color = cState === 'CLOSED' ? 'var(--success)' : 'var(--danger)';
+        if(fragBadge) fragBadge.innerText = cState === 'CLOSED' ? 'Barqaror' : 'Diqqat';
+      }
+
+      // Queues & DLQ
+      const qDepth = document.getElementById('healthQueueDepth');
+      const dlqCount = document.getElementById('healthDlqCount');
+      if(qDepth) qDepth.innerText = data.queue_depth?.active_jobs ?? 0;
+      if(dlqCount) dlqCount.innerText = data.failed_jobs?.dead_letter_count ?? 0;
+
+      // Update quick problem orders summary
+      updateProblemOrdersSummary();
+      if(spinBtn) showToast("Tizim holati yangilandi! ⚡");
+    } catch(e) {
+      console.error("loadSystemHealth error:", e);
+      if(spinBtn) showToast("Tizim holatini yuklashda xatolik!", "error");
+    } finally {
+      if(spinBtn) spinBtn.classList.remove('refresh-spinning');
+    }
+  }
+
+  async function updateProblemOrdersSummary() {
+    try {
+      const res = await fetch('/api/v1/admin/orders/problematic', { headers: adminHeaders() });
+      if(!res.ok) return;
+      const data = await res.json();
+      const el = document.getElementById('healthProblemOrdersSummary');
+      if(el && data.counts) {
+        const total = data.counts.total_problematic || 0;
+        if(total === 0) {
+          el.innerHTML = '<span style="color:var(--success);font-weight:700;">✅ Hozirda birorta ham muammoli buyurtma mavjud emas.</span>';
+        } else {
+          el.innerHTML = `<span style="color:var(--warn);font-weight:700;">⚠️ Jami ${total} ta buyurtma admin e'tiborini talab qiladi</span> (To'langan, yetkazilmagan: ${data.counts.paid_not_fulfilled}, Qotib qolgan: ${data.counts.stuck_processing}).`;
+        }
+      }
+    } catch(e){}
+  }
+
+  // ================= 1C. PROBLEM ORDERS DASHBOARD (Req 9) ================= //
+  let activeProblemCategory = '';
+
+  function switchProblemCategory(cat, tabEl) {
+    activeProblemCategory = cat;
+    document.querySelectorAll('#problem-orders .tab-item').forEach(t => t.classList.remove('active'));
+    if(tabEl) tabEl.classList.add('active');
+    loadProblemOrders();
+  }
+
+  async function loadProblemOrders(btn) {
+    let spinBtn = (btn && btn instanceof HTMLElement) ? (btn.tagName === 'BUTTON' ? btn : btn.closest('button')) : null;
+    if(spinBtn) spinBtn.classList.add('refresh-spinning');
+    try {
+      const url = `/api/v1/admin/orders/problematic${activeProblemCategory ? '?category=' + activeProblemCategory : ''}`;
+      const res = await fetch(url, { headers: adminHeaders() });
+      if(!res.ok) throw new Error("Problematic orders API error: " + res.status);
+      const data = await res.json();
+
+      // Update category count badges
+      if(data.counts) {
+        const setBadge = (id, val) => {
+          const el = document.getElementById(id);
+          if(el) el.innerText = val || '0';
+        };
+        setBadge('countAllProblems', data.counts.total_problematic);
+        setBadge('countPaidNotFulfilled', data.counts.paid_not_fulfilled);
+        setBadge('countStuckProcessing', data.counts.stuck_processing);
+        setBadge('countPaymentMismatch', data.counts.payment_mismatch);
+        setBadge('countFailedFulfillment', data.counts.failed_fulfillment);
+        setBadge('countPendingRefund', data.counts.pending_refund);
+      }
+
+      const tbody = document.getElementById('problemOrdersTableBody');
+      if(!tbody) return;
+
+      if(!data.orders || data.orders.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" style="text-align:center;padding:45px 20px;color:var(--text-muted);">
+              <div style="font-size:32px;margin-bottom:8px;">🎉</div>
+              <div style="font-weight:700;font-size:15px;color:var(--text);">Ushbu toifada muammoli buyurtmalar yo'q!</div>
+              <div style="font-size:12.5px;color:var(--text-faint);margin-top:4px;">Barcha jarayonlar ko'ngildagidek yakunlangan.</div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = data.orders.map(o => {
+        const orderCode = o.order_code || ('GH-' + String(o.id).padStart(6, '0'));
+        const price = (o.total_price || 0).toLocaleString('ru-RU') + ' ' + (o.currency || 'UZS');
+        const userDisplay = `@${o.recipient_username || 'Noma\'lum'} (UID: ${o.user_id})`;
+        const problemReason = o.problem_detail || o.fulfillment_error || 'Noma\'lum sabab';
+
+        return `
+          <tr>
+            <td>
+              <b style="font-family:var(--font-mono);font-size:13.5px;color:var(--primary);">${orderCode}</b>
+              <div style="font-size:10.5px;color:var(--text-faint);">${o.created_at ? new Date(o.created_at).toLocaleString('uz-UZ') : ''}</div>
+            </td>
+            <td>
+              <div style="font-weight:600;">${userDisplay}</div>
+              <div style="font-size:11.5px;color:var(--text-muted);">To'lov: ${o.payment_method || 'balance'}</div>
+            </td>
+            <td>
+              <div style="font-weight:700;">${o.item_title || o.product_type}</div>
+              <div style="font-size:11px;color:var(--text-muted);">${o.amount} dona</div>
+            </td>
+            <td>
+              <b style="color:var(--text);font-family:var(--font-mono);">${price}</b>
+            </td>
+            <td>
+              <span class="badge-status ${o.status === 'completed' ? 'done' : (o.status === 'failed' ? 'cancel' : 'pending')}">${o.status}</span>
+              <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">Yetkazish: ${o.fulfillment_status || 'kutilmoqda'}</div>
+            </td>
+            <td>
+              <div style="max-width:240px;font-size:12px;color:var(--danger);line-height:1.35;word-break:break-word;">
+                ⚠️ ${problemReason}
+              </div>
+            </td>
+            <td>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="btn btn-secondary btn-sm" title="Qayta avtomatik yuborish" onclick="retryProblemOrder(${o.id})">🔄 Qayta</button>
+                <button class="btn btn-primary btn-sm" title="Qo'lda bajarildi deb belgilash" onclick="manualFulfillProblemOrder(${o.id})">✅ Qo'lda</button>
+                <button class="btn btn-secondary btn-sm" title="Tarix va audit" onclick="openOrderAuditModal('${orderCode}')">📜</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      if(spinBtn) showToast("Muammoli buyurtmalar yangilandi! ⚡");
+    } catch(e) {
+      console.error("loadProblemOrders error:", e);
+      if(spinBtn) showToast("Yuklashda xatolik yuz berdi!", "error");
+    } finally {
+      if(spinBtn) spinBtn.classList.remove('refresh-spinning');
+    }
+  }
+
+  async function retryProblemOrder(orderId) {
+    if(!confirm("Ushbu buyurtmani zudlik bilan qayta yetkazib berishga yubormoqchimisiz?")) return;
+    try {
+      const res = await fetch(`/api/v1/admin/orders/${orderId}/retry-fulfillment`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: JSON.stringify({ reason: "Admin paneldan qo'lda qayta urinish buyurildi" })
+      });
+      const data = await res.json();
+      if(data.success) {
+        showToast("✓ Qayta yetkazib berish boshlandi!");
+        loadProblemOrders();
+      } else {
+        alert(data.result?.error || "Qayta urinishda xatolik yuz berdi");
+      }
+    } catch(e) {
+      alert("Tarmoq xatosi!");
+    }
+  }
+
+  async function manualFulfillProblemOrder(orderId) {
+    const reason = prompt("Qo'lda bajarilganlik sababini kiriting (masalan: Fragment orqali qo'lda yuborildi):", "Fragment orqali qo'lda yuborildi");
+    if(!reason || !reason.trim()) return;
+    try {
+      const res = await fetch(`/api/v1/admin/orders/${orderId}/manual-fulfill`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: JSON.stringify({ reason: reason.trim() })
+      });
+      if(res.ok) {
+        showToast("✓ Buyurtma muvaffaqiyatli yakunlandi!");
+        loadProblemOrders();
+      } else {
+        alert("Xatolik yuz berdi!");
+      }
+    } catch(e) {
+      alert("Tarmoq xatosi!");
+    }
+  }
+
+  // ================= 1D. ORDER AUDIT & TIMELINE MODAL (Req 13) ================= //
+  async function openOrderAuditModal(orderCode) {
+    const modal = document.getElementById('adminOrderAuditModal');
+    const container = document.getElementById('auditTimelineContainer');
+    const subtitle = document.getElementById('auditModalSubtitle');
+    if(!modal) return;
+    if(subtitle) subtitle.innerText = `Buyurtma kodi: ${orderCode}`;
+    modal.classList.add('open');
+    if(container) container.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);">Yuklanmoqda...</div>';
+
+    try {
+      const res = await fetch(`/api/v1/orders/${encodeURIComponent(orderCode)}/timeline`, { headers: adminHeaders() });
+      if(!res.ok) throw new Error("Timeline API error");
+      const data = await res.json();
+
+      if(!data.timeline || data.timeline.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Tarix topilmadi.</div>';
+        return;
+      }
+
+      container.innerHTML = data.timeline.map((item, idx) => {
+        const time = item.created_at ? new Date(item.created_at).toLocaleString('uz-UZ') : '';
+        const statusTransition = item.from_status ? `${item.from_status} ➔ ${item.to_status}` : `Boshlang'ich holat: ${item.to_status}`;
+        return `
+          <div style="background:var(--surface);border-left:3px solid var(--primary);border-radius:var(--radius-sm);padding:10px 14px;border-top:1px solid var(--line);border-right:1px solid var(--line);border-bottom:1px solid var(--line);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <b style="font-size:13px;color:var(--text);">${statusTransition}</b>
+              <span style="font-size:11px;color:var(--text-faint);">${time}</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);">
+              Aktor: <b style="color:var(--primary);">${item.actor || 'SYSTEM'}</b> | Izoh: ${item.note || 'Holat o\'zgardi'}
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch(e) {
+      if(container) container.innerHTML = '<div style="color:var(--danger);text-align:center;padding:20px;">Tarixni yuklashda xatolik!</div>';
+    }
+  }
+
+  function closeOrderAuditModal() {
+    const modal = document.getElementById('adminOrderAuditModal');
+    if(modal) modal.classList.remove('open');
+  }
+
+  // ================= 1E. PRICE CHANGE PREVIEW (Req 17) ================= //
+  async function openPricePreviewModal() {
+    const modal = document.getElementById('pricePreviewModal');
+    const tbody = document.getElementById('pricePreviewTableBody');
+    if(!modal) return;
+    modal.classList.add('open');
+    if(tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);">Simulyatsiya hisoblanmoqda...</td></tr>';
+
+    try {
+      const margin = parseFloat(document.getElementById('inpMargin')?.value) || 20;
+      const starUnit = parseFloat(document.getElementById('inpStarUnitPrice')?.value) || 176.46;
+
+      const payload = {
+        margin_percent: margin,
+        star_unit_price_uzs: starUnit
+      };
+
+      const res = await fetch('/api/v1/admin/pricing/preview', {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: JSON.stringify(payload)
+      });
+      if(!res.ok) throw new Error("Price preview API error");
+      const data = await res.json();
+
+      if(!data.preview || data.preview.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted);">Taqqoslash ma\'lumotlari topilmadi.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = data.preview.map(p => {
+        const isUp = p.diff_uzs > 0;
+        const isDown = p.diff_uzs < 0;
+        const diffSign = isUp ? '+' : '';
+        const badgeColor = isUp ? 'var(--warn)' : (isDown ? 'var(--primary)' : 'var(--text-faint)');
+
+        return `
+          <tr>
+            <td><span class="badge-tag" style="background:var(--surface-hover);">${p.category.toUpperCase()}</span></td>
+            <td><b>${p.title}</b></td>
+            <td>${p.formatted_current}</td>
+            <td><b style="color:var(--primary);">${p.formatted_preview}</b></td>
+            <td style="color:${badgeColor};font-weight:700;">
+              ${diffSign}${Number(p.diff_uzs).toLocaleString('ru-RU')} UZS (${diffSign}${p.diff_percent}%)
+            </td>
+          </tr>
+        `;
+      }).join('');
+    } catch(e) {
+      console.error(e);
+      if(tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--danger);">Simulyatsiyani hisoblashda xatolik yuz berdi!</td></tr>';
+    }
+  }
+
+  function closePricePreviewModal() {
+    const modal = document.getElementById('pricePreviewModal');
+    if(modal) modal.classList.remove('open');
+  }
+
+  function confirmSavePricing() {
+    closePricePreviewModal();
+    savePricing();
   }
 
   // ================= 1. DASHBOARD & SALES CHARTS ================= //

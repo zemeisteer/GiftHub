@@ -19,8 +19,11 @@ class SecretMaskingFormatter(logging.Formatter):
             if cid and not getattr(record, "_cid_injected", False):
                 record.msg = f"[{cid}] {record.msg}"
                 record._cid_injected = True
-        except Exception:
+        except (LookupError, AttributeError):
             pass
+        except Exception as e:
+            import sys
+            sys.stderr.write(f"Correlation ID formatting error: {e}\n")
 
         original = super().format(record)
         masked = original

@@ -83,10 +83,11 @@ async def init_db():
             )
             session.add(payment)
 
-        # Clean up any leftover demo channels
+        # Clean up any leftover legacy demo channels
         await session.execute(
             delete(ChannelRequirement).where(
-                ChannelRequirement.username_or_link.in_(["@stellar_news", "@stellar_chat"])
+                (ChannelRequirement.username_or_link.in_(["@stellar_news", "@stellar_chat"])) |
+                (ChannelRequirement.username_or_link.ilike("%stellar%"))
             )
         )
 

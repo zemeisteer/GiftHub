@@ -115,7 +115,10 @@ class Order(Base):
     unit_price = Column(Numeric(18, 2), default=Decimal("0.00"), nullable=False)
     total_price = Column(Numeric(18, 2), default=Decimal("0.00"), nullable=False)
     cost_price = Column(Numeric(18, 2), default=Decimal("0.00"), nullable=False)
+    margin = Column(Numeric(18, 2), default=Decimal("0.00"), nullable=False)
     discount_amount = Column(Numeric(18, 2), default=Decimal("0.00"), nullable=False)
+    exchange_rate = Column(Numeric(18, 4), default=Decimal("1.0000"), nullable=False)
+    currency = Column(String(8), default="UZS", nullable=False)
     promo_code = Column(String(32), nullable=True)
     payment_method = Column(String(32), default="balance", nullable=False)
     status = Column(String(32), default=OrderStatus.CREATED, index=True, nullable=False)
@@ -142,6 +145,26 @@ class Order(Base):
     # Relationships
     user = relationship("User", back_populates="orders")
     payment_transactions = relationship("PaymentTransaction", back_populates="order")
+    timeline = relationship("OrderStatusHistory", back_populates="order", cascade="all, delete-orphan", order_by="OrderStatusHistory.created_at.asc()")
+
+
+class OrderStatusHistory(Base):
+    """
+    Detailed order timeline and status transition history.
+    Tracks every status change, timestamp, actor, and contextual notes.
+    """
+    __tablename__ = "order_status_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_code = Column(String(32), index=True, nullable=False)
+    from_status = Column(String(32), nullable=True)
+    to_status = Column(String(32), nullable=False)
+    actor = Column(String(32), default="SYSTEM", nullable=False) # SYSTEM, USER, ADMIN, WORKER, WEBHOOK
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    order = relationship("Order", back_populates="timeline")
 
 
 class CheckoutIdempotency(Base):

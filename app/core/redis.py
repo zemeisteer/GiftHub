@@ -50,25 +50,52 @@ def get_redis_client():
 
 def get_fsm_storage() -> BaseStorage:
     """
-    Returns Redis-backed FSM storage if Redis is available and reachable,
-    falling back to MemoryStorage for local development/test.
+    Returns Redis-backed FSM storage. In production, RedisStorage is strictly enforced.
+    Falls back to MemoryStorage strictly in development/test environments.
     """
     global _fsm_storage
     if _fsm_storage is not None:
         return _fsm_storage
 
+    is_prod = (getattr(settings, "ENVIRONMENT", "").lower() == "production")
+
     if settings.REDIS_URL and is_redis_reachable(settings.REDIS_URL):
         try:
             from aiogram.fsm.storage.redis import RedisStorage
             _fsm_storage = RedisStorage.from_url(settings.REDIS_URL)
-            logger.info("Aiogram FSM configured with Redis storage.")
+            logger.info("Aiogram FSM configured with RedisStorage.")
             return _fsm_storage
         except Exception as e:
+            if is_prod:
+                logger.critical(f"FATAL: Failed to initialize RedisStorage in production: {e}")
+                raise RuntimeError(f"Production requires RedisStorage! Connection failed: {e}")
             logger.warning(f"Failed to initialize Redis FSM storage ({e}). Falling back to MemoryStorage.")
+    elif is_prod:
+        logger.critical("FATAL: REDIS_URL is not configured or Redis is unreachable in production environment!")
+        raise RuntimeError("Production environment requires RedisStorage! Please configure REDIS_URL and ensure Redis is running.")
 
-    logger.info("Aiogram FSM configured with in-memory storage fallback.")
+    logger.info("Aiogram FSM configured with MemoryStorage fallback (development/test only).")
     _fsm_storage = MemoryStorage()
     return _fsm_storage
+
+
+async def close_redis() -> None:
+    """Gracefully closes Redis client and FSM storage connections."""
+    global _redis_client, _fsm_storage
+    if _redis_client:
+        try:
+            await _redis_client.close()
+            logger.info("Redis client connection pool closed.")
+        except Exception as e:
+            logger.warning(f"Error closing Redis client: {e}")
+        _redis_client = None
+    if _fsm_storage and hasattr(_fsm_storage, "close"):
+        try:
+            await _fsm_storage.close()
+            logger.info("Redis FSM storage closed.")
+        except Exception as e:
+            logger.warning(f"Error closing Redis FSM storage: {e}")
+        _fsm_storage = None
 
 
 @asynccontextmanager

@@ -323,8 +323,8 @@ async def cb_recipient_other(callback: CallbackQuery, state: FSMContext):
     )
     try:
         await callback.message.delete()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Xabarni o'chirishda ogohlantirish: {e}")
 
     await callback.message.answer(text, reply_markup=get_user_request_keyboard())
     await callback.answer()
@@ -353,8 +353,8 @@ async def process_recipient_users_shared(message: Message, state: FSMContext):
     try:
         rm = await message.answer("✅ Qabul qiluvchi tanlandi!", reply_markup=ReplyKeyboardRemove())
         await rm.delete()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Vaqtinchalik klaviaturani tozalashda ogohlantirish: {e}")
 
     await show_order_confirmation(message, state, recipient)
 
@@ -367,8 +367,8 @@ async def process_recipient_single_shared(message: Message, state: FSMContext):
     try:
         rm = await message.answer("✅ Qabul qiluvchi tanlandi!", reply_markup=ReplyKeyboardRemove())
         await rm.delete()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Vaqtinchalik klaviaturani tozalashda ogohlantirish: {e}")
     await show_order_confirmation(message, state, recipient)
 
 
@@ -387,8 +387,8 @@ async def cancel_recipient_selection(message: Message, state: FSMContext):
     try:
         rm = await message.answer("❌ Bekor qilindi.", reply_markup=ReplyKeyboardRemove())
         await rm.delete()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Bekor qilish xabarini tozalashda ogohlantirish: {e}")
 
     await message.answer(
         text=build_main_menu_text(first_name, balance, user_id, services_count=len(services), services=services),
@@ -414,8 +414,8 @@ async def process_recipient_text(message: Message, state: FSMContext):
     try:
         rm = await message.answer("⏳ Qabul qiluvchi saqlandi...", reply_markup=ReplyKeyboardRemove())
         await rm.delete()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Vaqtinchalik xabarni tozalashda ogohlantirish: {e}")
     await show_order_confirmation(message, state, txt)
 
 

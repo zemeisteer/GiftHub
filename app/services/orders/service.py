@@ -20,9 +20,11 @@ from app.models.order import (
     CheckoutIdempotency,
     Order,
     OrderStatus,
+    OrderStatusHistory,
     normalize_status,
     validate_order_transition,
 )
+from app.models.pricing import PricingSetting
 from app.models.user import User
 from app.services.feature_flags.service import feature_flag_service
 from app.services.outbox.service import outbox_service
@@ -38,7 +40,8 @@ logger = get_logger(__name__)
 class OrderService:
     @staticmethod
     def generate_order_code() -> str:
-        return f"#GH-{random.randint(10000, 99999)}"
+        """Generates public user-facing order code format: GH-XXXXXX"""
+        return f"GH-{random.randint(100000, 999999)}"
 
     @classmethod
     async def create_order(
@@ -153,7 +156,11 @@ class OrderService:
             initial_status = OrderStatus.CREATED
             paid_at = None
 
-        # 4. Create Order Record
+        pricing_setting = await session.get(PricingSetting, 1)
+        exchange_rate = Decimal(str(pricing_setting.ton_rate_uzs)) if (pricing_setting and pricing_setting.ton_rate_uzs) else Decimal("14800.00")
+        order_margin = max(Decimal("0.00"), payable_price - cost_price)
+
+        # 4. Create Order Record with Immutable Financial Snapshot
         order = Order(
             order_code=order_code,
             user_id=user_id,
@@ -163,7 +170,10 @@ class OrderService:
             unit_price=unit_price,
             total_price=payable_price,
             cost_price=cost_price,
+            margin=order_margin,
             discount_amount=discount_amount,
+            exchange_rate=exchange_rate,
+            currency="UZS",
             promo_code=applied_promo,
             payment_method=payment_method,
             status=initial_status,
@@ -177,6 +187,18 @@ class OrderService:
         )
         session.add(order)
         await session.flush()
+
+        # Record Initial Status in Order Timeline
+        initial_history = OrderStatusHistory(
+            order_id=order.id,
+            order_code=order.order_code,
+            from_status=None,
+            to_status=initial_status,
+            actor="USER",
+            note=f"Buyurtma yaratildi: {item_title} (To'lov: {payment_method})",
+            created_at=now
+        )
+        session.add(initial_history)
 
         # 5. Process Referral Bonus and Transactional Outbox if wallet paid
         bonus, referrer = (Decimal("0.00"), None)
@@ -231,7 +253,8 @@ class OrderService:
         new_status_raw: str,
         admin_id: int | None = None,
         reason: str | None = None,
-        payload: str | None = None
+        payload: str | None = None,
+        actor: str | None = None
     ) -> Order:
         """
         Transitions order status adhering to the strict order state machine.
@@ -315,6 +338,18 @@ class OrderService:
         if payload:
             order.fragment_payload = payload
 
+        # Record Status Transition in Order Timeline (Req 13)
+        history = OrderStatusHistory(
+            order_id=order.id,
+            order_code=order.order_code,
+            from_status=current_status,
+            to_status=target_status,
+            actor=actor or (f"ADMIN:{admin_id}" if admin_id else "SYSTEM"),
+            note=reason or f"Buyurtma holati o'zgartirildi: {current_status} -> {target_status}",
+            created_at=now
+        )
+        session.add(history)
+
         await session.commit()
         await session.refresh(order)
         logger.info(f"[Order Status Transition] order={order.id}, from={current_status} to={target_status}")
@@ -381,6 +416,30 @@ class OrderService:
             admin_id=admin_telegram_id,
             reason=reason or "Admin tomonidan qaytarildi"
         )
+
+    @classmethod
+    async def get_order_by_id_or_code(cls, session: AsyncSession, order_id_or_code: str | int) -> Order | None:
+        """Resolves order by internal primary key or public user-facing code (e.g. GH-123456 or #GH-123456)."""
+        if isinstance(order_id_or_code, int) or (isinstance(order_id_or_code, str) and order_id_or_code.isdigit()):
+            return await session.get(Order, int(order_id_or_code))
+        code = str(order_id_or_code).strip()
+        stmt = select(Order).where(
+            (Order.order_code == code) |
+            (Order.order_code == f"#{code}") |
+            (Order.order_code == code.lstrip("#"))
+        )
+        res = await session.execute(stmt)
+        return res.scalars().first()
+
+    @classmethod
+    async def get_order_timeline(cls, session: AsyncSession, order_id_or_code: str | int) -> list[OrderStatusHistory]:
+        """Returns chronological status audit timeline for the specified order."""
+        order = await cls.get_order_by_id_or_code(session, order_id_or_code)
+        if not order:
+            return []
+        stmt = select(OrderStatusHistory).where(OrderStatusHistory.order_id == order.id).order_by(OrderStatusHistory.created_at.asc())
+        res = await session.execute(stmt)
+        return list(res.scalars().all())
 
 
 order_service = OrderService()

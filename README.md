@@ -7,35 +7,35 @@
 ## 🏛️ High-Level System Architecture
 
 ```text
-                           Telegram Users & Admins
-                                      │
-            ┌─────────────────────────┴─────────────────────────┐
-            │                                                   │
-     Telegram Bot                                      Telegram Mini App / Admin
-  (Aiogram 3 + FSM)                                       (FastAPI REST API)
-            │                                                   │
-            └─────────────────────────┬─────────────────────────┘
-                                      │
-                                Service Layer
-     ┌────────────────────────────────┼────────────────────────────────┐
-     │                                │                                │
-Order Service                  Payment Service                  Pricing Service
-(State Machine)              (Idempotent Webhooks)            (Authoritative Locks)
-     │                                │                                │
-Wallet Ledger                  Referral Service                Fulfillment Service
-(Atomic DB Locks)             (Commission Tiers)               (Fragment Worker)
-     │                                │                                │
-     └────────────────────────────────┼────────────────────────────────┘
-                                      │
-            ┌─────────────────────────┴─────────────────────────┐
-            │                                                   │
-      PostgreSQL 16                                          Redis 7
-   (AsyncPG + Alembic)                                 (FSM / Locks / Queue)
-            │                                                   │
-            └─────────────────────────┬─────────────────────────┘
-                                      │
-                              Background Worker
-                        (Async Queue / Retries / TTL)
+                            Telegram Users & Admins
+                                       │
+            ┌──────────────────────────┴──────────────────────────┐
+            │                                                     │
+      Telegram Bot                                       Telegram Mini App / Admin
+   (Aiogram 3 + FSM)                                        (FastAPI REST API)
+            │                                                     │
+            └──────────────────────────┬──────────────────────────┘
+                                       │
+                                 Service Layer
+      ┌────────────────────────────────┼────────────────────────────────┐
+      │                                │                                │
+Order Service                   Payment Service                  Pricing Service
+(State Machine & Timeline)     (Idempotent Webhooks)            (Authoritative Locks)
+      │                                │                                │
+Wallet Ledger                   Referral Service                 Fulfillment Service
+(Atomic DB Locks)              (Commission Tiers)                (Circuit Breaker Worker)
+      │                                │                                │
+      └────────────────────────────────┼────────────────────────────────┘
+                                       │
+            ┌──────────────────────────┴──────────────────────────┐
+            │                                                     │
+      PostgreSQL 16                                            Redis 7
+   (AsyncPG + Alembic)                                   (FSM / Locks / Queues)
+            │                                                     │
+            └──────────────────────────┬──────────────────────────┘
+                                       │
+                               Background Worker
+                         (Transactional Outbox / DLQ)
 ```
 
 ---
@@ -52,7 +52,7 @@ Wallet Ledger                  Referral Service                Fulfillment Servi
 - **Hard Webhook Idempotency:** Enforces unique compound constraints on `(provider, provider_transaction_id)`. If Click or Payme resends the same webhook multiple times, balance is credited exactly once, referral rewards are dispatched exactly once, and duplicate deliveries are prevented.
 - **Server-Side Authorization:** Client assertions of payment success are ignored. Orders transition to `PAID` exclusively via verified server-side webhook signatures and transaction IDs.
 
-### 3. Order Lifecycle State Machine
+### 3. Order Lifecycle State Machine & Audit Timeline
 - Strict state progression:
   ```text
   CREATED ──► AWAITING_PAYMENT ──► PAID ──► PROCESSING ──► COMPLETED
@@ -61,37 +61,51 @@ Wallet Ledger                  Referral Service                Fulfillment Servi
                                     └──► REFUNDED
   ```
 - Prevents illegal state transitions (e.g. `COMPLETED` to `PROCESSING` or `REFUNDED` to `COMPLETED`).
-- Detailed audit timestamps: `created_at`, `paid_at`, `processing_at`, `completed_at`, `refunded_at`.
+- **Public Reference IDs:** Orders receive collision-resistant, human-friendly public tracking codes (`GH-XXXXXX`, e.g. `GH-K8F2B1`).
+- **Immutable Status History (`order_status_history`):** Non-repudiable audit log recording every transition with source state, destination state, acting entity (`USER`, `ADMIN:<id>`, `SYSTEM`, `PAYMENT_GATEWAY`), timestamp, and operational reason.
+- **Financial Snapshots:** Every order permanently freezes `unit_price`, `cost_price`, `margin`, `exchange_rate`, and `currency` at purchase time, insulating historical reporting from subsequent market fluctuations.
 
-### 4. Dynamic Pricing & Checkout Price Locks
+### 4. Dynamic Pricing, Price Locks & Preview Simulation
 - **Authoritative Calculations:** Prices for Stars, Premium, and Gifts are calculated server-side based on TON/UZS exchange rates, margin parameters, and bulk volume discount curves.
 - **Price Lock Mechanism:** Customers entering checkout receive a cryptographically tracked `price_lock` valid for a fixed duration (default: 10 minutes), shielding transactions from sudden exchange-rate volatility.
+- **Price Preview Simulation:** Administrators can simulate proposed price updates against live catalog items before committing them, previewing resulting consumer prices, gross profit margins, and volume sensitivity curves (`POST /api/v1/admin/pricing/preview`).
 
-### 5. Automated Order Fulfillment & Worker
+### 5. Automated Order Fulfillment, Worker & Circuit Breakers
 - Automatic delivery of Telegram Stars and Premium subscriptions via Fragment automation.
 - Maximum retry budget (default: 3 attempts) with exponential backoff and admin escalation alerts.
 - Dedicated background worker queue (`app/services/worker.py`) offloading heavy tasks from request threads.
+- **Provider Circuit Breakers:** Fulfillment and payment providers utilize three-state circuit breakers (`CLOSED`, `OPEN`, `HALF_OPEN`) to stop traffic during outages and prevent cascading latency.
 
-### 6. Role-Based Access Control (RBAC) & Security
-- **Granular Permissions:** `orders.read`, `orders.refund`, `pricing.update`, `admins.manage`, `support.reply`, `broadcast.send`, etc.
-- **Roles:** `super_admin`, `price_admin`, `support_admin`, `marketing_admin`, `user`.
-- **Telegram WebApp Auth:** Strict HMAC-SHA256 signature verification and `auth_date` timestamp age checks (< 86,400 seconds) preventing credential spoofing and replay attacks.
-- **Immutable Admin Audit Log:** Records administrative interventions (refunds, balance adjustments, pricing changes) with actor IDs, reasons, and timestamps.
+### 6. Problem Orders Dashboard & Remediation
+- Dedicated administrative triage view categorizing problematic orders into 5 operational buckets:
+  1. `fulfillment_failed` — Exhausted fulfillment retries.
+  2. `pending_15m` — Created orders awaiting payment exceeding 15 minutes.
+  3. `payment_failed` — Orders with payment gateway anomalies or rejected captures.
+  4. `stuck_processing_10m` — Orders in `processing` state for more than 10 minutes without completion.
+  5. `manual_action_needed` — Orders flagged for administrative inspection or refund verification.
+- **One-Click Remediation:** Administrators can directly trigger instant fulfillment retries (`POST /api/v1/admin/orders/{id}/retry-fulfillment`) or perform verified manual fulfillments (`POST /api/v1/admin/orders/{id}/manual-fulfill`) directly from the dashboard.
 
-### 7. Support Tickets, Promotions & Notifications
-- Threaded customer support ticket system integrated with the Admin Panel.
-- Promo codes supporting percentage and fixed discounts with global and per-user redemption limits.
-- In-app notification center alongside Telegram alerts for real-time order status tracking.
+### 7. Production Readiness & Observability Semantics
+- **`/health/live`:** High-frequency, low-overhead liveness probe (< 5ms) returning `{"status": "healthy", "live": true}` for container orchestrators (Kubernetes / Docker).
+- **`/health/ready`:** Deep readiness probe verifying critical runtime dependencies:
+  - PostgreSQL database connection and round-trip query latency.
+  - Redis cache and distributed lock ping response.
+  - Background worker heartbeat freshness (verifying worker is actively consuming tasks).
+  - Fragment fulfillment provider circuit breaker status.
+- **`/api/v1/admin/health/system`:** Comprehensive administrator diagnostics API detailing bot status, PostgreSQL connection pool metrics, Redis latency, worker heartbeat, payment provider statuses, queue depths, and dead-letter queue (DLQ) counts.
 
-### 8. Enterprise Reliability & Fault-Tolerance Architecture
+### 8. User Experience Enhancements
+- **Saved Recipients:** Frequently gifted friend handles and Telegram IDs can be saved with custom nicknames for 1-click recipient selection (`/api/v1/recipients`).
+- **Pre-Purchase Confirmation Dialog:** Client modal verifies balance sufficiency, recipient accuracy, and displays non-refundable warnings before order commitment.
+- **Digital Receipts:** Comprehensive digital receipts generated for every completed purchase (`/api/v1/orders/{code}/receipt`), printable and shareable with full order metadata.
+- **1-Click "Buy Again":** Repeat previous orders with live real-time price recalculation (`/api/v1/orders/{code}/buy-again-details`).
+
+### 9. Enterprise Reliability Architecture
 - **Transactional Outbox Pattern (`app/models/outbox.py`, `app/services/outbox/`):** Critical post-payment events (`ORDER_FULFILLMENT_REQUESTED`, `WALLET_DEPOSIT_COMPLETED`, `ORDER_REFUNDED`) are committed atomically within the same database transaction as payment ledger mutations. Eliminates lost fulfillment jobs on server crashes.
 - **Dead Letter Queue (DLQ) (`app/models/dlq.py`, `app/services/dlq/`):** Exhausted fulfillment jobs are automatically routed to persistent DLQ storage with complete error diagnostics, payload snapshots, and stack traces for manual retry or resolution from the Admin Panel.
 - **Payment Reconciliation Engine (`app/models/reconciliation.py`, `app/services/reconciliation/`):** Periodically compares provider statements against internal orders and ledger entries to detect paid unpaid orders, missing wallet transactions, unfulfilled orders (> 5 min), amount mismatches, duplicate provider transactions, and refund anomalies.
-- **Provider Health & Circuit Breakers (`app/models/provider.py`, `app/services/providers/`):** Individual payment/fulfillment providers transition between `HEALTHY`, `DEGRADED`, and `DISABLED` statuses. Circuit breakers trip to `OPEN` after repeated provider failures to prevent cascading latency.
-- **Database-Driven Product Catalog (`app/models/catalog.py`, `app/services/catalog/`):** Dynamic catalog management for Telegram Stars, Premium subscriptions, and Gifts without code changes.
-- **Feature Flags & Maintenance Mode (`app/models/feature_flags.py`, `app/services/feature_flags/`):** Immediate in-memory cached feature toggles and platform-wide maintenance mode without service redeployment.
-- **Checkout-Level Idempotency (`app/models/order.py`):** Client-supplied idempotency keys prevent duplicate orders and double debits from rapid user clicks or network retries.
-- **End-to-End Correlation IDs (`app/core/correlation.py`):** Injects unified `X-Correlation-ID` across Telegram → API → Payment → Order → Worker → Fulfillment.
+- **Single-Loop Graceful Shutdown:** Gracefully drains running connections, bot sessions, Redis connection pools, worker loops, and database engines within a single unified asyncio event loop upon receiving `SIGINT` or `SIGTERM`.
+- **Configurable `drop_pending_updates`:** Controlled via the `TELEGRAM_DROP_PENDING_UPDATES` environment variable (disabled in production to guarantee zero lost user interactions, enabled in local development).
 - **Database-Level Financial Constraints:** Engine-enforced `CHECK` constraints on `balance >= 0`, `referral_earnings >= 0`, `amount != 0`, `balance_before >= 0`, `balance_after >= 0`, and `total_price >= 0`.
 - **Automated Backup & Restore Strategy (`scripts/backup_postgres.py`, `scripts/restore_postgres.py`):** Automated compressed `pg_dump` with SHA-256 integrity verification, retention rotation, and automated restore testing.
 
@@ -99,18 +113,17 @@ Wallet Ledger                  Referral Service                Fulfillment Servi
 
 ## 🛠️ Technology Stack
 
-| Layer | Technology |
-|---|---|
-| **Bot Framework** | Aiogram 3.17+ (Async FSM, Inline Query Handlers) |
-| **Backend & REST API** | FastAPI 0.115+, Uvicorn (ASGI) |
-| **Primary Database** | PostgreSQL 16 (AsyncPG driver) / SQLite for local development |
-| **ORM & Migrations** | SQLAlchemy 2.0 Async, Alembic 1.14+ |
-| **Cache & Distributed Locks** | Redis 7, aioredis |
-| **Validation & Settings** | Pydantic 2.7+, Pydantic-Settings |
-| **Frontend** | Vanilla HTML5, CSS3, JavaScript (Sora & Inter typography) |
-| **Testing** | Pytest, Pytest-AsyncIO, HTTPX |
-| **Code Quality** | Ruff, Mypy |
-| **Containers** | Docker, Docker Compose |
+| Layer | Technology | Production Requirement |
+|---|---|---|
+| **Bot Framework** | Aiogram 3.17+ | Async FSM with RedisStorage |
+| **Backend & REST API** | FastAPI 0.115+, Uvicorn (ASGI) | Async endpoints, Pydantic v2 validation |
+| **Primary Database** | PostgreSQL 16 (AsyncPG driver) | Mandatory for production (Strict row locks & NUMERIC precision) |
+| **ORM & Migrations** | SQLAlchemy 2.0 Async, Alembic 1.14+ | Async session management |
+| **Cache & Distributed Locks** | Redis 7, aioredis | Mandatory for production (FSM, idempotency locks, queues) |
+| **Validation & Settings** | Pydantic 2.7+, Pydantic-Settings | Strongly-typed environment configuration |
+| **Frontend** | Vanilla HTML5, CSS3, JavaScript | Modern responsive design, Sora & Inter typography |
+| **Testing** | Pytest, Pytest-AsyncIO, HTTPX | 100% test coverage on critical financial & lifecycle flows |
+| **Containers** | Docker, Docker Compose | Multi-stage production container |
 
 ---
 
@@ -119,45 +132,60 @@ Wallet Ledger                  Referral Service                Fulfillment Servi
 ```text
 GiftHub/
 ├── app/
+│   ├── api/                   # Versioned REST APIs
+│   │   └── v1/
+│   │       └── router.py      # System health, problematic orders, recipients, preview APIs
 │   ├── core/                  # Core infrastructure
 │   │   ├── config.py          # Validated Pydantic settings & env management
-│   │   ├── database.py        # Async SQLAlchemy engine & session scopes
-│   │   ├── redis.py           # Redis client, distributed locks, FSM storage
+│   │   ├── database.py        # Async SQLAlchemy engine, session scopes & get_db dependency
+│   │   ├── redis.py           # Redis client, distributed locks, production RedisStorage
 │   │   ├── security.py        # Telegram HMAC-SHA256 validation & RBAC
-│   │   ├── logging.py         # Structured logging with secret masking
+│   │   ├── logging.py         # Structured logging with secret masking & exception context
 │   │   └── exceptions.py      # Domain exceptions
 │   ├── models/                # SQLAlchemy declarative models (Decimal precision)
 │   │   ├── user.py            # User & referral relations
 │   │   ├── wallet.py          # WalletTransaction immutable ledger
-│   │   ├── order.py           # Order state machine & timestamps
-│   │   ├── payment.py         # PaymentTransaction with unique constraint
+│   │   ├── order.py           # Order state machine, snapshots & OrderStatusHistory
+│   │   ├── recipient.py       # SavedRecipient quick-select contacts
+│   │   ├── payment.py         # PaymentTransaction with unique compound constraint
 │   │   ├── pricing.py         # Pricing settings & PriceLock
 │   │   ├── promo.py           # PromoCode & redemption tracking
 │   │   ├── support.py         # SupportTicket & TicketMessage
+│   │   ├── outbox.py          # Transactional Outbox events
+│   │   ├── dlq.py             # Dead Letter Queue jobs
+│   │   ├── provider.py        # Provider health & CircuitBreaker state
 │   │   └── audit.py           # AdminAuditLog
 │   ├── services/              # Domain service layer
 │   │   ├── payments/          # Click, Payme, AutoPayCard & idempotency service
 │   │   ├── wallet/            # Atomic balance operations & ledger journal
-│   │   ├── orders/            # Order state lifecycle & refunds
-│   │   ├── pricing/           # Authoritative price calculation & price locks
+│   │   ├── orders/            # Order state lifecycle, GH-XXXXXX generator & refunds
+│   │   ├── pricing/           # Authoritative price calculation, price locks & preview
 │   │   ├── fulfillment/       # Fragment automated delivery
-│   │   ├── promotions/        # Promo validation & safe redemptions
-│   │   ├── referrals/         # Referral bonus calculation
+│   │   ├── providers/         # Circuit breaker provider monitoring
+│   │   ├── outbox/            # Outbox publisher & event dispatcher
+│   │   ├── dlq/               # Dead letter queue management
+│   │   ├── reconciliation/    # Payment statement reconciliation engine
 │   │   └── worker.py          # Background worker queue & job processor
 │   ├── handlers/              # Aiogram Telegram Bot handlers
 │   ├── keyboards/             # Telegram inline & webapp keyboards
 │   └── web/                   # FastAPI server & static web assets
-│       ├── server.py          # REST API endpoints & route handlers
+│       ├── server.py          # REST API endpoints, liveness/readiness probes
 │       └── auth.py            # WebApp authentication dependencies
 ├── database/                  # Backward compatibility bridge (queries & models)
 ├── migrations/                # Alembic database migrations
+├── docs/                      # Documentation & Specifications
+│   ├── audits/                # Historical security & architectural audit reports
+│   └── specifications/        # Platform engineering specifications
 ├── tests/                     # Comprehensive test suite
-│   ├── unit/                  # Pricing, wallet, orders, promotions tests
-│   ├── integration/           # Idempotent payments, security, refund tests
-│   └── e2e/                   # API health & endpoint integration tests
+│   ├── unit/                  # Pricing, wallet, orders, audit v2, promotions tests
+│   ├── integration/           # Idempotent payments, security, crash recovery, refunds
+│   └── e2e/                   # API health probes, products & admin stats tests
 ├── web/                       # Web application frontends
-│   ├── user/index.html        # Telegram Mini App (GiftHub Client Store)
-│   └── admin/index.html       # GiftHub Admin Control Panel
+│   ├── user/index.html        # Telegram Mini App (GiftHub Client Store & Receipts)
+│   └── admin/index.html       # GiftHub Admin Control Panel & Health Dashboard
+├── scripts/                   # Production utility scripts
+│   ├── backup_postgres.py     # Automated PostgreSQL dump with SHA-256
+│   └── restore_postgres.py    # Backup verification and test restore
 ├── Dockerfile                 # Multi-stage production container
 ├── docker-compose.yml         # Compose stack (App, Worker, Postgres, Redis)
 ├── pytest.ini                 # Test runner configuration
@@ -197,6 +225,7 @@ cp .env.example .env
 # Bot Configuration
 BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
 ADMINS=7195359577
+TELEGRAM_DROP_PENDING_UPDATES=false
 
 # Web & URLs
 WEB_HOST=0.0.0.0
@@ -204,11 +233,12 @@ WEB_PORT=8000
 WEB_APP_URL=http://localhost:8000/app
 ADMIN_APP_URL=http://localhost:8000/admin
 
-# Database & Cache (PostgreSQL + Redis for production)
+# Database & Cache (PostgreSQL 16 + Redis 7 for production)
 DATABASE_URL=postgresql+asyncpg://gifthub:password@localhost:5432/gifthub
-# For local SQLite development:
-# DATABASE_URL=sqlite+aiosqlite:///data/gifthub.db
 REDIS_URL=redis://localhost:6379/0
+
+# For isolated local unit testing only:
+# DATABASE_URL=sqlite+aiosqlite:///data/gifthub.db
 
 # Payment Gateways
 CLICK_SERVICE_ID=your_click_service_id
@@ -249,23 +279,10 @@ Access the interfaces:
 - **Telegram Mini App:** `http://localhost:8000/app`
 - **Admin Control Panel:** `http://localhost:8000/admin`
 - **Interactive OpenAPI v1 Docs:** `http://localhost:8000/docs`
-- **Health Check Probe:** `http://localhost:8000/health`
-- **Readiness Dependency Probe:** `http://localhost:8000/ready`
-- **Reconciliation Dashboard:** `http://localhost:8000/api/v1/admin/reconciliation/dashboard`
-
----
-
-### 5. Automated PostgreSQL Backup & Restore
-
-Automated database backup scripts with SHA-256 integrity checksums and verification:
-
-```bash
-# 1. Create compressed backup (.dump + .sha256)
-python scripts/backup_postgres.py
-
-# 2. Verify and test restore against an isolated test database
-python scripts/restore_postgres.py backups/gifthub_backup_YYYYMMDD_HHMMSS.dump --test-restore
-```
+- **Liveness Probe:** `http://localhost:8000/health/live`
+- **Readiness Dependency Probe:** `http://localhost:8000/health/ready`
+- **System Health Diagnostics:** `http://localhost:8000/api/v1/admin/health/system`
+- **Problem Orders Dashboard:** `http://localhost:8000/admin#problem-orders`
 
 ---
 
@@ -291,7 +308,7 @@ docker-compose exec app alembic upgrade head
 
 ## 🧪 Automated Testing
 
-Execute the test suite covering pricing, wallet ledger, idempotency, order transitions, promotions, and security:
+Execute the test suite covering pricing, wallet ledger, idempotency, order transitions, problem orders, system health probes, promotions, and security:
 
 ```bash
 pytest
@@ -301,7 +318,8 @@ pytest
 
 ## 🔒 Security Summary
 
-1. **HMAC-SHA256 WebApp Verification:** Validates Telegram initData hash using the bot token as an HMAC key, combined with `auth_date` expiry rejection.
+1. **HMAC-SHA256 WebApp Verification:** Validates Telegram initData hash using the bot token as an HMAC key, combined with `auth_date` expiry rejection (< 86,400s).
 2. **Payment Webhook Idempotency:** Duplicate payment webhooks are discarded via DB uniqueness constraints and transactional row locks.
 3. **No Financial Spoofing:** Prices and discounts sent by clients are completely disregarded; backend calculates all amounts authoritatively.
-4. **Audit Logging:** Every administrative refund, balance adjustment, and setting change is immutably logged with admin Telegram ID, reason, and IP metadata.
+4. **Audit Logging & Timeline:** Every administrative refund, balance adjustment, setting change, and order transition is immutably logged with actor ID, reason, and timestamp.
+5. **Circuit Breakers & Fault Tolerance:** Automatic isolation of failing external providers with graceful degradation and alert dispatch.
