@@ -26,7 +26,7 @@ def upgrade() -> None:
     if 'outbox_events' not in existing_tables:
         op.create_table(
             'outbox_events',
-            sa.Column('id', sa.BigInteger(), primary_key=True, autoincrement=True),
+            sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
             sa.Column('event_type', sa.String(length=64), nullable=False, index=True),
             sa.Column('aggregate_type', sa.String(length=32), nullable=False, index=True),
             sa.Column('aggregate_id', sa.String(length=64), nullable=False, index=True),
@@ -44,7 +44,7 @@ def upgrade() -> None:
     if 'failed_jobs' not in existing_tables:
         op.create_table(
             'failed_jobs',
-            sa.Column('id', sa.BigInteger(), primary_key=True, autoincrement=True),
+            sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
             sa.Column('job_type', sa.String(length=64), nullable=False, index=True),
             sa.Column('order_id', sa.BigInteger(), nullable=True, index=True),
             sa.Column('payload', sa.JSON(), nullable=False),
@@ -90,7 +90,7 @@ def upgrade() -> None:
     if 'catalog_products' not in existing_tables:
         op.create_table(
             'catalog_products',
-            sa.Column('id', sa.BigInteger(), primary_key=True, autoincrement=True),
+            sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
             sa.Column('category', sa.String(length=32), nullable=False, index=True),
             sa.Column('sku', sa.String(length=64), unique=True, nullable=False, index=True),
             sa.Column('title', sa.String(length=128), nullable=False),
@@ -110,7 +110,7 @@ def upgrade() -> None:
     if 'reconciliation_reports' not in existing_tables:
         op.create_table(
             'reconciliation_reports',
-            sa.Column('id', sa.BigInteger(), primary_key=True, autoincrement=True),
+            sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
             sa.Column('total_payments_checked', sa.Integer(), nullable=False, server_default='0'),
             sa.Column('total_orders_checked', sa.Integer(), nullable=False, server_default='0'),
             sa.Column('total_wallet_tx_checked', sa.Integer(), nullable=False, server_default='0'),
@@ -123,8 +123,8 @@ def upgrade() -> None:
     if 'reconciliation_discrepancies' not in existing_tables:
         op.create_table(
             'reconciliation_discrepancies',
-            sa.Column('id', sa.BigInteger(), primary_key=True, autoincrement=True),
-            sa.Column('report_id', sa.BigInteger(), sa.ForeignKey('reconciliation_reports.id', ondelete='CASCADE'), nullable=False, index=True),
+            sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
+            sa.Column('report_id', sa.Integer(), sa.ForeignKey('reconciliation_reports.id', ondelete='CASCADE'), nullable=False, index=True),
             sa.Column('discrepancy_type', sa.String(length=64), nullable=False, index=True),
             sa.Column('order_id', sa.BigInteger(), nullable=True, index=True),
             sa.Column('payment_id', sa.BigInteger(), nullable=True, index=True),
@@ -142,7 +142,7 @@ def upgrade() -> None:
     if 'risk_audits' not in existing_tables:
         op.create_table(
             'risk_audits',
-            sa.Column('id', sa.BigInteger(), primary_key=True, autoincrement=True),
+            sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
             sa.Column('user_id', sa.BigInteger(), nullable=False, index=True),
             sa.Column('risk_type', sa.String(length=32), nullable=False, index=True),
             sa.Column('severity', sa.String(length=16), nullable=False, server_default='medium', index=True),
