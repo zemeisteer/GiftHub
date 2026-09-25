@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
@@ -15,6 +16,7 @@ logger = get_logger(__name__)
 
 class ProcessPaymentResult(tuple):
     """Tuple subclass enabling both tuple unpacking and direct PaymentTransaction attribute access."""
+
     def __new__(cls, payment_tx, user, is_new):
         return super().__new__(cls, (payment_tx, user, is_new))
 
@@ -48,11 +50,11 @@ class PaymentService:
         order_id: int | None = None,
         note: str | None = None,
         raw_payload: str | None = None,
-        correlation_id: str | None = None
+        correlation_id: str | None = None,
     ) -> ProcessPaymentResult:
         """
         ATOMIC, IDEMPOTENT payment confirmation pipeline with Transactional Outbox.
-        
+
         Guarantees that regardless of how many times a payment provider webhook is delivered:
         1. User balance is credited EXACTLY ONCE (if topup) or order is marked PAID EXACTLY ONCE.
         2. PaymentTransaction ledger record is recorded EXACTLY ONCE.
@@ -79,7 +81,7 @@ class PaymentService:
             select(PaymentTransaction)
             .where(
                 PaymentTransaction.provider == provider,
-                PaymentTransaction.provider_transaction_id == str(provider_transaction_id)
+                PaymentTransaction.provider_transaction_id == str(provider_transaction_id),
             )
             .with_for_update()
         )
@@ -99,81 +101,91 @@ class PaymentService:
                 if not existing_tx.correlation_id:
                     existing_tx.correlation_id = cid
                 payment_tx = existing_tx
-        else:
-            payment_tx = PaymentTransaction(
-                provider=provider,
-                provider_transaction_id=str(provider_transaction_id),
-                idempotency_key=idempotency_key,
-                user_id=effective_user_id,
-                order_id=order_id,
-                amount=amount,
-                currency=currency,
-                status="success",
-                correlation_id=cid,
-                raw_payload=raw_payload,
-                created_at=utc_now(),
-                paid_at=utc_now()
-            )
-            session.add(payment_tx)
+        try:
+            if not existing_tx:
+                payment_tx = PaymentTransaction(
+                    provider=provider,
+                    provider_transaction_id=str(provider_transaction_id),
+                    idempotency_key=idempotency_key,
+                    user_id=effective_user_id,
+                    order_id=order_id,
+                    amount=amount,
+                    currency=currency,
+                    status="success",
+                    correlation_id=cid,
+                    raw_payload=raw_payload,
+                    created_at=utc_now(),
+                    paid_at=utc_now(),
+                )
+                session.add(payment_tx)
 
-        # 2. If tied to an order, transition order to PAID and reward referrer
-        if order_id:
-            from app.services.orders.service import order_service
-            from app.services.referrals.service import referral_service
+            # 2. If tied to an order, transition order to PAID and reward referrer
+            if order_id:
+                from app.services.orders.service import order_service
+                from app.services.referrals.service import referral_service
 
-            await order_service.transition_order_status(
-                session=session,
-                order_id=order_id,
-                new_status_raw=OrderStatus.PAID.value
-            )
-            await referral_service.process_order_referral_reward(
-                session=session,
-                order_id=order_id,
-                buyer_id=effective_user_id,
-                purchase_amount=amount
-            )
+                await order_service.transition_order_status(
+                    session=session, order_id=order_id, new_status_raw=OrderStatus.PAID.value
+                )
+                await referral_service.process_order_referral_reward(
+                    session=session, order_id=order_id, buyer_id=effective_user_id, purchase_amount=amount
+                )
 
-            # Atomic Outbox event for fulfillment dispatch
-            await outbox_service.create_event(
-                session=session,
-                event_type="ORDER_FULFILLMENT_REQUESTED",
-                aggregate_type="order",
-                aggregate_id=str(order_id),
-                payload={
-                    "order_id": order_id,
-                    "provider": provider,
-                    "amount": str(amount),
-                    "user_id": effective_user_id
-                },
-                correlation_id=cid
-            )
-            user = await session.get(User, effective_user_id)
-        else:
-            # 3. Direct wallet balance credit
-            user, wallet_tx = await wallet_service.credit_balance(
-                session=session,
-                user_id=effective_user_id,
-                amount=amount,
-                tx_type="deposit",
-                reference_type="payment",
-                reference_id=idempotency_key,
-                note=note or f"{provider.upper()} orqali hisob to'ldirildi (ID: {provider_transaction_id})"
-            )
-            await outbox_service.create_event(
-                session=session,
-                event_type="WALLET_DEPOSIT_COMPLETED",
-                aggregate_type="user",
-                aggregate_id=str(effective_user_id),
-                payload={
-                    "user_id": effective_user_id,
-                    "amount": str(amount),
-                    "provider": provider
-                },
-                correlation_id=cid
-            )
+                # Atomic Outbox event for fulfillment dispatch
+                await outbox_service.create_event(
+                    session=session,
+                    event_type="ORDER_FULFILLMENT_REQUESTED",
+                    aggregate_type="order",
+                    aggregate_id=str(order_id),
+                    payload={
+                        "order_id": order_id,
+                        "provider": provider,
+                        "amount": str(amount),
+                        "user_id": effective_user_id,
+                    },
+                    correlation_id=cid,
+                )
+                user = await session.get(User, effective_user_id)
+            else:
+                # 3. Direct wallet balance credit
+                user, wallet_tx = await wallet_service.credit_balance(
+                    session=session,
+                    user_id=effective_user_id,
+                    amount=amount,
+                    tx_type="deposit",
+                    reference_type="payment",
+                    reference_id=idempotency_key,
+                    note=note or f"{provider.upper()} orqali hisob to'ldirildi (ID: {provider_transaction_id})",
+                )
+                await outbox_service.create_event(
+                    session=session,
+                    event_type="WALLET_DEPOSIT_COMPLETED",
+                    aggregate_type="user",
+                    aggregate_id=str(effective_user_id),
+                    payload={"user_id": effective_user_id, "amount": str(amount), "provider": provider},
+                    correlation_id=cid,
+                )
 
-        await session.flush()
-        await session.commit()
+            await session.flush()
+            await session.commit()
+        except IntegrityError:
+            await session.rollback()
+            # Concurrency race: another simultaneous request committed the same provider transaction
+            res = await session.execute(
+                select(PaymentTransaction).where(
+                    PaymentTransaction.provider == provider,
+                    PaymentTransaction.provider_transaction_id == str(provider_transaction_id),
+                )
+            )
+            existing_tx = res.scalars().first()
+            if existing_tx:
+                logger.info(
+                    f"[Payment Idempotency] Concurrent race resolved to existing {provider} tx={provider_transaction_id}"
+                )
+                user = await session.get(User, effective_user_id)
+                return ProcessPaymentResult(existing_tx, user, False)
+            raise
+
         if user:
             await session.refresh(user)
 

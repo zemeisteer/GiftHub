@@ -2,7 +2,9 @@
 Backward-compatibility bridge for database.models.
 Re-exports all models from app.models.
 """
+
 from app.models import (
+    VALID_ORDER_TRANSITIONS,
     AdminAuditLog,
     Base,
     BroadcastDraft,
@@ -12,8 +14,8 @@ from app.models import (
     CircuitState,
     ClickTransaction,
     CustomService,
-    DLQStatus,
     DiscrepancyType,
+    DLQStatus,
     FailedJob,
     FeatureFlag,
     FragmentSetting,
@@ -23,10 +25,10 @@ from app.models import (
     OrderStatusHistory,
     OutboxEvent,
     OutboxStatus,
-    PaymeTransaction,
     PaymentCard,
     PaymentSetting,
     PaymentTransaction,
+    PaymeTransaction,
     PriceLock,
     PricingSetting,
     PromoCode,
@@ -48,7 +50,6 @@ from app.models import (
     Transaction,
     User,
     UserJoinRequest,
-    VALID_ORDER_TRANSITIONS,
     WalletTransaction,
     normalize_status,
     validate_order_transition,

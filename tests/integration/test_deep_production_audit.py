@@ -40,7 +40,7 @@ async def test_wallet_parallel_credit_and_debit_invariants(db_session: AsyncSess
             user_id=sample_user.id,
             amount=credit_amount,
             tx_type="deposit",
-            note=f"Parallel test credit #{i}"
+            note=f"Parallel test credit #{i}",
         )
 
     # 2. Execute 3 debits
@@ -50,7 +50,7 @@ async def test_wallet_parallel_credit_and_debit_invariants(db_session: AsyncSess
             user_id=sample_user.id,
             amount=debit_amount,
             tx_type="purchase",
-            note=f"Parallel test debit #{i}"
+            note=f"Parallel test debit #{i}",
         )
 
     await db_session.commit()
@@ -97,7 +97,7 @@ async def test_click_complete_duplicate_idempotency(db_session: AsyncSession, sa
         "error": 0,
         "error_note": "",
         "sign_time": sign_time,
-        "sign_string": prep_sign
+        "sign_string": prep_sign,
     }
 
     # 1. Prepare
@@ -112,7 +112,7 @@ async def test_click_complete_duplicate_idempotency(db_session: AsyncSession, sa
         **prepare_payload,
         "action": 1,
         "merchant_prepare_id": merchant_prep_id,
-        "sign_string": comp_sign
+        "sign_string": comp_sign,
     }
 
     # 2. Complete #1
@@ -142,26 +142,17 @@ async def test_payme_perform_duplicate_idempotency(db_session: AsyncSession, sam
     now_ms = int(time.time() * 1000)
 
     # 1. Create Transaction
-    create_params = {
-        "id": paycom_id,
-        "time": now_ms,
-        "amount": amount_tiyin,
-        "account": {"user_id": sample_user.id}
-    }
-    create_res = await payme_provider.handle_request(db_session, {
-        "method": "CreateTransaction",
-        "params": create_params,
-        "id": 1
-    })
+    create_params = {"id": paycom_id, "time": now_ms, "amount": amount_tiyin, "account": {"user_id": sample_user.id}}
+    create_res = await payme_provider.handle_request(
+        db_session, {"method": "CreateTransaction", "params": create_params, "id": 1}
+    )
     assert "result" in create_res
     assert create_res["result"]["state"] == 1
 
     # 2. Perform #1
-    perform_res_1 = await payme_provider.handle_request(db_session, {
-        "method": "PerformTransaction",
-        "params": {"id": paycom_id},
-        "id": 2
-    })
+    perform_res_1 = await payme_provider.handle_request(
+        db_session, {"method": "PerformTransaction", "params": {"id": paycom_id}, "id": 2}
+    )
     assert "result" in perform_res_1
     assert perform_res_1["result"]["state"] == 2
 
@@ -169,11 +160,9 @@ async def test_payme_perform_duplicate_idempotency(db_session: AsyncSession, sam
     bal_after_first = sample_user.balance
 
     # 3. Duplicate Perform #2
-    perform_res_2 = await payme_provider.handle_request(db_session, {
-        "method": "PerformTransaction",
-        "params": {"id": paycom_id},
-        "id": 3
-    })
+    perform_res_2 = await payme_provider.handle_request(
+        db_session, {"method": "PerformTransaction", "params": {"id": paycom_id}, "id": 3}
+    )
     assert "result" in perform_res_2
     assert perform_res_2["result"]["state"] == 2
 
@@ -196,16 +185,17 @@ async def test_payme_cancellation_when_balance_spent_returns_error(db_session: A
     now_ms = int(time.time() * 1000)
 
     # 1. Create & Perform
-    await payme_provider.handle_request(db_session, {
-        "method": "CreateTransaction",
-        "params": {"id": paycom_id, "time": now_ms, "amount": amount_tiyin, "account": {"user_id": sample_user.id}},
-        "id": 1
-    })
-    await payme_provider.handle_request(db_session, {
-        "method": "PerformTransaction",
-        "params": {"id": paycom_id},
-        "id": 2
-    })
+    await payme_provider.handle_request(
+        db_session,
+        {
+            "method": "CreateTransaction",
+            "params": {"id": paycom_id, "time": now_ms, "amount": amount_tiyin, "account": {"user_id": sample_user.id}},
+            "id": 1,
+        },
+    )
+    await payme_provider.handle_request(
+        db_session, {"method": "PerformTransaction", "params": {"id": paycom_id}, "id": 2}
+    )
 
     # 2. Simulate user spending all balance on orders
     await db_session.refresh(sample_user)
@@ -214,18 +204,16 @@ async def test_payme_cancellation_when_balance_spent_returns_error(db_session: A
         user_id=sample_user.id,
         amount=sample_user.balance,
         tx_type="purchase",
-        note="User spent full balance"
+        note="User spent full balance",
     )
     await db_session.commit()
     await db_session.refresh(sample_user)
     assert sample_user.balance == Decimal("0.00")
 
     # 3. Payme sends CancelTransaction
-    cancel_res = await payme_provider.handle_request(db_session, {
-        "method": "CancelTransaction",
-        "params": {"id": paycom_id, "reason": 5},
-        "id": 4
-    })
+    cancel_res = await payme_provider.handle_request(
+        db_session, {"method": "CancelTransaction", "params": {"id": paycom_id, "reason": 5}, "id": 4}
+    )
 
     # Must return error -31007 (PAYME_ERR_CANT_CANCEL)
     assert "error" in cancel_res
@@ -249,26 +237,25 @@ async def test_payme_cancellation_when_balance_available_reverses(db_session: As
     now_ms = int(time.time() * 1000)
 
     # 1. Create & Perform
-    await payme_provider.handle_request(db_session, {
-        "method": "CreateTransaction",
-        "params": {"id": paycom_id, "time": now_ms, "amount": amount_tiyin, "account": {"user_id": sample_user.id}},
-        "id": 1
-    })
-    await payme_provider.handle_request(db_session, {
-        "method": "PerformTransaction",
-        "params": {"id": paycom_id},
-        "id": 2
-    })
+    await payme_provider.handle_request(
+        db_session,
+        {
+            "method": "CreateTransaction",
+            "params": {"id": paycom_id, "time": now_ms, "amount": amount_tiyin, "account": {"user_id": sample_user.id}},
+            "id": 1,
+        },
+    )
+    await payme_provider.handle_request(
+        db_session, {"method": "PerformTransaction", "params": {"id": paycom_id}, "id": 2}
+    )
 
     await db_session.refresh(sample_user)
     bal_before_cancel = sample_user.balance
 
     # 2. Cancel
-    cancel_res = await payme_provider.handle_request(db_session, {
-        "method": "CancelTransaction",
-        "params": {"id": paycom_id, "reason": 1},
-        "id": 3
-    })
+    cancel_res = await payme_provider.handle_request(
+        db_session, {"method": "CancelTransaction", "params": {"id": paycom_id, "reason": 1}, "id": 3}
+    )
     assert "result" in cancel_res
     assert cancel_res["result"]["state"] == -2
 
@@ -284,9 +271,7 @@ async def test_autopaycard_security_and_missing_id_rejection(db_session: AsyncSe
     """
     # 1. Reject without tx_id
     res_no_tx = await autopaycard_provider.handle_webhook(
-        session=db_session,
-        payload={"user_id": sample_user.id, "amount": 15000, "api_key": ""},
-        headers={}
+        session=db_session, payload={"user_id": sample_user.id, "amount": 15000, "api_key": ""}, headers={}
     )
     assert res_no_tx["success"] is False
 
@@ -295,12 +280,10 @@ async def test_autopaycard_security_and_missing_id_rejection(db_session: AsyncSe
         "user_id": sample_user.id,
         "amount": 15000,
         "tx_id": "apc_test_001",
-        "timestamp": time.time() - 3600 # 1 hour old
+        "timestamp": time.time() - 3600,  # 1 hour old
     }
     res_stale = await autopaycard_provider.handle_webhook(
-        session=db_session,
-        payload=stale_payload,
-        headers={"x-api-key": "secret"}
+        session=db_session, payload=stale_payload, headers={"x-api-key": "secret"}
     )
     assert res_stale["success"] is False
 
@@ -312,10 +295,10 @@ def test_production_fail_fast_validation():
     """
     prod_bad_config = Settings(
         ENVIRONMENT="production",
-        BOT_TOKEN="1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ", # Placeholder
+        BOT_TOKEN="1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ",  # Placeholder
         ADMINS=[],
         DB_URL="sqlite+aiosqlite:///data/test.db",
-        REDIS_URL=None
+        REDIS_URL=None,
     )
 
     with pytest.raises(ValueError) as exc:

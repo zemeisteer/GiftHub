@@ -43,7 +43,11 @@ async def cb_orders_history(callback: CallbackQuery, state: FSMContext):
             date_str = ord_item.created_at.strftime("%d.%m.%Y %H:%M")
             rec = f"@{ord_item.recipient_username}" if ord_item.recipient_username else "O'zim"
             link_info = ""
-            if ord_item.product_type == "service" and ord_item.fragment_payload and ord_item.status in ["done", "completed"]:
+            if (
+                ord_item.product_type == "service"
+                and ord_item.fragment_payload
+                and ord_item.status in ["done", "completed"]
+            ):
                 link_info = f"\n   🔗 <b>Havola:</b> {ord_item.fragment_payload}\n   ⚠️ <i>24 soat ichida ulaning</i>"
 
             text += (
@@ -53,16 +57,14 @@ async def cb_orders_history(callback: CallbackQuery, state: FSMContext):
             )
 
             # Add quick actions for each order
-            buttons.append([
-                InlineKeyboardButton(
-                    text=f"🧾 Chek #{ord_item.order_code}",
-                    callback_data=f"order:receipt:{ord_item.order_code}"
-                ),
-                InlineKeyboardButton(
-                    text="🔁 Qayta olish",
-                    callback_data=f"order:buyagain:{ord_item.order_code}"
-                )
-            ])
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"🧾 Chek #{ord_item.order_code}", callback_data=f"order:receipt:{ord_item.order_code}"
+                    ),
+                    InlineKeyboardButton(text="🔁 Qayta olish", callback_data=f"order:buyagain:{ord_item.order_code}"),
+                ]
+            )
 
         buttons.append([InlineKeyboardButton(text="🔄 Yangilash", callback_data="orders:history")])
         buttons.append([InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="menu:main")])
@@ -107,17 +109,16 @@ async def cb_order_receipt(callback: CallbackQuery):
             receipt_text += f"🔗 <b>Fragment TX:</b> <code>{order.fragment_tx_hash}</code>\n"
         receipt_text += "━━━━━━━━━━━━━━━━━━━━\n<i>GiftHub kafolatlangan raqamli xizmati</i>"
 
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🔁 Ushbu mahsulotni qayta sotib olish",
-                    callback_data=f"order:buyagain:{order.order_code}"
-                )
-            ],
-            [
-                InlineKeyboardButton(text="🔙 Buyurtmalar ro'yxatiga qaytish", callback_data="orders:history")
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🔁 Ushbu mahsulotni qayta sotib olish", callback_data=f"order:buyagain:{order.order_code}"
+                    )
+                ],
+                [InlineKeyboardButton(text="🔙 Buyurtmalar ro'yxatiga qaytish", callback_data="orders:history")],
             ]
-        ])
+        )
 
         try:
             await callback.message.edit_text(receipt_text, reply_markup=kb)
@@ -138,10 +139,7 @@ async def cb_order_buy_again(callback: CallbackQuery):
 
         # Calculate current authoritative live price
         live_price_info = await pricing_service.get_authoritative_price(
-            session=session,
-            product_type=order.product_type,
-            amount=order.amount,
-            item_title=order.item_title
+            session=session, product_type=order.product_type, amount=order.amount, item_title=order.item_title
         )
         current_price = float(live_price_info["total_price_decimal"])
         currency = "UZS"
@@ -157,17 +155,17 @@ async def cb_order_buy_again(callback: CallbackQuery):
             f"Xaridni tasdiqlaysizmi?"
         )
 
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=f"✅ Xaridni tasdiqlash ({current_price:,.0f} {currency})",
-                    callback_data=f"order:confirm_buyagain:{order.order_code}"
-                )
-            ],
-            [
-                InlineKeyboardButton(text="❌ Bekor qilish", callback_data="orders:history")
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=f"✅ Xaridni tasdiqlash ({current_price:,.0f} {currency})",
+                        callback_data=f"order:confirm_buyagain:{order.order_code}",
+                    )
+                ],
+                [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="orders:history")],
             ]
-        ])
+        )
 
         try:
             await callback.message.edit_text(prompt_text, reply_markup=kb)
@@ -194,25 +192,24 @@ async def cb_order_confirm_buy_again(callback: CallbackQuery):
             return
 
         live_price_info = await pricing_service.get_authoritative_price(
-            session=session,
-            product_type=order.product_type,
-            amount=order.amount,
-            item_title=order.item_title
+            session=session, product_type=order.product_type, amount=order.amount, item_title=order.item_title
         )
         total_price = live_price_info["total_price_decimal"]
 
         # Check user balance
         if user.balance < total_price:
             diff = total_price - user.balance
-            kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💳 Hamyonni to'ldirish", callback_data="wallet:topup")],
-                [InlineKeyboardButton(text="🔙 Buyurtmalar", callback_data="orders:history")]
-            ])
+            kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="💳 Hamyonni to'ldirish", callback_data="wallet:topup")],
+                    [InlineKeyboardButton(text="🔙 Buyurtmalar", callback_data="orders:history")],
+                ]
+            )
             await callback.message.answer(
                 f"❌ Balansingizda yetarli mablag' mavjud emas.\n"
                 f"Sizning balansingiz: <b>{user.balance:,.0f} UZS</b>\n"
                 f"Yetishmayotgan summa: <b>{diff:,.0f} UZS</b>",
-                reply_markup=kb
+                reply_markup=kb,
             )
             await callback.answer()
             return
@@ -225,10 +222,11 @@ async def cb_order_confirm_buy_again(callback: CallbackQuery):
             item_title=order.item_title,
             amount=order.amount,
             recipient_username=order.recipient_username,
-            payment_method="balance"
+            payment_method="balance",
         )
 
         from app.services.wallet.service import wallet_service
+
         await wallet_service.debit_balance(
             session=session,
             user_id=user_id,
@@ -236,7 +234,7 @@ async def cb_order_confirm_buy_again(callback: CallbackQuery):
             tx_type="purchase",
             reference_type="order",
             reference_id=new_order.order_code,
-            note=f"Qayta xarid: #{new_order.order_code} ({new_order.item_title})"
+            note=f"Qayta xarid: #{new_order.order_code} ({new_order.item_title})",
         )
 
         await order_service.transition_order_status(
@@ -244,12 +242,13 @@ async def cb_order_confirm_buy_again(callback: CallbackQuery):
             order_id=new_order.id,
             new_status_raw="paid",
             actor="USER",
-            reason="Hamyon balansidan to'landi"
+            reason="Hamyon balansidan to'landi",
         )
         await session.commit()
 
         # Trigger fulfillment asynchronously
         from app.services.fulfillment.service import fulfillment_service
+
         _ = await fulfillment_service.fulfill_order_automated(session, new_order.id)
 
         await callback.message.answer(
@@ -258,6 +257,6 @@ async def cb_order_confirm_buy_again(callback: CallbackQuery):
             f"📦 <b>Mahsulot:</b> {new_order.item_title}\n"
             f"💰 <b>To'langan summa:</b> {float(new_order.total_price):,.0f} UZS\n\n"
             f"Yetkazib berish jarayoni boshlandi. Natija haqida bot xabar beradi.",
-            reply_markup=get_orders_keyboard()
+            reply_markup=get_orders_keyboard(),
         )
     await callback.answer()

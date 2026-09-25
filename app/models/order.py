@@ -37,39 +37,21 @@ class OrderStatus(str, Enum):
 
 
 VALID_ORDER_TRANSITIONS: dict[str, set[str]] = {
-    OrderStatus.CREATED: {
-        OrderStatus.AWAITING_PAYMENT,
-        OrderStatus.PAID,
-        OrderStatus.CANCELLED,
-        OrderStatus.EXPIRED
-    },
-    OrderStatus.AWAITING_PAYMENT: {
-        OrderStatus.PAID,
-        OrderStatus.CANCELLED,
-        OrderStatus.EXPIRED
-    },
-    OrderStatus.PAID: {
-        OrderStatus.PROCESSING,
-        OrderStatus.COMPLETED,
-        OrderStatus.FAILED,
-        OrderStatus.REFUNDED
-    },
-    OrderStatus.PROCESSING: {
-        OrderStatus.COMPLETED,
-        OrderStatus.FAILED,
-        OrderStatus.REFUNDED
-    },
+    OrderStatus.CREATED: {OrderStatus.AWAITING_PAYMENT, OrderStatus.PAID, OrderStatus.CANCELLED, OrderStatus.EXPIRED},
+    OrderStatus.AWAITING_PAYMENT: {OrderStatus.PAID, OrderStatus.CANCELLED, OrderStatus.EXPIRED},
+    OrderStatus.PAID: {OrderStatus.PROCESSING, OrderStatus.COMPLETED, OrderStatus.FAILED, OrderStatus.REFUNDED},
+    OrderStatus.PROCESSING: {OrderStatus.COMPLETED, OrderStatus.FAILED, OrderStatus.REFUNDED},
     OrderStatus.COMPLETED: {
-        OrderStatus.REFUNDED # Admin recovery or explicit refund
+        OrderStatus.REFUNDED  # Admin recovery or explicit refund
     },
     OrderStatus.FAILED: {
-        OrderStatus.PROCESSING, # Manual or automated retry
+        OrderStatus.PROCESSING,  # Manual or automated retry
         OrderStatus.REFUNDED,
-        OrderStatus.CANCELLED
+        OrderStatus.CANCELLED,
     },
     OrderStatus.CANCELLED: set(),
     OrderStatus.REFUNDED: set(),
-    OrderStatus.EXPIRED: set()
+    OrderStatus.EXPIRED: set(),
 }
 
 
@@ -94,9 +76,7 @@ def validate_order_transition(current_status: str, new_status: str) -> None:
 
     allowed = VALID_ORDER_TRANSITIONS.get(current_norm, set())
     if new_norm not in allowed:
-        raise InvalidOrderStateError(
-            f"Buyurtma holatini '{current_norm}' dan '{new_norm}' ga o'tkazish mumkin emas."
-        )
+        raise InvalidOrderStateError(f"Buyurtma holatini '{current_norm}' dan '{new_norm}' ga o'tkazish mumkin emas.")
 
 
 class Order(Base):
@@ -110,7 +90,7 @@ class Order(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     order_code = Column(String(32), unique=True, index=True, nullable=False)
     user_id = Column(BigInteger, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
-    product_type = Column(String(32), nullable=False) # stars, premium, gift, service
+    product_type = Column(String(32), nullable=False)  # stars, premium, gift, service
     item_title = Column(String(128), nullable=False)
     amount = Column(Integer, default=1, nullable=False)
     unit_price = Column(Numeric(18, 2), default=Decimal("0.00"), nullable=False)
@@ -131,7 +111,7 @@ class Order(Base):
     fragment_req_id = Column(String(64), nullable=True)
     fragment_payload = Column(Text, nullable=True)
     fragment_tx_hash = Column(String(128), nullable=True)
-    fulfillment_status = Column(String(32), default="pending") # pending, processing, fulfilled, failed, manual_review
+    fulfillment_status = Column(String(32), default="pending")  # pending, processing, fulfilled, failed, manual_review
     fulfillment_attempts = Column(Integer, default=0, nullable=False)
     fulfillment_error = Column(Text, nullable=True)
 
@@ -146,7 +126,12 @@ class Order(Base):
     # Relationships
     user = relationship("User", back_populates="orders")
     payment_transactions = relationship("PaymentTransaction", back_populates="order")
-    timeline = relationship("OrderStatusHistory", back_populates="order", cascade="all, delete-orphan", order_by="OrderStatusHistory.created_at.asc()")
+    timeline = relationship(
+        "OrderStatusHistory",
+        back_populates="order",
+        cascade="all, delete-orphan",
+        order_by="OrderStatusHistory.created_at.asc()",
+    )
 
 
 class OrderStatusHistory(Base):
@@ -154,6 +139,7 @@ class OrderStatusHistory(Base):
     Detailed order timeline and status transition history.
     Tracks every status change, timestamp, actor, and contextual notes.
     """
+
     __tablename__ = "order_status_history"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -161,7 +147,7 @@ class OrderStatusHistory(Base):
     order_code = Column(String(32), index=True, nullable=False)
     from_status = Column(String(32), nullable=True)
     to_status = Column(String(32), nullable=False)
-    actor = Column(String(32), default="SYSTEM", nullable=False) # SYSTEM, USER, ADMIN, WORKER, WEBHOOK
+    actor = Column(String(32), default="SYSTEM", nullable=False)  # SYSTEM, USER, ADMIN, WORKER, WEBHOOK
     note = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
 
@@ -172,6 +158,7 @@ class CheckoutIdempotency(Base):
     """
     Prevents duplicate purchases from rapid clicks or network retries.
     """
+
     __tablename__ = "checkout_idempotency"
 
     idempotency_key = Column(String(128), primary_key=True)

@@ -1,8 +1,11 @@
-from typing import Callable, Dict, Any
+from typing import Any, Callable, Dict
+
 from aiogram import BaseMiddleware
 from aiogram.types import Message
-from database.db import AsyncSessionLocal
+
 from database import queries
+from database.db import AsyncSessionLocal
+
 
 class UserRegisterMiddleware(BaseMiddleware):
     async def __call__(
@@ -19,7 +22,7 @@ class UserRegisterMiddleware(BaseMiddleware):
                     user_id=user.id,
                     first_name=user.first_name or "Foydalanuvchi",
                     last_name=user.last_name,
-                    username=user.username
+                    username=user.username,
                 )
                 data["db_user"] = db_user
 

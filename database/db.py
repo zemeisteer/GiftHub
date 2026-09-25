@@ -1,13 +1,23 @@
 import os
 from decimal import Decimal
-from sqlalchemy import select, delete
+
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
-from app.core.database import engine, AsyncSessionLocal
+from app.core.database import AsyncSessionLocal, engine
 from app.core.logging import get_logger
 from app.models import (
-    Base, PricingSetting, ReferralSetting, PaymentSetting, ChannelRequirement,
-    User, PromoCode, FragmentSetting, UserJoinRequest, PaymentCard
+    Base,
+    ChannelRequirement,
+    FragmentSetting,
+    PaymentCard,
+    PaymentSetting,
+    PricingSetting,
+    PromoCode,
+    ReferralSetting,
+    User,
+    UserJoinRequest,
 )
 
 logger = get_logger(__name__)
@@ -40,7 +50,7 @@ async def init_db():
                 tonapi_key="",
                 network="mainnet",
                 min_ton_balance=Decimal("1.0000"),
-                simulation_mode=False
+                simulation_mode=False,
             )
             session.add(frag_setting)
 
@@ -55,7 +65,7 @@ async def init_db():
                 star_unit_price_uzs=Decimal("180.00"),
                 minimum_margin=Decimal("5.00"),
                 maximum_discount=Decimal("30.00"),
-                minimum_price=Decimal("1000.00")
+                minimum_price=Decimal("1000.00"),
             )
             session.add(pricing)
 
@@ -67,7 +77,7 @@ async def init_db():
                 bonus_percent=Decimal("5.00"),
                 min_purchase_uzs=Decimal("20000.00"),
                 auto_reward=True,
-                require_purchase=True
+                require_purchase=True,
             )
             session.add(referral)
 
@@ -82,15 +92,15 @@ async def init_db():
                 card_number="",
                 card_holder="",
                 bank_name="",
-                autopaycard_active=False
+                autopaycard_active=False,
             )
             session.add(payment)
 
         # Clean up any leftover legacy demo channels
         await session.execute(
             delete(ChannelRequirement).where(
-                (ChannelRequirement.username_or_link.in_(["@stellar_news", "@stellar_chat"])) |
-                (ChannelRequirement.username_or_link.ilike("%stellar%"))
+                (ChannelRequirement.username_or_link.in_(["@stellar_news", "@stellar_chat"]))
+                | (ChannelRequirement.username_or_link.ilike("%stellar%"))
             )
         )
 
@@ -104,7 +114,7 @@ async def init_db():
                     reward_value=Decimal("10.00"),
                     max_uses=500,
                     min_order_amount=Decimal("5000.00"),
-                    is_active=True
+                    is_active=True,
                 )
                 session.add(p1)
                 logger.info("[Demo Seed] Created default promo code GIFTHUB10 (SEED_DEMO_DATA=True)")
@@ -118,7 +128,7 @@ async def init_db():
                     first_name="Super Admin",
                     username="superadmin",
                     role="super_admin",
-                    balance=Decimal("0.00")
+                    balance=Decimal("0.00"),
                 )
                 session.add(user)
                 logger.info(f"[Admin Bootstrap] Initialized super_admin record for id={admin_id} with 0.00 balance.")
@@ -126,7 +136,9 @@ async def init_db():
                 if user.role != "super_admin":
                     if settings.ENVIRONMENT != "production":
                         user.role = "super_admin"
-                        logger.info(f"[Admin Bootstrap] Promoted id={admin_id} to super_admin in development environment.")
+                        logger.info(
+                            f"[Admin Bootstrap] Promoted id={admin_id} to super_admin in development environment."
+                        )
                     else:
                         logger.warning(
                             f"[Admin Bootstrap] Configured ADMIN id={admin_id} has role='{user.role}'. "

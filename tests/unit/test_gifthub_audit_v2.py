@@ -31,7 +31,7 @@ async def test_order_financial_snapshots_and_history(db_session: AsyncSession, s
         item_title="100 Telegram Stars",
         amount=100,
         recipient_username="friend_user",
-        payment_method="click"
+        payment_method="click",
     )
 
     # 1. Public ID format
@@ -58,7 +58,7 @@ async def test_order_financial_snapshots_and_history(db_session: AsyncSession, s
         order_id=order.id,
         new_status_raw="paid",
         actor="PAYMENT_GATEWAY",
-        reason="Click to'lovi muvaffaqiyatli o'tdi"
+        reason="Click to'lovi muvaffaqiyatli o'tdi",
     )
     timeline_updated = await order_service.get_order_timeline(db_session, order.order_code)
     assert len(timeline_updated) == 2
@@ -76,11 +76,10 @@ async def test_saved_recipients_api(db_session: AsyncSession, sample_user: User)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             # Add saved recipient
-            resp = await client.post("/api/v1/recipients", json={
-                "user_id": sample_user.id,
-                "recipient_username": "my_best_friend",
-                "label": "Eng yaxshi do'stim"
-            })
+            resp = await client.post(
+                "/api/v1/recipients",
+                json={"user_id": sample_user.id, "recipient_username": "my_best_friend", "label": "Eng yaxshi do'stim"},
+            )
             assert resp.status_code == 200
             data = resp.json()
             assert data["success"] is True
@@ -112,7 +111,7 @@ async def test_order_receipt_and_buy_again_api(db_session: AsyncSession, sample_
         item_title="50 Telegram Stars",
         amount=50,
         recipient_username="test_target",
-        payment_method="balance"
+        payment_method="balance",
     )
     order.status = "completed"
     order.fulfillment_status = "fulfilled"
@@ -194,11 +193,10 @@ async def test_admin_price_preview_simulation(db_session: AsyncSession):
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.post("/api/v1/admin/pricing/preview", json={
-                "margin_percent": 25.0,
-                "star_unit_price_uzs": 190.0,
-                "ton_rate_uzs": 15000.0
-            })
+            resp = await client.post(
+                "/api/v1/admin/pricing/preview",
+                json={"margin_percent": 25.0, "star_unit_price_uzs": 190.0, "ton_rate_uzs": 15000.0},
+            )
             assert resp.status_code == 200
             data = resp.json()
             assert data["success"] is True

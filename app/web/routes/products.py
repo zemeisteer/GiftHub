@@ -28,13 +28,15 @@ async def get_products(stars_amount: int | None = None, session: AsyncSession = 
     stars_packages = []
     for amt in popular_amounts:
         calc = pricing_service.calculate_stars_price(amt, pricing)
-        stars_packages.append({
-            "amount": amt,
-            "name": f"{amt} ⭐",
-            "price_uzs": calc["total_price_uzs"],
-            "discount_pct": calc["discount_percent"],
-            "formatted_price": calc["formatted_price"]
-        })
+        stars_packages.append(
+            {
+                "amount": amt,
+                "name": f"{amt} ⭐",
+                "price_uzs": calc["total_price_uzs"],
+                "discount_pct": calc["discount_percent"],
+                "formatted_price": calc["formatted_price"],
+            }
+        )
 
     custom_calc = None
     if stars_amount and stars_amount > 0:
@@ -48,7 +50,7 @@ async def get_products(stars_amount: int | None = None, session: AsyncSession = 
     premium_packages = [
         {"months": 3, "name": "Premium — 3 oy", "price_uzs": prem_data.get("3", 142000), "icon": "💎"},
         {"months": 6, "name": "Premium — 6 oy", "price_uzs": prem_data.get("6", 210000), "icon": "💎"},
-        {"months": 12, "name": "Premium — 12 oy", "price_uzs": prem_data.get("12", 380000), "icon": "👑"}
+        {"months": 12, "name": "Premium — 12 oy", "price_uzs": prem_data.get("12", 380000), "icon": "👑"},
     ]
 
     try:
@@ -65,15 +67,17 @@ async def get_products(stars_amount: int | None = None, session: AsyncSession = 
             c_holder = getattr(payment_setting, "card_holder", "ANVAR S.")
             b_name = getattr(payment_setting, "bank_name", "TBC Bank")
             card_info = {"card_number": c_num, "card_holder": c_holder, "bank_name": b_name}
-            payment_methods.append({
-                "id": "card",
-                "name": "Karta orqali to'lov",
-                "icon": "💳",
-                "type": "card",
-                "card_number": c_num,
-                "card_holder": c_holder,
-                "bank_name": b_name
-            })
+            payment_methods.append(
+                {
+                    "id": "card",
+                    "name": "Karta orqali to'lov",
+                    "icon": "💳",
+                    "type": "card",
+                    "card_number": c_num,
+                    "card_holder": c_holder,
+                    "bank_name": b_name,
+                }
+            )
         if payment_setting.click_active:
             payment_methods.append({"id": "click", "name": "Click", "icon": "💳", "type": "official"})
         if payment_setting.payme_active:
@@ -93,7 +97,7 @@ async def get_products(stars_amount: int | None = None, session: AsyncSession = 
         "premium_packages": premium_packages,
         "gifts": gifts_list,
         "payment_methods": payment_methods,
-        "card_info": card_info
+        "card_info": card_info,
     }
 
 
@@ -107,10 +111,7 @@ async def create_price_lock_endpoint(req: PriceLockRequest, user: User = Depends
     """Creates a temporary price lock for checkout."""
     async with AsyncSessionLocal() as session:
         lock = await pricing_service.create_price_lock(
-            session=session,
-            product_type=req.product_type,
-            amount=req.amount,
-            user_id=user.id
+            session=session, product_type=req.product_type, amount=req.amount, user_id=user.id
         )
         now = datetime.now(timezone.utc)
         time_left = max(0, int((lock.expires_at - now).total_seconds()))
@@ -122,7 +123,7 @@ async def create_price_lock_endpoint(req: PriceLockRequest, user: User = Depends
             "total_price_uzs": float(lock.total_price),
             "unit_price_uzs": float(lock.unit_price),
             "expires_at": lock.expires_at.isoformat(),
-            "time_left_seconds": time_left
+            "time_left_seconds": time_left,
         }
 
 
@@ -141,7 +142,7 @@ async def apply_promocode_endpoint(req: PromoApplyRequest, user: User = Depends(
                 code_str=req.code,
                 user_id=user.id,
                 order_total=Decimal(str(req.order_total)),
-                product_type=req.product_type
+                product_type=req.product_type,
             )
             return res
         except GiftHubException as e:

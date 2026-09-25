@@ -9,7 +9,7 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel
-from sqlalchemy import func, select, or_, and_
+from sqlalchemy import and_, func, or_, select
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
@@ -46,6 +46,7 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
+
 @router.get("/api/admin/payments")
 async def get_payment_settings_endpoint(admin: User = Depends(require_permission(Permission.PAYMENTS_READ))):
     async with AsyncSessionLocal() as session:
@@ -60,7 +61,7 @@ async def get_payment_settings_endpoint(admin: User = Depends(require_permission
             "autopaycard_active": p.autopaycard_active if p else False,
             "autopaycard_last4": p.autopaycard_last4 if p else "6412",
             "autopaycard_email": p.autopaycard_email if p else "payments.gifthub@gmail.com",
-            "autopaycard_webhook_url": p.autopaycard_webhook_url if p else "https://gifthub.uz/webhook/autopaycard"
+            "autopaycard_webhook_url": p.autopaycard_webhook_url if p else "https://gifthub.uz/webhook/autopaycard",
         }
 
 
@@ -79,8 +80,7 @@ class PaymentSettingsUpdate(BaseModel):
 
 @router.post("/api/admin/payments")
 async def update_payment_settings_endpoint(
-    req: PaymentSettingsUpdate,
-    admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))
+    req: PaymentSettingsUpdate, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))
 ):
     async with AsyncSessionLocal() as session:
         p = await session.get(PaymentSetting, 1)
@@ -135,14 +135,16 @@ async def get_admin_cards_endpoint(admin: User = Depends(require_permission(Perm
                 "bank_name": c.bank_name,
                 "card_type": c.card_type,
                 "is_active": c.is_active,
-                "created_at": c.created_at.strftime("%Y-%m-%d %H:%M") if c.created_at else ""
+                "created_at": c.created_at.strftime("%Y-%m-%d %H:%M") if c.created_at else "",
             }
             for c in cards
         ]
 
 
 @router.post("/api/admin/cards")
-async def create_admin_card_endpoint(req: PaymentCardCreate, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))):
+async def create_admin_card_endpoint(
+    req: PaymentCardCreate, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))
+):
     async with AsyncSessionLocal() as session:
         c = await queries.create_payment_card(
             session=session,
@@ -150,13 +152,15 @@ async def create_admin_card_endpoint(req: PaymentCardCreate, admin: User = Depen
             card_holder=req.card_holder,
             bank_name=req.bank_name,
             card_type=req.card_type,
-            is_active=req.is_active
+            is_active=req.is_active,
         )
         return {"success": True, "id": c.id}
 
 
 @router.put("/api/admin/cards/{card_id}")
-async def update_admin_card_endpoint(card_id: int, req: PaymentCardUpdate, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))):
+async def update_admin_card_endpoint(
+    card_id: int, req: PaymentCardUpdate, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))
+):
     async with AsyncSessionLocal() as session:
         c = await queries.update_payment_card(
             session=session,
@@ -165,7 +169,7 @@ async def update_admin_card_endpoint(card_id: int, req: PaymentCardUpdate, admin
             card_holder=req.card_holder,
             bank_name=req.bank_name,
             card_type=req.card_type,
-            is_active=req.is_active
+            is_active=req.is_active,
         )
         if not c:
             raise HTTPException(status_code=404, detail="Karta topilmadi")
@@ -173,11 +177,11 @@ async def update_admin_card_endpoint(card_id: int, req: PaymentCardUpdate, admin
 
 
 @router.delete("/api/admin/cards/{card_id}")
-async def delete_admin_card_endpoint(card_id: int, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))):
+async def delete_admin_card_endpoint(
+    card_id: int, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))
+):
     async with AsyncSessionLocal() as session:
         ok = await queries.delete_payment_card(session, card_id)
         if not ok:
             raise HTTPException(status_code=404, detail="Karta topilmadi")
         return {"success": True}
-
-

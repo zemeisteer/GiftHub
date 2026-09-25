@@ -18,7 +18,7 @@ class SupportService:
         subject: str,
         category: str = "other",
         initial_message: str | None = None,
-        order_id: int | None = None
+        order_id: int | None = None,
     ) -> SupportTicket:
         """Creates a new support ticket and attaches initial message if provided."""
         ticket = SupportTicket(
@@ -28,7 +28,7 @@ class SupportService:
             subject=subject.strip(),
             status=TicketStatus.OPEN,
             created_at=utc_now(),
-            updated_at=utc_now()
+            updated_at=utc_now(),
         )
         session.add(ticket)
         await session.flush()
@@ -39,7 +39,7 @@ class SupportService:
                 sender_id=user_id,
                 sender_type="user",
                 text=initial_message.strip(),
-                created_at=utc_now()
+                created_at=utc_now(),
             )
             session.add(msg)
 
@@ -50,12 +50,7 @@ class SupportService:
 
     @classmethod
     async def add_reply(
-        cls,
-        session: AsyncSession,
-        ticket_id: int,
-        sender_id: int,
-        sender_type: str,
-        text: str
+        cls, session: AsyncSession, ticket_id: int, sender_id: int, sender_type: str, text: str
     ) -> TicketMessage:
         """Adds a reply message to a support ticket."""
         ticket = await session.get(SupportTicket, ticket_id)
@@ -64,11 +59,7 @@ class SupportService:
 
         now = utc_now()
         msg = TicketMessage(
-            ticket_id=ticket_id,
-            sender_id=sender_id,
-            sender_type=sender_type,
-            text=text.strip(),
-            created_at=now
+            ticket_id=ticket_id, sender_id=sender_id, sender_type=sender_type, text=text.strip(), created_at=now
         )
         session.add(msg)
 
@@ -82,11 +73,7 @@ class SupportService:
 
     @classmethod
     async def update_status(
-        cls,
-        session: AsyncSession,
-        ticket_id: int,
-        status: str,
-        assigned_admin_id: int | None = None
+        cls, session: AsyncSession, ticket_id: int, status: str, assigned_admin_id: int | None = None
     ) -> SupportTicket:
         """Updates ticket status (OPEN, IN_PROGRESS, RESOLVED, CLOSED)."""
         ticket = await session.get(SupportTicket, ticket_id)
@@ -111,10 +98,7 @@ class SupportService:
 
     @classmethod
     async def list_all_tickets(
-        cls,
-        session: AsyncSession,
-        status: str | None = None,
-        limit: int = 50
+        cls, session: AsyncSession, status: str | None = None, limit: int = 50
     ) -> list[SupportTicket]:
         query = select(SupportTicket).order_by(desc(SupportTicket.updated_at))
         if status:

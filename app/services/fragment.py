@@ -10,27 +10,21 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
 class FragmentPricingEngine:
     """
     Fragment.com real-vaqt bazaviy tannarxlari va marja hisoblagichi.
     Stars va Premium tannarxlari Fragment platformasiga bog'langan.
     """
+
     # 1 dona Stars Fragment tannarxi (so'mda)
     FRAGMENT_STAR_BASE_UZS = 176.46
 
     # Telegram Premium Fragment rasmiy tannarxlari (so'mda)
-    FRAGMENT_PREMIUM_BASE_UZS = {
-        "3": 138000.0,
-        "6": 205000.0,
-        "12": 375000.0
-    }
+    FRAGMENT_PREMIUM_BASE_UZS = {"3": 138000.0, "6": 205000.0, "12": 375000.0}
 
     # Telegram & Apple Gifts Fragment tannarxlari (so'mda)
-    FRAGMENT_GIFTS_BASE_UZS = {
-        "bear": 50000.0,
-        "heart": 68000.0,
-        "rocket": 95000.0
-    }
+    FRAGMENT_GIFTS_BASE_UZS = {"bear": 50000.0, "heart": 68000.0, "rocket": 95000.0}
 
     @classmethod
     def get_star_base_cost(cls) -> float:
@@ -49,7 +43,9 @@ class FragmentPricingEngine:
         return cls.FRAGMENT_GIFTS_BASE_UZS.copy()
 
     @classmethod
-    def calculate_gift(cls, gift_id: str, margin_uzs: float = 14000.0, custom_price: float | None = None) -> dict[str, Any]:
+    def calculate_gift(
+        cls, gift_id: str, margin_uzs: float = 14000.0, custom_price: float | None = None
+    ) -> dict[str, Any]:
         base_cost = cls.FRAGMENT_GIFTS_BASE_UZS.get(gift_id, 50000.0)
         final_price = custom_price if (custom_price and custom_price > 0) else (base_cost + margin_uzs)
         return {
@@ -57,15 +53,12 @@ class FragmentPricingEngine:
             "base_cost_uzs": round(base_cost),
             "margin_uzs": round(final_price - base_cost),
             "final_price_uzs": round(final_price),
-            "formatted_price": f"{round(final_price):,} so'm".replace(",", " ")
+            "formatted_price": f"{round(final_price):,} so'm".replace(",", " "),
         }
 
     @classmethod
     def calculate_stars(
-        cls,
-        amount: int,
-        margin_percent: float,
-        discounts: list[dict[str, Any]] | None = None
+        cls, amount: int, margin_percent: float, discounts: list[dict[str, Any]] | None = None
     ) -> dict[str, Any]:
         """
         Ixtiyoriy miqdordagi Stars (masalan 105 ta) uchun Fragment tannarxi + marja bo'yicha hisoblaydi.
@@ -95,15 +88,11 @@ class FragmentPricingEngine:
             "discount_percent": applied_discount,
             "total_price_uzs": round(final_total),
             "cost_total_uzs": round(cost_total),
-            "formatted_price": f"{round(final_total):,} so'm".replace(",", " ")
+            "formatted_price": f"{round(final_total):,} so'm".replace(",", " "),
         }
 
     @classmethod
-    def calculate_premium(
-        cls,
-        months: int,
-        margin_uzs: float = 5000.0
-    ) -> dict[str, Any]:
+    def calculate_premium(cls, months: int, margin_uzs: float = 5000.0) -> dict[str, Any]:
         """
         Fragment Premium tannarxi + belgilangan marja (so'mda).
         Masalan: 138 000 + 5 000 = 143 000 so'm.
@@ -117,7 +106,7 @@ class FragmentPricingEngine:
             "base_cost_uzs": round(base_cost),
             "margin_uzs": round(margin_uzs),
             "final_price_uzs": round(final_price),
-            "formatted_price": f"{round(final_price):,} so'm".replace(",", " ")
+            "formatted_price": f"{round(final_price):,} so'm".replace(",", " "),
         }
 
 
@@ -197,7 +186,7 @@ class FragmentService:
             "contract_address": FRAGMENT_STARS_CONTRACT,
             "comment_payload": comment,
             "tonkeeper_link": deep_link,
-            "fragment_url": f"https://fragment.com/stars?recipient={clean_user}&quantity={stars_amount}"
+            "fragment_url": f"https://fragment.com/stars?recipient={clean_user}&quantity={stars_amount}",
         }
 
     async def create_premium_invoice(self, recipient: str, months: int) -> dict[str, Any]:
@@ -220,15 +209,11 @@ class FragmentService:
             "contract_address": FRAGMENT_PREMIUM_CONTRACT,
             "comment_payload": comment,
             "tonkeeper_link": deep_link,
-            "fragment_url": f"https://fragment.com/premium?recipient={clean_user}&months={months}"
+            "fragment_url": f"https://fragment.com/premium?recipient={clean_user}&months={months}",
         }
 
     async def send_ton_transaction(
-        self,
-        to_address: str,
-        ton_amount: float,
-        comment: str,
-        setting: FragmentSetting
+        self, to_address: str, ton_amount: float, comment: str, setting: FragmentSetting
     ) -> dict[str, Any]:
         """
         TON tranzaksiyasini botning hamyonidan Fragment smart kontraktiga yuboradi.
@@ -237,12 +222,14 @@ class FragmentService:
         if setting.simulation_mode or not setting.ton_wallet_mnemonic:
             # Simulyatsiya / Demo rejim
             tx_id = f"sim_{int(datetime.utcnow().timestamp())}_{abs(hash(comment)) % 1000000:06d}"
-            logger.info(f"[Fragment Auto-Fulfill Simulyatsiya] {to_address} ga {ton_amount} TON ({comment}) yuborildi. TX: {tx_id}")
+            logger.info(
+                f"[Fragment Auto-Fulfill Simulyatsiya] {to_address} ga {ton_amount} TON ({comment}) yuborildi. TX: {tx_id}"
+            )
             return {
                 "success": True,
                 "mode": "simulation",
                 "tx_hash": tx_id,
-                "tonscan_url": f"https://tonscan.org/tx/{tx_id}"
+                "tonscan_url": f"https://tonscan.org/tx/{tx_id}",
             }
 
         try:
@@ -250,18 +237,10 @@ class FragmentService:
             # Standart TonAPI / Toncenter orqali yuborish
             # Hozirgi integratsiya asosida tranzaksiya yuboriladi
             tx_id = f"tx_{int(datetime.utcnow().timestamp())}_{abs(hash(comment)) % 1000000:06d}"
-            return {
-                "success": True,
-                "mode": "live",
-                "tx_hash": tx_id,
-                "tonscan_url": f"https://tonscan.org/tx/{tx_id}"
-            }
+            return {"success": True, "mode": "live", "tx_hash": tx_id, "tonscan_url": f"https://tonscan.org/tx/{tx_id}"}
         except Exception as e:
             logger.error(f"TON tranzaksiyasini yuborishda xatolik: {e}")
-            return {
-                "success": False,
-                "error": str(e)
-            }
+            return {"success": False, "error": str(e)}
 
     async def fulfill_order(self, order_id: int, bot=None) -> dict[str, Any]:
         """
@@ -293,14 +272,14 @@ class FragmentService:
                     session=session,
                     order_id=order.id,
                     fulfillment_status="processing",
-                    fragment_payload=invoice.get("tonkeeper_link")
+                    fragment_payload=invoice.get("tonkeeper_link"),
                 )
 
                 pay_res = await self.send_ton_transaction(
                     to_address=invoice["contract_address"],
                     ton_amount=invoice["ton_amount"],
                     comment=invoice["comment_payload"],
-                    setting=setting
+                    setting=setting,
                 )
 
                 if pay_res.get("success"):
@@ -310,7 +289,7 @@ class FragmentService:
                         order_id=order.id,
                         fulfillment_status="fulfilled",
                         status="done",
-                        fragment_tx_hash=tx_hash
+                        fragment_tx_hash=tx_hash,
                     )
 
                     # Mijozga bot orqali muvaffaqiyat xabarini yuborish
@@ -323,47 +302,32 @@ class FragmentService:
                                 f"⭐ <b>Miqdor:</b> {order.amount}\n"
                                 f"💎 <b>To'lov turi:</b> Fragment (TON)\n"
                                 f"🧾 <b>Buyurtma ID:</b> <code>{order.order_code}</code>\n"
-                                f"🔗 <b>Tranzaksiya:</b> <a href=\"{pay_res.get('tonscan_url', 'https://tonscan.org')}\">Tonscan ko'rish</a>\n\n"
+                                f'🔗 <b>Tranzaksiya:</b> <a href="{pay_res.get("tonscan_url", "https://tonscan.org")}">Tonscan ko\'rish</a>\n\n'
                                 f"Xaridingiz uchun tashakkur! ⭐"
                             )
                             await bot.send_message(chat_id=order.user_id, text=msg, parse_mode="HTML")
                         except Exception as e:
                             logger.warning(f"Foydalanuvchiga muvaffaqiyat xabari yuborilmadi: {e}")
 
-                    return {
-                        "success": True,
-                        "fulfilled": True,
-                        "tx_hash": tx_hash,
-                        "invoice": invoice
-                    }
+                    return {"success": True, "fulfilled": True, "tx_hash": tx_hash, "invoice": invoice}
                 else:
                     await queries.update_order_fulfillment(
                         session=session,
                         order_id=order.id,
                         fulfillment_status="failed",
-                        fulfillment_error=pay_res.get("error", "To'lov amalga oshmadi")
+                        fulfillment_error=pay_res.get("error", "To'lov amalga oshmadi"),
                     )
-                    return {
-                        "success": False,
-                        "fulfilled": False,
-                        "error": pay_res.get("error")
-                    }
+                    return {"success": False, "fulfilled": False, "error": pay_res.get("error")}
             else:
                 # Qo'lda yoki 1-bosishda tasdiqlash rejimi
                 await queries.update_order_fulfillment(
                     session=session,
                     order_id=order.id,
                     fulfillment_status="waiting_payment",
-                    fragment_payload=invoice.get("tonkeeper_link")
+                    fragment_payload=invoice.get("tonkeeper_link"),
                 )
-                return {
-                    "success": True,
-                    "fulfilled": False,
-                    "mode": "waiting_payment",
-                    "invoice": invoice
-                }
+                return {"success": True, "fulfilled": False, "mode": "waiting_payment", "invoice": invoice}
 
 
 fragment_client = FragmentService()
 pricing_engine = FragmentPricingEngine
-

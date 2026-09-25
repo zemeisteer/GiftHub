@@ -9,6 +9,6 @@ async def set_bot_commands(bot: Bot):
     commands = [
         BotCommand(command="start", description="⭐ Asosiy do'kon menyusi"),
         BotCommand(command="help", description="🛟 Yordam va ma'lumot"),
-        BotCommand(command="admin", description="⚙️ Boshqaruv paneli (admin)")
+        BotCommand(command="admin", description="⚙️ Boshqaruv paneli (admin)"),
     ]
     await bot.set_my_commands(commands=commands)

@@ -7,7 +7,7 @@ class BroadcastDraft(Base):
     __tablename__ = "broadcast_drafts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    mode = Column(String(32), default="write", nullable=False) # write, forward, postbot
+    mode = Column(String(32), default="write", nullable=False)  # write, forward, postbot
     text = Column(Text, nullable=True)
     photo = Column(String(255), nullable=True)
     button_text = Column(String(64), nullable=True)

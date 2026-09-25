@@ -9,7 +9,7 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel
-from sqlalchemy import func, select, or_, and_
+from sqlalchemy import and_, func, or_, select
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
@@ -45,6 +45,7 @@ from database import queries
 logger = get_logger(__name__)
 
 router = APIRouter()
+
 
 @router.get("/api/admin/pricing")
 async def get_admin_pricing(admin: User = Depends(require_permission(Permission.PRICING_READ))):
@@ -91,7 +92,7 @@ async def get_admin_pricing(admin: User = Depends(require_permission(Permission.
             "fragment_premium_bases": prem_bases,
             "premium_prices": prem_prices,
             "premium_margins": prem_margins,
-            "gifts": gifts
+            "gifts": gifts,
         }
 
 
@@ -107,7 +108,9 @@ class PricingUpdateRequest(BaseModel):
 
 
 @router.post("/api/admin/pricing")
-async def update_admin_pricing(req: PricingUpdateRequest, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))):
+async def update_admin_pricing(
+    req: PricingUpdateRequest, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))
+):
     async with AsyncSessionLocal() as session:
         disc_str = json.dumps(req.discounts) if req.discounts is not None else None
         prem_str = json.dumps(req.premium_prices) if req.premium_prices is not None else None
@@ -120,7 +123,7 @@ async def update_admin_pricing(req: PricingUpdateRequest, admin: User = Depends(
             star_unit_price_uzs=req.star_unit_price_uzs,
             stars_discounts_json=disc_str,
             premium_prices_json=prem_str,
-            gifts_json=gifts_str
+            gifts_json=gifts_str,
         )
         await queries.log_admin_action(
             session=session,
@@ -128,15 +131,15 @@ async def update_admin_pricing(req: PricingUpdateRequest, admin: User = Depends(
             admin_username=admin.username,
             action="Narx sozlamalarini yangiladi",
             entity_type="pricing",
-            details=f"1 Stars: {req.star_unit_price_uzs} UZS, Marja: {req.margin_percent}%"
+            details=f"1 Stars: {req.star_unit_price_uzs} UZS, Marja: {req.margin_percent}%",
         )
         return {"success": True, "message": "Barcha narxlar muvaffaqiyatli saqlandi!"}
-
 
 
 @router.get("/api/admin/fragment/settings")
 async def get_fragment_settings_endpoint(admin: User = Depends(require_permission(Permission.SETTINGS_READ))):
     from app.services.fragment import fragment_client
+
     async with AsyncSessionLocal() as session:
         s = await queries.get_fragment_settings(session)
         balance = await fragment_client.get_wallet_balance(s.ton_wallet_address, s.network)
@@ -149,7 +152,7 @@ async def get_fragment_settings_endpoint(admin: User = Depends(require_permissio
             "network": s.network,
             "min_ton_balance": float(s.min_ton_balance or 1.0),
             "simulation_mode": s.simulation_mode,
-            "wallet_balance_ton": balance
+            "wallet_balance_ton": balance,
         }
 
 
@@ -165,8 +168,7 @@ class FragmentSettingsUpdate(BaseModel):
 
 @router.post("/api/admin/fragment/settings")
 async def update_fragment_settings_endpoint(
-    req: FragmentSettingsUpdate,
-    admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))
+    req: FragmentSettingsUpdate, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))
 ):
     async with AsyncSessionLocal() as session:
         mnemonic = req.ton_wallet_mnemonic
@@ -181,10 +183,9 @@ async def update_fragment_settings_endpoint(
             tonapi_key=req.tonapi_key,
             network=req.network,
             min_ton_balance=req.min_ton_balance,
-            simulation_mode=req.simulation_mode
+            simulation_mode=req.simulation_mode,
         )
         return {"success": True, "message": "Fragment va TON sozlamalari muvaffaqiyatli saqlandi!"}
-
 
 
 class CreateServiceRequest(BaseModel):
@@ -221,14 +222,16 @@ async def api_admin_list_services(admin: User = Depends(require_permission(Permi
                 "icon": s.icon,
                 "description": s.description,
                 "is_active": s.is_active,
-                "created_at": s.created_at.strftime("%Y-%m-%d %H:%M") if s.created_at else ""
+                "created_at": s.created_at.strftime("%Y-%m-%d %H:%M") if s.created_at else "",
             }
             for s in services
         ]
 
 
 @router.post("/api/admin/services")
-async def api_admin_create_service(req: CreateServiceRequest, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))):
+async def api_admin_create_service(
+    req: CreateServiceRequest, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))
+):
     if not req.name.strip():
         raise HTTPException(status_code=400, detail="Xizmat nomi kiritilishi shart")
     async with AsyncSessionLocal() as session:
@@ -240,13 +243,15 @@ async def api_admin_create_service(req: CreateServiceRequest, admin: User = Depe
             category=req.category,
             icon=req.icon,
             description=req.description,
-            is_active=req.is_active
+            is_active=req.is_active,
         )
         return {"success": True, "id": s.id, "message": "Xizmat muvaffaqiyatli qo'shildi"}
 
 
 @router.put("/api/admin/services/{service_id}")
-async def api_admin_update_service(service_id: int, req: UpdateServiceRequest, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))):
+async def api_admin_update_service(
+    service_id: int, req: UpdateServiceRequest, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))
+):
     async with AsyncSessionLocal() as session:
         s = await queries.update_custom_service(
             session=session,
@@ -257,7 +262,7 @@ async def api_admin_update_service(service_id: int, req: UpdateServiceRequest, a
             category=req.category,
             icon=req.icon,
             description=req.description,
-            is_active=req.is_active
+            is_active=req.is_active,
         )
         if not s:
             raise HTTPException(status_code=404, detail="Xizmat topilmadi")
@@ -265,11 +270,11 @@ async def api_admin_update_service(service_id: int, req: UpdateServiceRequest, a
 
 
 @router.delete("/api/admin/services/{service_id}")
-async def api_admin_delete_service(service_id: int, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))):
+async def api_admin_delete_service(
+    service_id: int, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))
+):
     async with AsyncSessionLocal() as session:
         ok = await queries.delete_custom_service(session=session, service_id=service_id)
         if not ok:
             raise HTTPException(status_code=404, detail="Xizmat topilmadi")
         return {"success": True, "message": "Xizmat o'chirildi"}
-
-

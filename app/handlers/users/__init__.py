@@ -19,5 +19,5 @@ def setup(dp: Dispatcher):
         orders_router,
         admin_panel_router,
         admin_forward_router,
-        help_router
+        help_router,
     )

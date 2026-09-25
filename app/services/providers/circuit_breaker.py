@@ -22,6 +22,7 @@ class CircuitBreaker:
     Trips from CLOSED -> OPEN after consecutive failures.
     Allows probe requests in HALF_OPEN after cooldown.
     """
+
     FAILURE_THRESHOLD = 5
     COOLDOWN_SECONDS = 60
 
@@ -35,7 +36,7 @@ class CircuitBreaker:
                 "state": CircuitState.CLOSED.value,
                 "consecutive_failures": 0,
                 "last_failure_ts": 0.0,
-                "last_probe_ts": 0.0
+                "last_probe_ts": 0.0,
             }
         return self._states[provider_name]
 
@@ -97,7 +98,9 @@ class CircuitBreaker:
                 )
             st["state"] = CircuitState.OPEN.value
 
-    async def sync_to_db(self, session: AsyncSession, provider_name: str, error: Optional[str] = None, is_success: bool = True) -> None:
+    async def sync_to_db(
+        self, session: AsyncSession, provider_name: str, error: Optional[str] = None, is_success: bool = True
+    ) -> None:
         """Persists provider health statistics to the database."""
         try:
             ph = await session.get(ProviderHealth, provider_name)
@@ -109,7 +112,7 @@ class CircuitBreaker:
                     circuit_state=CircuitState.CLOSED.value,
                     failure_count=0,
                     success_count=0,
-                    consecutive_failures=0
+                    consecutive_failures=0,
                 )
                 session.add(ph)
 

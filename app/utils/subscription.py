@@ -9,11 +9,8 @@ from database import queries
 
 logger = logging.getLogger(__name__)
 
-async def verify_user_subscriptions(
-    bot: Bot | None,
-    user_id: int,
-    session: AsyncSession
-) -> tuple[bool, list[Any]]:
+
+async def verify_user_subscriptions(bot: Bot | None, user_id: int, session: AsyncSession) -> tuple[bool, list[Any]]:
     """
     Checks if a user is subscribed to all mandatory channels.
     Returns (all_passed: bool, missing_channels: list).
@@ -57,7 +54,7 @@ async def verify_user_subscriptions(
                 except Exception:
                     is_member = False
 
-        else: # ordinary / group
+        else:  # ordinary / group
             # Target chat ID or username
             chat_target = ch.chat_id
             if not chat_target and ch.username_or_link:

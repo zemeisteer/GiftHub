@@ -1,11 +1,13 @@
-import time
 import logging
-from typing import Callable, Dict, Any
+import time
+from typing import Any, Callable, Dict
+
 from aiogram import BaseMiddleware
-from aiogram.types import Message
 from aiogram.dispatcher.flags import get_flag
+from aiogram.types import Message
 
 logger = logging.getLogger(__name__)
+
 
 class ThrottlingMiddleware(BaseMiddleware):
     def __init__(self, rate_limit: float = 0.5):

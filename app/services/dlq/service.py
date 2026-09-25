@@ -22,7 +22,7 @@ class DLQService:
         tb: Optional[str] = None,
         order_id: Optional[int] = None,
         attempts: int = 1,
-        correlation_id: Optional[str] = None
+        correlation_id: Optional[str] = None,
     ) -> FailedJob:
         """
         Stores an exhausted failed job in the Dead Letter Queue for admin review/recovery.
@@ -37,7 +37,7 @@ class DLQService:
             attempts=attempts,
             status=DLQStatus.EXHAUSTED.value,
             correlation_id=cid,
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(timezone.utc),
         )
         session.add(failed_job)
         await session.flush()
@@ -46,10 +46,7 @@ class DLQService:
 
     @staticmethod
     async def list_failed_jobs(
-        session: AsyncSession,
-        status: Optional[str] = None,
-        limit: int = 50,
-        offset: int = 0
+        session: AsyncSession, status: Optional[str] = None, limit: int = 50, offset: int = 0
     ) -> List[FailedJob]:
         """Lists DLQ jobs with optional status filter."""
         stmt = select(FailedJob).order_by(FailedJob.created_at.desc())
@@ -60,11 +57,7 @@ class DLQService:
         return list(res.scalars().all())
 
     @staticmethod
-    async def mark_retrying(
-        session: AsyncSession,
-        job_id: int,
-        admin_id: Optional[int] = None
-    ) -> Optional[FailedJob]:
+    async def mark_retrying(session: AsyncSession, job_id: int, admin_id: Optional[int] = None) -> Optional[FailedJob]:
         """Sets status to RETRYING for re-queueing by background workers."""
         job = await session.get(FailedJob, job_id)
         if not job:
@@ -75,12 +68,7 @@ class DLQService:
         return job
 
     @staticmethod
-    async def resolve_job(
-        session: AsyncSession,
-        job_id: int,
-        admin_id: int,
-        notes: str
-    ) -> Optional[FailedJob]:
+    async def resolve_job(session: AsyncSession, job_id: int, admin_id: int, notes: str) -> Optional[FailedJob]:
         """Marks a DLQ job as manually resolved."""
         job = await session.get(FailedJob, job_id)
         if not job:

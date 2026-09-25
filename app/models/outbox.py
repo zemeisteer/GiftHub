@@ -18,11 +18,12 @@ class OutboxEvent(Base):
     Transactional Outbox pattern for mission-critical events.
     Committed in the same database transaction as financial/order mutations.
     """
+
     __tablename__ = "outbox_events"
 
     id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
-    event_type = Column(String(64), nullable=False, index=True) # e.g. PAYMENT_CONFIRMED, ORDER_FULFILLMENT_REQUESTED
-    aggregate_type = Column(String(32), nullable=False, index=True) # order, payment, user
+    event_type = Column(String(64), nullable=False, index=True)  # e.g. PAYMENT_CONFIRMED, ORDER_FULFILLMENT_REQUESTED
+    aggregate_type = Column(String(32), nullable=False, index=True)  # order, payment, user
     aggregate_id = Column(String(64), nullable=False, index=True)
     payload = Column(JSON, nullable=False, default=dict)
     status = Column(String(20), default=OutboxStatus.PENDING.value, nullable=False, index=True)

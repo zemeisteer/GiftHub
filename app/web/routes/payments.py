@@ -50,7 +50,7 @@ async def topup_wallet(req: TopupRequest, user: User = Depends(get_current_user)
                 amount=dec_amount,
                 tx_type="topup",
                 reference_type="dev_mock",
-                note=f"Test demo hisob to'ldirildi ({req.method})"
+                note=f"Test demo hisob to'ldirildi ({req.method})",
             )
             await session.commit()
             return {
@@ -59,7 +59,7 @@ async def topup_wallet(req: TopupRequest, user: User = Depends(get_current_user)
                 "new_balance": round(float(updated_user.balance)),
                 "amount": float(dec_amount),
                 "method": req.method,
-                "message": f"[DEV] Hamyon to'ldirildi: +{dec_amount:,.0f} so'm"
+                "message": f"[DEV] Hamyon to'ldirildi: +{dec_amount:,.0f} so'm",
             }
 
     # Generate checkout link for the requested payment provider
@@ -77,7 +77,7 @@ async def topup_wallet(req: TopupRequest, user: User = Depends(get_current_user)
                 "success": True,
                 "method": "autopaycard",
                 "instructions": f"Ushbu summani ko'rsatilgan Uzcard kartaga o'tkazing: **** **** **** {card_last4}",
-                "amount": float(dec_amount)
+                "amount": float(dec_amount),
             }
     else:
         raise HTTPException(status_code=400, detail="Noma'lum to'lov usuli")
@@ -108,13 +108,14 @@ async def get_checkout_link(req: CheckoutLinkRequest, user: User = Depends(get_c
                 "success": True,
                 "method": "autopaycard",
                 "instructions": f"Ushbu summani ko'rsatilgan Uzcard kartaga o'tkazing: **** **** **** {card_last4}",
-                "amount": float(dec_amount)
+                "amount": float(dec_amount),
             }
     else:
         raise HTTPException(status_code=400, detail="Noma'lum to'lov usuli")
 
 
 # ================= OFFICIAL PAYMENT WEBHOOKS ================= #
+
 
 @router.post("/api/payments/click")
 @router.post("/api/payments/click/prepare")
@@ -146,20 +147,14 @@ async def click_webhook_handler(request: Request):
 async def payme_webhook_handler(request: Request):
     auth_header = request.headers.get("authorization")
     if not verify_payme_auth(auth_header):
-        return JSONResponse({
-            "jsonrpc": "2.0",
-            "id": None,
-            "error": {"code": -32504, "message": "Avtorizatsiya xatosi"}
-        })
+        return JSONResponse(
+            {"jsonrpc": "2.0", "id": None, "error": {"code": -32504, "message": "Avtorizatsiya xatosi"}}
+        )
 
     try:
         payload = await request.json()
     except Exception:
-        return JSONResponse({
-            "jsonrpc": "2.0",
-            "id": None,
-            "error": {"code": -32700, "message": "JSON xatosi"}
-        })
+        return JSONResponse({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "JSON xatosi"}})
 
     async with AsyncSessionLocal() as session:
         bot = get_bot()

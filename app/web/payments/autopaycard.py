@@ -1,4 +1,5 @@
 """Backward-compatibility re-export."""
+
 from app.services.payments.autopaycard import (
     AutoPayCardProvider,
     autopaycard_provider,

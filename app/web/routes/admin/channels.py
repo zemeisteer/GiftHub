@@ -9,7 +9,7 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel
-from sqlalchemy import func, select, or_, and_
+from sqlalchemy import and_, func, or_, select
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
@@ -46,6 +46,7 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
+
 @router.get("/api/admin/channels")
 async def get_admin_channels(admin: User = Depends(require_permission(Permission.SETTINGS_READ))):
     async with AsyncSessionLocal() as session:
@@ -58,7 +59,7 @@ async def get_admin_channels(admin: User = Depends(require_permission(Permission
                 "req_type": c.req_type,
                 "is_active": c.is_active,
                 "is_detected": c.is_detected,
-                "created_at": ""
+                "created_at": "",
             }
             for c in channels
         ]
@@ -73,8 +74,7 @@ class ChannelCreateRequest(BaseModel):
 
 @router.post("/api/admin/channels")
 async def create_channel_endpoint(
-    req: ChannelCreateRequest,
-    admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))
+    req: ChannelCreateRequest, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))
 ):
     async with AsyncSessionLocal() as session:
         link = req.username_or_link.strip()
@@ -102,37 +102,37 @@ async def create_channel_endpoint(
                 final_req_type = "external"
 
         ch = await queries.add_or_update_channel(
-            session=session,
-            username_or_link=link,
-            title=title,
-            req_type=final_req_type,
-            is_detected=req.is_detected
+            session=session, username_or_link=link, title=title, req_type=final_req_type, is_detected=req.is_detected
         )
         await queries.log_admin_action(
             session=session,
             admin_id=admin.id,
             admin_username=admin.username,
             action="Majburiy kanal qo'shdi/yangiladi",
-            details=f"{title} ({link}, {final_req_type})"
+            details=f"{title} ({link}, {final_req_type})",
         )
         return {"success": True, "channel_id": ch.id, "title": title, "req_type": ch.req_type}
 
 
 @router.delete("/api/admin/channels/{channel_id}")
-async def delete_channel_endpoint(channel_id: int, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))):
+async def delete_channel_endpoint(
+    channel_id: int, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))
+):
     async with AsyncSessionLocal() as session:
         await queries.delete_channel(session, channel_id)
         await queries.log_admin_action(
             session=session,
             admin_id=admin.id,
             admin_username=admin.username,
-            action=f"Majburiy kanalni o'chirdi (ID: {channel_id})"
+            action=f"Majburiy kanalni o'chirdi (ID: {channel_id})",
         )
         return {"success": True}
 
 
 @router.post("/api/admin/channels/{channel_id}/toggle")
-async def toggle_channel_endpoint(channel_id: int, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))):
+async def toggle_channel_endpoint(
+    channel_id: int, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))
+):
     async with AsyncSessionLocal() as session:
         ch = await session.get(ChannelRequirement, channel_id)
         if not ch:
@@ -147,7 +147,9 @@ class ChannelConfirmRequest(BaseModel):
 
 
 @router.post("/api/admin/channels/{channel_id}/confirm")
-async def confirm_channel_endpoint(channel_id: int, req: ChannelConfirmRequest, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))):
+async def confirm_channel_endpoint(
+    channel_id: int, req: ChannelConfirmRequest, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))
+):
     async with AsyncSessionLocal() as session:
         ch = await queries.confirm_detected_channel(session, channel_id, req.req_type)
         if not ch:
@@ -160,7 +162,11 @@ class ChannelTypeUpdateRequest(BaseModel):
 
 
 @router.post("/api/admin/channels/{channel_id}/type")
-async def update_channel_type_endpoint(channel_id: int, req: ChannelTypeUpdateRequest, admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE))):
+async def update_channel_type_endpoint(
+    channel_id: int,
+    req: ChannelTypeUpdateRequest,
+    admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE)),
+):
     async with AsyncSessionLocal() as session:
         ch = await queries.update_channel_type(session, channel_id, req.req_type)
         if not ch:
@@ -169,4 +175,3 @@ async def update_channel_type_endpoint(channel_id: int, req: ChannelTypeUpdateRe
 
 
 # ================= ADMIN PROMOCODES ================= #
-

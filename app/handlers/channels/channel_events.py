@@ -2,11 +2,15 @@ from aiogram import Router
 from aiogram.enums import ChatMemberStatus
 from aiogram.types import ChatJoinRequest, ChatMemberUpdated
 
+from app.core.logging import get_logger
 from data import config
 from database import queries
 from database.db import AsyncSessionLocal
 
+logger = get_logger(__name__)
+
 router = Router()
+
 
 @router.my_chat_member()
 async def on_bot_chat_member_updated(event: ChatMemberUpdated):
@@ -43,7 +47,7 @@ async def on_bot_chat_member_updated(event: ChatMemberUpdated):
                 req_type=default_req_type,
                 chat_id=chat.id,
                 is_detected=True,
-                is_active=False
+                is_active=False,
             )
 
         # Notify admins
@@ -59,10 +63,11 @@ async def on_bot_chat_member_updated(event: ChatMemberUpdated):
                         f"Chat ID: <code>{chat.id}</code>\n"
                         f"Shart turi: <b>{default_req_type}</b>\n\n"
                         f"⚙️ <i>Admin paneldan majburiy a'zolik turini tanlab, 'Tayyor' tugmasini bosing!</i>"
-                    )
+                    ),
                 )
             except Exception as e:
                 logger.warning(f"Adminga ({admin_id_str}) yangi kanal bildirishnomasini yuborishda xatolik: {e}")
+
 
 @router.chat_join_request()
 async def on_chat_join_request(event: ChatJoinRequest):
@@ -72,10 +77,6 @@ async def on_chat_join_request(event: ChatJoinRequest):
     """
     try:
         async with AsyncSessionLocal() as session:
-            await queries.record_user_join_request(
-                session=session,
-                user_id=event.from_user.id,
-                chat_id=event.chat.id
-            )
+            await queries.record_user_join_request(session=session, user_id=event.from_user.id, chat_id=event.chat.id)
     except Exception as e:
         logger.error(f"Join request yozishda xatolik (user: {event.from_user.id}, chat: {event.chat.id}): {e}")

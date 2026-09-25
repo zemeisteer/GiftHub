@@ -23,6 +23,7 @@ class PaymentTransaction(Base):
     Unified Payment Transaction Ledger.
     Guarantees idempotency via database-level unique constraint on (provider, provider_transaction_id).
     """
+
     __tablename__ = "payment_transactions"
     __table_args__ = (
         UniqueConstraint("provider", "provider_transaction_id", name="uq_provider_tx_id"),
@@ -30,14 +31,16 @@ class PaymentTransaction(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    provider = Column(String(32), nullable=False, index=True) # click, payme, autopaycard, manual_card
+    provider = Column(String(32), nullable=False, index=True)  # click, payme, autopaycard, manual_card
     provider_transaction_id = Column(String(128), nullable=False, index=True)
     idempotency_key = Column(String(128), unique=True, index=True, nullable=False)
     user_id = Column(BigInteger, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     amount = Column(Numeric(18, 2), nullable=False)
     currency = Column(String(8), default="UZS", nullable=False)
-    status = Column(String(32), default="pending", index=True) # pending, prepared, success, failed, cancelled, refunded
+    status = Column(
+        String(32), default="pending", index=True
+    )  # pending, prepared, success, failed, cancelled, refunded
     correlation_id = Column(String(64), nullable=True, index=True)
     raw_payload = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
@@ -50,6 +53,7 @@ class ClickTransaction(Base):
     """
     Dedicated Click Merchant transactions table (preserved for backward compatibility).
     """
+
     __tablename__ = "click_transactions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -57,13 +61,13 @@ class ClickTransaction(Base):
     service_id = Column(Integer, nullable=False)
     merchant_trans_id = Column(String(64), nullable=False, index=True)
     amount = Column(Numeric(18, 2), nullable=False)
-    action = Column(Integer, nullable=False) # 0: prepare, 1: complete
+    action = Column(Integer, nullable=False)  # 0: prepare, 1: complete
     error = Column(Integer, default=0)
     error_note = Column(String(255), default="Success")
     sign_time = Column(String(32), nullable=True)
     sign_string = Column(String(255), nullable=True)
     user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    status = Column(String(32), default="prepared") # prepared, completed, cancelled
+    status = Column(String(32), default="prepared")  # prepared, completed, cancelled
     created_at = Column(DateTime(timezone=True), default=utc_now)
 
 
@@ -71,6 +75,7 @@ class PaymeTransaction(Base):
     """
     Dedicated Payme Paycom transactions table (preserved for backward compatibility).
     """
+
     __tablename__ = "payme_transactions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -79,8 +84,8 @@ class PaymeTransaction(Base):
     create_time = Column(BigInteger, default=lambda: int(datetime.utcnow().timestamp() * 1000))
     perform_time = Column(BigInteger, default=0)
     cancel_time = Column(BigInteger, default=0)
-    amount = Column(BigInteger, nullable=False) # In tiyin (1 UZS = 100 tiyin)
-    state = Column(Integer, default=1) # 1: created, 2: performed, -1: cancelled created, -2: cancelled performed
+    amount = Column(BigInteger, nullable=False)  # In tiyin (1 UZS = 100 tiyin)
+    state = Column(Integer, default=1)  # 1: created, 2: performed, -1: cancelled created, -2: cancelled performed
     reason = Column(Integer, nullable=True)
     user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), default=utc_now)

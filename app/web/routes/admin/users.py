@@ -9,7 +9,7 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel
-from sqlalchemy import func, select, or_, and_
+from sqlalchemy import and_, func, or_, select
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
@@ -46,6 +46,7 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
+
 class BalanceAdjustRequest(BaseModel):
     amount: float
     reason: str
@@ -53,9 +54,7 @@ class BalanceAdjustRequest(BaseModel):
 
 @router.post("/api/admin/users/{user_id}/adjust-balance")
 async def adjust_user_balance_endpoint(
-    user_id: int,
-    req: BalanceAdjustRequest,
-    admin: User = Depends(require_permission(Permission.ADMINS_MANAGE))
+    user_id: int, req: BalanceAdjustRequest, admin: User = Depends(require_permission(Permission.ADMINS_MANAGE))
 ):
     """Manually adjusts user balance with required reason and immutable audit log."""
     async with AsyncSessionLocal() as session:
@@ -65,16 +64,10 @@ async def adjust_user_balance_endpoint(
             user_id=user_id,
             amount=Decimal(str(req.amount)),
             reason=req.reason,
-            admin_username=admin.username
+            admin_username=admin.username,
         )
         await session.commit()
-        return {
-            "success": True,
-            "user_id": user.id,
-            "new_balance": float(user.balance),
-            "amount_adjusted": req.amount
-        }
-
+        return {"success": True, "user_id": user.id, "new_balance": float(user.balance), "amount_adjusted": req.amount}
 
 
 @router.get("/api/admin/users")
@@ -82,30 +75,34 @@ async def get_admin_users(
     search: str | None = None,
     limit: int = 50,
     offset: int = 0,
-    admin: User = Depends(require_permission(Permission.USERS_READ))
+    admin: User = Depends(require_permission(Permission.USERS_READ)),
 ):
     async with AsyncSessionLocal() as session:
         users = await queries.list_users(session, search=search, limit=limit, offset=offset)
         from sqlalchemy import func, select
+
         result = []
         for u in users:
             q = await session.execute(
-                select(func.count(Order.id), func.sum(Order.total_price)).where(Order.user_id == u.id, Order.status.in_([OrderStatus.COMPLETED, "done"]))
+                select(func.count(Order.id), func.sum(Order.total_price)).where(
+                    Order.user_id == u.id, Order.status.in_([OrderStatus.COMPLETED, "done"])
+                )
             )
             count, total = q.first()
-            result.append({
-                "id": u.id,
-                "first_name": u.first_name,
-                "username": f"@{u.username}" if u.username else str(u.id),
-                "role": u.role,
-                "balance": round(float(u.balance)),
-                "orders_count": count or 0,
-                "total_spent": round(float(total or 0.0)),
-                "referrals_count": u.referrals_count,
-                "created_at": u.created_at.strftime("%d %b %Y") if u.created_at else ""
-            })
+            result.append(
+                {
+                    "id": u.id,
+                    "first_name": u.first_name,
+                    "username": f"@{u.username}" if u.username else str(u.id),
+                    "role": u.role,
+                    "balance": round(float(u.balance)),
+                    "orders_count": count or 0,
+                    "total_spent": round(float(total or 0.0)),
+                    "referrals_count": u.referrals_count,
+                    "created_at": u.created_at.strftime("%d %b %Y") if u.created_at else "",
+                }
+            )
         return result
-
 
 
 @router.get("/api/admin/admins")
@@ -118,7 +115,7 @@ async def get_admins_list(admin: User = Depends(require_permission(Permission.AD
                 "first_name": a.first_name,
                 "username": f"@{a.username}" if a.username else str(a.id),
                 "role": a.role,
-                "created_at": a.created_at.strftime("%d %b %Y") if a.created_at else ""
+                "created_at": a.created_at.strftime("%d %b %Y") if a.created_at else "",
             }
             for a in admins
         ]
@@ -150,7 +147,7 @@ async def add_admin_endpoint(req: AddAdminRequest, admin: User = Depends(require
             action=f"Yangi admin tayinladi: @{updated.username or updated.id}",
             entity_type="admin",
             entity_id=str(updated.id),
-            details=f"Rol: {req.role}"
+            details=f"Rol: {req.role}",
         )
         return {"success": True, "message": f"@{updated.username or updated.id} ga '{req.role}' roli berildi!"}
 
@@ -167,7 +164,7 @@ async def revoke_admin_endpoint(user_id: int, admin: User = Depends(require_perm
             admin_username=admin.username,
             action=f"Admin huquqini bekor qildi: ID {user_id}",
             entity_type="admin",
-            entity_id=str(user_id)
+            entity_id=str(user_id),
         )
         return {"success": True}
 
@@ -183,11 +180,10 @@ async def get_audit_logs(admin: User = Depends(require_permission(Permission.ADM
                 "action": log_item.action,
                 "entity_type": log_item.entity_type,
                 "details": log_item.details,
-                "created_at": log_item.created_at.strftime("%d %b, %H:%M") if log_item.created_at else ""
+                "created_at": log_item.created_at.strftime("%d %b, %H:%M") if log_item.created_at else "",
             }
             for log_item in logs
         ]
 
 
 # ================= ADMIN SUPPORT TICKETS ================= #
-

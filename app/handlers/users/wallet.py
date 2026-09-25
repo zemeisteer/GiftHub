@@ -11,8 +11,8 @@ from app.keyboards.shop_keyboards import (
     get_topup_amounts_keyboard,
     get_wallet_keyboard,
 )
-from app.state.user_states import BalanceTopupState
 from app.services.payments import generate_click_link, generate_payme_link
+from app.state.user_states import BalanceTopupState
 from data import config
 from database import queries
 from database.db import AsyncSessionLocal
@@ -22,6 +22,7 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 # ================= WALLET OVERVIEW ================= #
+
 
 @router.callback_query(F.data == "wallet:view")
 async def cb_wallet_view(callback: CallbackQuery, state: FSMContext):
@@ -50,6 +51,7 @@ async def cb_wallet_view(callback: CallbackQuery, state: FSMContext):
 
 
 # ================= TOP-UP AMOUNTS ================= #
+
 
 @router.callback_query(F.data == "wallet:topup")
 async def cb_wallet_topup(callback: CallbackQuery, state: FSMContext):
@@ -119,12 +121,7 @@ async def show_payment_methods(target_event, state: FSMContext, amount: int):
         "• <b>Karta (P2P):</b> Karta raqamiga pul o'tkazib, chek yuborish orqali"
     )
 
-    kb = get_payment_methods_keyboard(
-        amount=amount,
-        click_url=click_url,
-        payme_url=payme_url,
-        card_active=card_active
-    )
+    kb = get_payment_methods_keyboard(amount=amount, click_url=click_url, payme_url=payme_url, card_active=card_active)
 
     if isinstance(target_event, CallbackQuery):
         await target_event.message.edit_text(text, reply_markup=kb)
@@ -133,6 +130,7 @@ async def show_payment_methods(target_event, state: FSMContext, amount: int):
 
 
 # ================= CARD TRANSFER & RECEIPT UPLOAD ================= #
+
 
 @router.callback_query(F.data.startswith("pay:card:"))
 async def cb_pay_card(callback: CallbackQuery, state: FSMContext):
@@ -202,7 +200,7 @@ async def process_receipt_photo(message: Message, state: FSMContext, bot: Bot):
             tx_type="topup",
             method="card",
             status="pending",
-            note=f"Karta orqali to'lov cheki (kutilmoqda): {amount} so'm"
+            note=f"Karta orqali to'lov cheki (kutilmoqda): {amount} so'm",
         )
         session.add(tx)
         await session.commit()
@@ -217,7 +215,7 @@ async def process_receipt_photo(message: Message, state: FSMContext, bot: Bot):
         f"To'lov summasi: <b>{amount:,.0f} so'm</b>\n"
         "Holat: ⏳ <b>Admin tekshiruvida</b>\n\n"
         "Tez orada to'lov tasdiqlanib, balansingiz to'ldiriladi va sizga xabar beriladi.",
-        reply_markup=get_back_to_main_keyboard()
+        reply_markup=get_back_to_main_keyboard(),
     )
 
     # Notify admins with photo and approval buttons
@@ -233,17 +231,13 @@ async def process_receipt_photo(message: Message, state: FSMContext, bot: Bot):
     kb = get_admin_receipt_approval_keyboard(tx_id=tx_id, user_id=user_id, amount=float(amount))
     for adm in config.ADMINS:
         try:
-            await bot.send_photo(
-                chat_id=int(adm),
-                photo=photo_file_id,
-                caption=admin_caption,
-                reply_markup=kb
-            )
+            await bot.send_photo(chat_id=int(adm), photo=photo_file_id, caption=admin_caption, reply_markup=kb)
         except Exception as e:
             logger.warning(f"Adminga chek yuborishda xatolik ({adm}): {e}")
 
 
 # ================= ADMIN RECEIPT APPROVAL ================= #
+
 
 @router.callback_query(F.data.startswith("adm_chk:approve:"))
 async def cb_admin_approve_receipt(callback: CallbackQuery, bot: Bot):
@@ -271,7 +265,7 @@ async def cb_admin_approve_receipt(callback: CallbackQuery, bot: Bot):
             amount=amount,
             tx_type="topup",
             method="card",
-            note=f"Karta to'lovi tasdiqlandi (+{amount:,.0f} so'm)"
+            note=f"Karta to'lovi tasdiqlandi (+{amount:,.0f} so'm)",
         )
         new_balance = user.balance if user else amount
 
@@ -296,7 +290,7 @@ async def cb_admin_approve_receipt(callback: CallbackQuery, bot: Bot):
                 f"💳 Yangi balansingiz: <b>{new_balance:,.0f} so'm</b>\n\n"
                 "Endi bemalol Stars yoki Premium xarid qilishingiz mumkin!"
             ),
-            reply_markup=get_back_to_main_keyboard()
+            reply_markup=get_back_to_main_keyboard(),
         )
     except Exception as e:
         logger.warning(f"Foydalanuvchiga to'lov tasdiqlanganini bildirishda xatolik: {e}")
@@ -336,7 +330,7 @@ async def cb_admin_reject_receipt(callback: CallbackQuery, bot: Bot):
                 f"Summa: <b>{amount:,.0f} so'm</b>\n\n"
                 "Agar to'lovni haqiqatan amalga oshirgan bo'lsangiz, iltimos adminga murojaat qiling."
             ),
-            reply_markup=get_back_to_main_keyboard()
+            reply_markup=get_back_to_main_keyboard(),
         )
     except Exception as e:
         logger.warning(f"Foydalanuvchiga rad xabarini yuborishda xatolik: {e}")
@@ -346,10 +340,12 @@ async def cb_admin_reject_receipt(callback: CallbackQuery, bot: Bot):
 
 # ================= TRANSACTION HISTORY ================= #
 
+
 @router.callback_query(F.data == "wallet:history")
 async def cb_wallet_history(callback: CallbackQuery):
     user_id = callback.from_user.id
     from sqlalchemy import desc, select
+
     async with AsyncSessionLocal() as session:
         res = await session.execute(
             select(Transaction).where(Transaction.user_id == user_id).order_by(desc(Transaction.created_at)).limit(8)
@@ -357,10 +353,7 @@ async def cb_wallet_history(callback: CallbackQuery):
         txs = list(res.scalars().all())
 
     if not txs:
-        text = (
-            "🧾 <b>To'lovlar va tranzaksiyalar tarixi</b>\n\n"
-            "Sizda hali hech qanday tranzaksiya mavjud emas."
-        )
+        text = "🧾 <b>To'lovlar va tranzaksiyalar tarixi</b>\n\nSizda hali hech qanday tranzaksiya mavjud emas."
     else:
         text = "🧾 <b>Oxirgi tranzaksiyalaringiz tarixi:</b>\n\n"
         for t in txs:

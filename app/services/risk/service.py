@@ -20,7 +20,7 @@ class RiskService:
         risk_type: str,
         severity: str = RiskSeverity.MEDIUM.value,
         details: Optional[str] = None,
-        flag_user: bool = False
+        flag_user: bool = False,
     ) -> RiskAudit:
         """Logs a suspicious activity event and optionally flags the user."""
         audit = RiskAudit(
@@ -28,7 +28,7 @@ class RiskService:
             risk_type=risk_type,
             severity=severity,
             details=details,
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(timezone.utc),
         )
         session.add(audit)
 
@@ -48,11 +48,14 @@ class RiskService:
         Returns False if velocity limit (> 10 referrals in 1 hour) is exceeded.
         """
         one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
-        count = await session.scalar(
-            select(func.count(User.id)).where(
-                and_(User.referrer_id == referrer_id, User.created_at >= one_hour_ago)
+        count = (
+            await session.scalar(
+                select(func.count(User.id)).where(
+                    and_(User.referrer_id == referrer_id, User.created_at >= one_hour_ago)
+                )
             )
-        ) or 0
+            or 0
+        )
 
         if count >= 10:
             await RiskService.log_risk_event(
@@ -60,7 +63,7 @@ class RiskService:
                 user_id=referrer_id,
                 risk_type=RiskType.REFERRAL_VELOCITY.value,
                 severity=RiskSeverity.HIGH.value,
-                details=f"Referral velocity exceeded: {count} referrals within 1 hour."
+                details=f"Referral velocity exceeded: {count} referrals within 1 hour.",
             )
             return False
         return True
@@ -72,15 +75,18 @@ class RiskService:
         Returns False if user has > 10 unpaid/created orders in the last 15 minutes.
         """
         fifteen_min_ago = datetime.now(timezone.utc) - timedelta(minutes=15)
-        count = await session.scalar(
-            select(func.count(Order.id)).where(
-                and_(
-                    Order.user_id == user_id,
-                    Order.status.in_([OrderStatus.CREATED.value, OrderStatus.AWAITING_PAYMENT.value]),
-                    Order.created_at >= fifteen_min_ago
+        count = (
+            await session.scalar(
+                select(func.count(Order.id)).where(
+                    and_(
+                        Order.user_id == user_id,
+                        Order.status.in_([OrderStatus.CREATED.value, OrderStatus.AWAITING_PAYMENT.value]),
+                        Order.created_at >= fifteen_min_ago,
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         if count >= 10:
             await RiskService.log_risk_event(
@@ -88,7 +94,7 @@ class RiskService:
                 user_id=user_id,
                 risk_type=RiskType.CHECKOUT_SPAM.value,
                 severity=RiskSeverity.MEDIUM.value,
-                details=f"Checkout spam detected: {count} pending orders in last 15 minutes."
+                details=f"Checkout spam detected: {count} pending orders in last 15 minutes.",
             )
             return False
         return True

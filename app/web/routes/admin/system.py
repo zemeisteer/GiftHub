@@ -9,7 +9,7 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel
-from sqlalchemy import func, select, or_, and_
+from sqlalchemy import and_, func, or_, select
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
@@ -47,9 +47,10 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-from app.services.worker import get_distributed_worker_heartbeat, get_worker_status
-from app.services.providers.circuit_breaker import circuit_breaker
 from app.core.redis import get_redis_client
+from app.services.providers.circuit_breaker import circuit_breaker
+from app.services.worker import get_distributed_worker_heartbeat, get_worker_status
+
 
 @router.get("/api/admin/system/health")
 async def get_admin_system_health(admin: User = Depends(require_permission(Permission.SETTINGS_READ))):
@@ -58,7 +59,7 @@ async def get_admin_system_health(admin: User = Depends(require_permission(Permi
     bot_info = {
         "status": "online" if (bot and settings.BOT_TOKEN) else "degraded",
         "has_token": bool(settings.BOT_TOKEN),
-        "mode": getattr(settings, "TELEGRAM_MODE", "polling")
+        "mode": getattr(settings, "TELEGRAM_MODE", "polling"),
     }
 
     # DB
@@ -66,6 +67,7 @@ async def get_admin_system_health(admin: User = Depends(require_permission(Permi
     try:
         async with AsyncSessionLocal() as session:
             from sqlalchemy import text
+
             await session.execute(text("SELECT 1"))
             db_ok = True
     except Exception as e:
@@ -81,7 +83,7 @@ async def get_admin_system_health(admin: User = Depends(require_permission(Permi
         except Exception:
             redis_ok = False
     else:
-        redis_ok = (settings.ENVIRONMENT != "production")
+        redis_ok = settings.ENVIRONMENT != "production"
 
     # Worker heartbeat
     worker_heartbeat = await get_distributed_worker_heartbeat()
@@ -90,10 +92,7 @@ async def get_admin_system_health(admin: User = Depends(require_permission(Permi
     providers = {}
     for p in ["click", "payme", "autopaycard", "fragment"]:
         state = circuit_breaker.get_state(p)
-        providers[p] = {
-            "circuit": state.value,
-            "status": "healthy" if state.value == "CLOSED" else "degraded"
-        }
+        providers[p] = {"circuit": state.value, "status": "healthy" if state.value == "CLOSED" else "degraded"}
 
     return {
         "status": "healthy" if (db_ok and redis_ok and worker_heartbeat.get("status") == "online") else "degraded",

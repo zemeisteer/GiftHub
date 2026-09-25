@@ -24,16 +24,13 @@ router = APIRouter(tags=["User & Gate"])
 async def get_me(user: User = Depends(get_current_user)):
     async with AsyncSessionLocal() as session:
         # Count total orders
-        res = await session.execute(
-            select(func.count(Order.id)).where(Order.user_id == user.id)
-        )
+        res = await session.execute(select(func.count(Order.id)).where(Order.user_id == user.id))
         orders_count = res.scalar() or 0
 
         # Count completed orders
         res_done = await session.execute(
             select(func.count(Order.id)).where(
-                Order.user_id == user.id,
-                Order.status.in_([OrderStatus.COMPLETED, "done"])
+                Order.user_id == user.id, Order.status.in_([OrderStatus.COMPLETED, "done"])
             )
         )
         completed_orders = res_done.scalar() or 0
@@ -50,7 +47,7 @@ async def get_me(user: User = Depends(get_current_user)):
             "referral_earnings": round(float(user.referral_earnings)),
             "orders_count": orders_count,
             "completed_orders": completed_orders,
-            "created_at": user.created_at.strftime("%d %b %Y") if user.created_at else ""
+            "created_at": user.created_at.strftime("%d %b %Y") if user.created_at else "",
         }
 
 
@@ -112,15 +109,17 @@ async def check_gate_channels(user: User = Depends(get_current_user)):
             if not ch_link.startswith("http"):
                 ch_link = f"https://t.me/{ch_link.lstrip('@')}"
 
-            results.append({
-                "id": ch.id,
-                "title": channel_title,
-                "link": ch_link,
-                "display_name": channel_title,
-                "username": ch.username_or_link,
-                "type": ch.req_type,
-                "passed": is_member
-            })
+            results.append(
+                {
+                    "id": ch.id,
+                    "title": channel_title,
+                    "link": ch_link,
+                    "display_name": channel_title,
+                    "username": ch.username_or_link,
+                    "type": ch.req_type,
+                    "passed": is_member,
+                }
+            )
 
         return {"all_passed": all_passed, "channels": results}
 
@@ -144,7 +143,7 @@ async def get_notifications_endpoint(user: User = Depends(get_current_user)):
                 "message": n.message,
                 "related_entity": n.related_entity,
                 "is_read": n.is_read,
-                "created_at": n.created_at.strftime("%d %b, %H:%M") if n.created_at else ""
+                "created_at": n.created_at.strftime("%d %b, %H:%M") if n.created_at else "",
             }
             for n in notifs
         ]
@@ -180,7 +179,7 @@ async def create_ticket_endpoint(req: TicketCreateRequest, user: User = Depends(
             subject=req.subject,
             category=req.category,
             initial_message=req.message,
-            order_id=req.order_id
+            order_id=req.order_id,
         )
         return {"success": True, "ticket_id": ticket.id}
 
@@ -196,7 +195,7 @@ async def list_user_tickets_endpoint(user: User = Depends(get_current_user)):
                 "category": t.category,
                 "status": t.status,
                 "order_id": t.order_id,
-                "created_at": t.created_at.strftime("%d %b, %H:%M") if t.created_at else ""
+                "created_at": t.created_at.strftime("%d %b, %H:%M") if t.created_at else "",
             }
             for t in tickets
         ]
@@ -219,7 +218,7 @@ async def get_ticket_messages_endpoint(ticket_id: int, user: User = Depends(get_
                 "sender_id": m.sender_id,
                 "sender_type": m.sender_type,
                 "text": m.text,
-                "created_at": m.created_at.strftime("%d %b, %H:%M") if m.created_at else ""
+                "created_at": m.created_at.strftime("%d %b, %H:%M") if m.created_at else "",
             }
             for m in messages
         ]
@@ -238,10 +237,6 @@ async def reply_ticket_endpoint(ticket_id: int, req: TicketReplyRequest, user: U
 
         sender_type = "admin" if (user.role != "user" or user.id in settings.ADMINS) else "user"
         msg = await support_service.add_reply(
-            session=session,
-            ticket_id=ticket_id,
-            sender_id=user.id,
-            sender_type=sender_type,
-            text=req.text
+            session=session, ticket_id=ticket_id, sender_id=user.id, sender_type=sender_type, text=req.text
         )
         return {"success": True, "message_id": msg.id}

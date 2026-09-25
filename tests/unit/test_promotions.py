@@ -20,18 +20,14 @@ async def test_apply_valid_percentage_promo(db_session: AsyncSession, sample_use
         min_order_amount=Decimal("50000.00"),
         max_uses=100,
         max_uses_per_user=1,
-        is_active=True
+        is_active=True,
     )
     db_session.add(code)
     await db_session.commit()
 
     order_amount = Decimal("100000.00")
     res = await promo_service.apply_promo_code(
-        session=db_session,
-        code_str="PERCENT10",
-        user_id=sample_user.id,
-        order_total=order_amount,
-        product_type="stars"
+        session=db_session, code_str="PERCENT10", user_id=sample_user.id, order_total=order_amount, product_type="stars"
     )
     assert res["success"] is True
     # 10% of 100,000 = 10,000
@@ -45,7 +41,7 @@ async def test_apply_expired_promo(db_session: AsyncSession, sample_user: User):
         reward_type="fixed_discount",
         reward_value=Decimal("10000.00"),
         is_active=True,
-        expires_at=datetime.now(timezone.utc) - timedelta(days=1)
+        expires_at=datetime.now(timezone.utc) - timedelta(days=1),
     )
     db_session.add(code)
     await db_session.commit()
@@ -56,7 +52,7 @@ async def test_apply_expired_promo(db_session: AsyncSession, sample_user: User):
             code_str="EXPIRED10",
             user_id=sample_user.id,
             order_total=Decimal("50000.00"),
-            product_type="stars"
+            product_type="stars",
         )
 
 
@@ -67,7 +63,7 @@ async def test_apply_promo_user_limit_exceeded(db_session: AsyncSession, sample_
         reward_type="fixed_discount",
         reward_value=Decimal("5000.00"),
         max_uses_per_user=1,
-        is_active=True
+        is_active=True,
     )
     db_session.add(code)
     await db_session.commit()
@@ -79,7 +75,7 @@ async def test_apply_promo_user_limit_exceeded(db_session: AsyncSession, sample_
         user_id=sample_user.id,
         order_total=Decimal("50000.00"),
         product_type="stars",
-        order_id=1
+        order_id=1,
     )
 
     # Second redemption attempt should fail because max_uses_per_user=1
@@ -89,5 +85,5 @@ async def test_apply_promo_user_limit_exceeded(db_session: AsyncSession, sample_
             code_str="ONCEONLY",
             user_id=sample_user.id,
             order_total=Decimal("50000.00"),
-            product_type="stars"
+            product_type="stars",
         )

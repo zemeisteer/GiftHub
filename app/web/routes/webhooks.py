@@ -12,7 +12,7 @@ router = APIRouter(tags=["Webhooks"])
 @router.post("/webhook/telegram")
 async def telegram_webhook(
     request: Request,
-    x_telegram_bot_api_secret_token: str | None = Header(None, alias="X-Telegram-Bot-Api-Secret-Token")
+    x_telegram_bot_api_secret_token: str | None = Header(None, alias="X-Telegram-Bot-Api-Secret-Token"),
 ):
     """
     Receives Telegram updates in production Webhook mode.
@@ -27,7 +27,9 @@ async def telegram_webhook(
     bot = get_bot()
     if bot:
         from aiogram.types import Update
+
         from main import dp
+
         update_obj = Update(**update_dict)
         await dp.feed_webhook_update(bot, update_obj)
         return {"ok": True}

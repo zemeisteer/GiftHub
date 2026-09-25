@@ -14,6 +14,7 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 def build_engine(db_url: str) -> AsyncEngine:
     if "postgresql" in db_url:
         return create_async_engine(
@@ -31,20 +32,13 @@ def build_engine(db_url: str) -> AsyncEngine:
             if data_dir:
                 os.makedirs(data_dir, exist_ok=True)
         return create_async_engine(
-            db_url,
-            echo=False,
-            connect_args={"check_same_thread": False} if "sqlite" in db_url else {}
+            db_url, echo=False, connect_args={"check_same_thread": False} if "sqlite" in db_url else {}
         )
 
 
 engine = build_engine(settings.DB_URL)
 
-AsyncSessionLocal = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=False
-)
+AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False, autoflush=False)
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:

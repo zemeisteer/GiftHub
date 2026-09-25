@@ -23,12 +23,7 @@ test_engine = create_async_engine(
     poolclass=StaticPool,
 )
 
-TestingSessionLocal = async_sessionmaker(
-    bind=test_engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=False
-)
+TestingSessionLocal = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False, autoflush=False)
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -46,20 +41,15 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
             star_unit_price_uzs=Decimal("180.00"),
             minimum_margin=Decimal("5.00"),
             maximum_discount=Decimal("30.00"),
-            minimum_price=Decimal("1000.00")
+            minimum_price=Decimal("1000.00"),
         )
-        pay_setting = PaymentSetting(
-            id=1,
-            click_active=True,
-            payme_active=True,
-            card_active=True
-        )
+        pay_setting = PaymentSetting(id=1, click_active=True, payme_active=True, card_active=True)
         ref_setting = ReferralSetting(
             id=1,
             bonus_percent=Decimal("5.00"),
             min_purchase_uzs=Decimal("10000.00"),
             auto_reward=True,
-            require_purchase=True
+            require_purchase=True,
         )
         session.add_all([pricing, pay_setting, ref_setting])
         await session.commit()
@@ -78,7 +68,7 @@ async def sample_user(db_session: AsyncSession) -> User:
         first_name="Test",
         last_name="Buyer",
         balance=Decimal("150000.00"),
-        role="user"
+        role="user",
     )
     db_session.add(user)
     await db_session.commit()
@@ -94,7 +84,7 @@ async def sample_admin(db_session: AsyncSession) -> User:
         first_name="Super",
         last_name="Admin",
         balance=Decimal("0.00"),
-        role="super_admin"
+        role="super_admin",
     )
     db_session.add(admin)
     await db_session.commit()
@@ -107,20 +97,17 @@ def make_telegram_init_data(bot_token: str, user_id: int, username: str = "testu
     if auth_date is None:
         auth_date = int(time.time())
     user_json = f'{{"id":{user_id},"first_name":"Test","username":"{username}","language_code":"uz"}}'
-    
-    params = {
-        "auth_date": str(auth_date),
-        "query_id": "AAHdF6IQAAAAAN0XohDhr123",
-        "user": user_json
-    }
-    
+
+    params = {"auth_date": str(auth_date), "query_id": "AAHdF6IQAAAAAN0XohDhr123", "user": user_json}
+
     # Sort keys
     data_check_arr = [f"{k}={params[k]}" for k in sorted(params.keys())]
     data_check_string = "\n".join(data_check_arr)
-    
+
     secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
     computed_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-    
+
     import urllib.parse
+
     params["hash"] = computed_hash
     return urllib.parse.urlencode(params)

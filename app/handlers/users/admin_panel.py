@@ -30,6 +30,7 @@ from database.models import Order, User
 router = Router()
 logger = logging.getLogger(__name__)
 
+
 async def is_admin_user(user_id: int, session) -> bool:
     if str(user_id) in config.ADMINS:
         return True
@@ -50,19 +51,13 @@ async def cmd_admin(message: Message):
 
     buttons = []
     if admin_url and admin_url.startswith("https://"):
-        buttons.append([
-            InlineKeyboardButton(text="📱 Admin Web App (Telegram ichida)", web_app=WebAppInfo(url=admin_url))
-        ])
-        buttons.append([
-            InlineKeyboardButton(text="🌐 Brauzerda ochish (Tunnel orqali)", url=admin_url)
-        ])
+        buttons.append(
+            [InlineKeyboardButton(text="📱 Admin Web App (Telegram ichida)", web_app=WebAppInfo(url=admin_url))]
+        )
+        buttons.append([InlineKeyboardButton(text="🌐 Brauzerda ochish (Tunnel orqali)", url=admin_url)])
     else:
-        buttons.append([
-            InlineKeyboardButton(text="🌐 Web Appni ochish", url=admin_url or local_url)
-        ])
-    buttons.append([
-        InlineKeyboardButton(text="📊 Bot ichida boshqarish (Inline)", callback_data="admin:menu")
-    ])
+        buttons.append([InlineKeyboardButton(text="🌐 Web Appni ochish", url=admin_url or local_url)])
+    buttons.append([InlineKeyboardButton(text="📊 Bot ichida boshqarish (Inline)", callback_data="admin:menu")])
 
     text = (
         "⚙️ <b>GiftHub — Administrator Boshqaruv Markazi</b>\n\n"
@@ -72,10 +67,7 @@ async def cmd_admin(message: Message):
         "Boshqarish usulini tanlang:"
     )
 
-    await message.answer(
-        text,
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
-    )
+    await message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 
 @router.callback_query(F.data == "admin:menu")
@@ -111,6 +103,7 @@ async def show_admin_dashboard(event, state: FSMContext = None):
     kb = get_admin_main_keyboard()
     if isinstance(event, CallbackQuery):
         from aiogram.exceptions import TelegramBadRequest
+
         try:
             await event.message.edit_text(text, reply_markup=kb)
         except TelegramBadRequest:
@@ -124,6 +117,7 @@ async def show_admin_dashboard(event, state: FSMContext = None):
 
 # ================= ADMIN STATS ================= #
 
+
 @router.callback_query(F.data == "admin:stats")
 async def cb_admin_stats(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -133,7 +127,9 @@ async def cb_admin_stats(callback: CallbackQuery):
             return
 
         total_users = await session.scalar(select(func.count(User.id)))
-        active_buyers = await session.scalar(select(func.count(func.distinct(Order.user_id))).where(Order.status == "done"))
+        active_buyers = await session.scalar(
+            select(func.count(func.distinct(Order.user_id))).where(Order.status == "done")
+        )
         total_orders = await session.scalar(select(func.count(Order.id)))
         done_orders = await session.scalar(select(func.count(Order.id)).where(Order.status == "done"))
         total_revenue = await session.scalar(select(func.sum(Order.total_price)).where(Order.status == "done")) or 0.0
@@ -161,6 +157,7 @@ async def cb_admin_stats(callback: CallbackQuery):
 
 # ================= ADMIN ORDERS ================= #
 
+
 @router.callback_query(F.data == "admin:orders")
 async def cb_admin_orders(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -170,8 +167,11 @@ async def cb_admin_orders(callback: CallbackQuery):
             return
         orders = await queries.list_all_orders(session=session, limit=10)
 
-    text = "📦 <b>Oxirgi buyurtmalar ro'yxati:</b>\n\nBatafsil ko'rish yoki holatini o'zgartirish uchun buyurtmani bosing:"
+    text = (
+        "📦 <b>Oxirgi buyurtmalar ro'yxati:</b>\n\nBatafsil ko'rish yoki holatini o'zgartirish uchun buyurtmani bosing:"
+    )
     from aiogram.exceptions import TelegramBadRequest
+
     try:
         await callback.message.edit_text(text, reply_markup=get_admin_orders_keyboard(orders))
         await callback.answer("✅ Ro'yxat yangilandi!")
@@ -201,17 +201,21 @@ async def cb_admin_order_detail(callback: CallbackQuery):
             f"👤 Xaridor: <b>{buyer_name}</b> (ID: <code>{order.user_id}</code>)\n"
             f"🎁 Mahsulot: <b>{order.item_title}</b>\n"
             f"👤 Qabul qiluvchi: <b>@{rcp}</b>\n"
-        f"💰 Narxi: <b>{order.total_price:,.0f} so'm</b>\n"
-        f"📉 Tannarxi: <b>{order.cost_price:,.0f} so'm</b>\n"
-        f"📊 Holati: <b>{order.status.upper()}</b>\n"
-        f"📅 Sana: <code>{order.created_at.strftime('%d.%m.%Y %H:%M')}</code>"
-    )
+            f"💰 Narxi: <b>{order.total_price:,.0f} so'm</b>\n"
+            f"📉 Tannarxi: <b>{order.cost_price:,.0f} so'm</b>\n"
+            f"📊 Holati: <b>{order.status.upper()}</b>\n"
+            f"📅 Sana: <code>{order.created_at.strftime('%d.%m.%Y %H:%M')}</code>"
+        )
 
-    is_service = (order.product_type == "service")
+    is_service = order.product_type == "service"
     try:
-        await callback.message.edit_text(text, reply_markup=get_admin_order_action_keyboard(order_id, is_service=is_service))
+        await callback.message.edit_text(
+            text, reply_markup=get_admin_order_action_keyboard(order_id, is_service=is_service)
+        )
     except Exception:
-        await callback.message.answer(text, reply_markup=get_admin_order_action_keyboard(order_id, is_service=is_service))
+        await callback.message.answer(
+            text, reply_markup=get_admin_order_action_keyboard(order_id, is_service=is_service)
+        )
     await callback.answer()
 
 
@@ -229,10 +233,12 @@ async def cb_admin_order_mark_done(callback: CallbackQuery, bot: Bot):
                         f"🔖 Buyurtma kodi: <code>{order.order_code}</code>\n"
                         f"📦 Mahsulot: <b>{order.item_title}</b>\n"
                         f"Xaridingiz uchun rahmat!"
-                    )
+                    ),
                 )
             except Exception as e:
-                logger.warning(f"Foydalanuvchiga buyurtma bajarilgani haqida xabar yuborishda xatolik ({order.user_id}): {e}")
+                logger.warning(
+                    f"Foydalanuvchiga buyurtma bajarilgani haqida xabar yuborishda xatolik ({order.user_id}): {e}"
+                )
 
     await callback.answer("✅ Buyurtma bajarildi deb belgilandi!", show_alert=True)
     await cb_admin_orders(callback)
@@ -251,16 +257,19 @@ async def cb_admin_order_cancel(callback: CallbackQuery, bot: Bot):
                         f"❌ <b>Buyurtmangiz bekor qilindi.</b>\n\n"
                         f"🔖 Buyurtma kodi: <code>{order.order_code}</code>\n"
                         f"💰 <b>{order.total_price:,.0f} so'm</b> mablag' hisobingizga qaytarildi."
-                    )
+                    ),
                 )
             except Exception as e:
-                logger.warning(f"Foydalanuvchiga buyurtma bekor qilingani haqida xabar yuborishda xatolik ({order.user_id}): {e}")
+                logger.warning(
+                    f"Foydalanuvchiga buyurtma bekor qilingani haqida xabar yuborishda xatolik ({order.user_id}): {e}"
+                )
 
     await callback.answer("❌ Buyurtma bekor qilindi va pul qaytarildi!", show_alert=True)
     await cb_admin_orders(callback)
 
 
 # ================= SERVICE / AI LINK DELIVERY ================= #
+
 
 @router.callback_query(F.data.startswith("adm_srv:send:"))
 async def cb_admin_deliver_service_start(callback: CallbackQuery, state: FSMContext):
@@ -288,15 +297,12 @@ async def cb_admin_deliver_service_start(callback: CallbackQuery, state: FSMCont
 
     await state.set_state(AdminDeliverServiceState.waiting_for_link)
     await state.update_data(
-        order_id=order.id,
-        order_code=order.order_code,
-        item_title=order.item_title,
-        buyer_id=order.user_id
+        order_id=order.id, order_code=order.order_code, item_title=order.item_title, buyer_id=order.user_id
     )
 
-    cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Bekor qilish", callback_data=f"adm_srv:back:{order.id}")]
-    ])
+    cancel_kb = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="🔙 Bekor qilish", callback_data=f"adm_srv:back:{order.id}")]]
+    )
 
     text = (
         f"🔗 <b>Buyurtma #{order.order_code} — Taklif havolasini yuborish</b>\n\n"
@@ -344,10 +350,12 @@ async def cb_admin_service_order_cancel(callback: CallbackQuery, bot: Bot):
                     f"🔖 Buyurtma kodi: <code>{order.order_code}</code>\n"
                     f"📦 Mahsulot: <b>{order.item_title}</b>\n"
                     f"💰 <b>{order.total_price:,.0f} so'm</b> mablag' hisobingizga qaytarildi."
-                )
+                ),
             )
         except Exception as e:
-            logger.warning(f"Foydalanuvchiga buyurtma bekor qilingani haqida xabar yuborishda xatolik ({order.user_id}): {e}")
+            logger.warning(
+                f"Foydalanuvchiga buyurtma bekor qilingani haqida xabar yuborishda xatolik ({order.user_id}): {e}"
+            )
 
     await callback.answer("❌ Buyurtma bekor qilindi va mablag' qaytarildi!", show_alert=True)
     try:
@@ -397,20 +405,19 @@ async def msg_admin_deliver_service_link(message: Message, state: FSMContext, bo
     )
 
     if raw_text.startswith("http://") or raw_text.startswith("https://"):
-        user_kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🚀 Havolaga o'tish", url=raw_text)],
-            [InlineKeyboardButton(text="🔙 Bosh menyu", callback_data="menu:main")]
-        ])
+        user_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🚀 Havolaga o'tish", url=raw_text)],
+                [InlineKeyboardButton(text="🔙 Bosh menyu", callback_data="menu:main")],
+            ]
+        )
     else:
         user_kb = get_back_to_main_keyboard()
 
     user_sent = True
     try:
         await bot.send_message(
-            chat_id=order.user_id,
-            text=user_notify_text,
-            reply_markup=user_kb,
-            disable_web_page_preview=False
+            chat_id=order.user_id, text=user_notify_text, reply_markup=user_kb, disable_web_page_preview=False
         )
     except Exception as e:
         logger.error(f"Foydalanuvchiga havola yuborishda xatolik ({order.user_id}): {e}")
@@ -430,8 +437,8 @@ async def msg_admin_deliver_service_link(message: Message, state: FSMContext, bo
     await message.answer(admin_confirm_text)
 
 
-
 # ================= ADMIN CHANNELS ================= #
+
 
 @router.callback_query(F.data == "admin:channels")
 async def cb_admin_channels(callback: CallbackQuery):
@@ -495,14 +502,12 @@ async def cb_admin_channel_view(callback: CallbackQuery):
         f"📊 Turi: <b>{ch.req_type}</b>\n"
         f"⚙️ Holati: <b>{st}</b>\n"
     )
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="🗑 O'chirish", callback_data=f"adm_ch:del:{ch.id}")
-        ],
-        [
-            InlineKeyboardButton(text="🔙 Kanallarga qaytish", callback_data="admin:channels")
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🗑 O'chirish", callback_data=f"adm_ch:del:{ch.id}")],
+            [InlineKeyboardButton(text="🔙 Kanallarga qaytish", callback_data="admin:channels")],
         ]
-    ])
+    )
     try:
         await callback.message.edit_text(text, reply_markup=kb)
     except Exception:
@@ -545,6 +550,7 @@ async def cb_admin_card(callback: CallbackQuery):
 
 # ================= ADMIN BROADCAST ================= #
 
+
 @router.callback_query(F.data == "admin:broadcast")
 async def cb_admin_broadcast(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
@@ -584,13 +590,9 @@ async def process_admin_broadcast_message(message: Message, state: FSMContext, b
 
     for uid in recipients:
         try:
-            await bot.copy_message(
-                chat_id=uid,
-                from_chat_id=message.chat.id,
-                message_id=message.message_id
-            )
+            await bot.copy_message(chat_id=uid, from_chat_id=message.chat.id, message_id=message.message_id)
             success_count += 1
-            await asyncio.sleep(0.04) # ~25 msgs/sec safe rate limit
+            await asyncio.sleep(0.04)  # ~25 msgs/sec safe rate limit
         except Exception:
             fail_count += 1
 
@@ -598,11 +600,12 @@ async def process_admin_broadcast_message(message: Message, state: FSMContext, b
         f"✅ <b>Xabarnoma yuborish yakunlandi!</b>\n\n"
         f"• Muvaffaqiyatli: <b>{success_count} ta</b>\n"
         f"• Yuborilmadi (bloklagan): <b>{fail_count} ta</b>",
-        reply_markup=get_admin_main_keyboard()
+        reply_markup=get_admin_main_keyboard(),
     )
 
 
 # ================= ADMIN PRICES ================= #
+
 
 @router.callback_query(F.data == "admin:prices")
 async def cb_admin_prices(callback: CallbackQuery):
@@ -624,16 +627,12 @@ async def cb_admin_prices(callback: CallbackQuery):
     admin_url = config.get_admin_app_url() if hasattr(config, "get_admin_app_url") else config.ADMIN_APP_URL
     rows = []
     if admin_url and admin_url.startswith("https://"):
-        rows.append([
-            InlineKeyboardButton(text="⚙️ Narxlarni o'zgartirish (Web App)", web_app=WebAppInfo(url=f"{admin_url}"))
-        ])
+        rows.append(
+            [InlineKeyboardButton(text="⚙️ Narxlarni o'zgartirish (Web App)", web_app=WebAppInfo(url=f"{admin_url}"))]
+        )
     else:
-        rows.append([
-            InlineKeyboardButton(text="⚙️ Narxlarni o'zgartirish (Web App)", url=admin_url or "https://t.me")
-        ])
-    rows.append([
-        InlineKeyboardButton(text="🔙 Admin panelga qaytish", callback_data="admin:menu")
-    ])
+        rows.append([InlineKeyboardButton(text="⚙️ Narxlarni o'zgartirish (Web App)", url=admin_url or "https://t.me")])
+    rows.append([InlineKeyboardButton(text="🔙 Admin panelga qaytish", callback_data="admin:menu")])
 
     try:
         await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))

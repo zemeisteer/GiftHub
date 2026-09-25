@@ -19,7 +19,7 @@ class OutboxService:
         aggregate_type: str,
         aggregate_id: str,
         payload: Dict[str, Any],
-        correlation_id: Optional[str] = None
+        correlation_id: Optional[str] = None,
     ) -> OutboxEvent:
         """
         Creates an OutboxEvent within the caller's active database transaction.
@@ -37,7 +37,7 @@ class OutboxService:
             max_retries=5,
             next_retry_at=now,
             correlation_id=cid,
-            created_at=now
+            created_at=now,
         )
         session.add(event)
         await session.flush()
@@ -48,11 +48,7 @@ class OutboxService:
 
     @classmethod
     async def claim_pending_events(
-        cls,
-        session: AsyncSession,
-        worker_id: str = "worker-1",
-        limit: int = 10,
-        lock_timeout_seconds: int = 300
+        cls, session: AsyncSession, worker_id: str = "worker-1", limit: int = 10, lock_timeout_seconds: int = 300
     ) -> List[OutboxEvent]:
         """
         Safely claims pending outbox events for a specific worker.
@@ -66,21 +62,16 @@ class OutboxService:
 
         is_ready = and_(
             OutboxEvent.status.in_([OutboxStatus.PENDING.value, OutboxStatus.RETRY.value]),
-            or_(OutboxEvent.next_retry_at.is_(None), OutboxEvent.next_retry_at <= now)
+            or_(OutboxEvent.next_retry_at.is_(None), OutboxEvent.next_retry_at <= now),
         )
         is_stale = and_(
             OutboxEvent.status == OutboxStatus.PROCESSING.value,
-            or_(OutboxEvent.locked_at.is_(None), OutboxEvent.locked_at <= stale_threshold)
+            or_(OutboxEvent.locked_at.is_(None), OutboxEvent.locked_at <= stale_threshold),
         )
 
         stmt = (
             select(OutboxEvent)
-            .where(
-                and_(
-                    or_(is_ready, is_stale),
-                    OutboxEvent.retry_count < OutboxEvent.max_retries
-                )
-            )
+            .where(and_(or_(is_ready, is_stale), OutboxEvent.retry_count < OutboxEvent.max_retries))
             .order_by(OutboxEvent.created_at.asc())
             .limit(limit)
         )
@@ -105,39 +96,24 @@ class OutboxService:
 
     @classmethod
     async def fetch_pending_events(
-        cls,
-        session: AsyncSession,
-        limit: int = 20,
-        worker_id: str = "worker-default"
+        cls, session: AsyncSession, limit: int = 20, worker_id: str = "worker-default"
     ) -> List[OutboxEvent]:
         """Fetches and claims pending outbox events ordered by creation time."""
         return await cls.claim_pending_events(session=session, worker_id=worker_id, limit=limit)
 
     @staticmethod
-    async def mark_processed(
-        session: AsyncSession,
-        event_id: int
-    ) -> None:
+    async def mark_processed(session: AsyncSession, event_id: int) -> None:
         """Marks outbox event as successfully processed."""
         now = datetime.now(timezone.utc)
         await session.execute(
             update(OutboxEvent)
             .where(OutboxEvent.id == event_id)
-            .values(
-                status=OutboxStatus.PROCESSED.value,
-                processed_at=now,
-                locked_by=None,
-                locked_at=None
-            )
+            .values(status=OutboxStatus.PROCESSED.value, processed_at=now, locked_by=None, locked_at=None)
         )
         await session.flush()
 
     @staticmethod
-    async def mark_failed(
-        session: AsyncSession,
-        event_id: int,
-        error: str
-    ) -> None:
+    async def mark_failed(session: AsyncSession, event_id: int, error: str) -> None:
         """
         Increments retry count, computes exponential backoff, and schedules next retry
         or routes to FAILED/DLQ if max retries reached.
@@ -160,6 +136,7 @@ class OutboxService:
             if event.event_type == "ORDER_FULFILLMENT_REQUESTED" and event.aggregate_id:
                 try:
                     from app.services.dlq.service import dlq_service
+
                     await dlq_service.record_failed_job(
                         session=session,
                         job_type="outbox_fulfillment",
@@ -167,13 +144,13 @@ class OutboxService:
                         error_message=f"Outbox retries exhausted ({event.retry_count}): {error}",
                         order_id=int(event.aggregate_id) if str(event.aggregate_id).isdigit() else None,
                         attempts=event.retry_count,
-                        correlation_id=event.correlation_id
+                        correlation_id=event.correlation_id,
                     )
                 except Exception as dlq_err:
                     logger.error(f"Failed to record outbox failure to DLQ: {dlq_err}")
         else:
             # Exponential backoff: retry 1: 4s, retry 2: 8s, retry 3: 16s, retry 4: 32s (capped at 300s)
-            backoff_sec = min(300, (2 ** event.retry_count) * 2)
+            backoff_sec = min(300, (2**event.retry_count) * 2)
             event.next_retry_at = now + timedelta(seconds=backoff_sec)
             event.status = OutboxStatus.RETRY.value
             logger.warning(

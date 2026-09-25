@@ -33,7 +33,7 @@ class WalletService:
         reference_type: str | None = None,
         reference_id: str | None = None,
         note: str | None = None,
-        meta_info: str | None = None
+        meta_info: str | None = None,
     ) -> tuple[User, WalletTransaction]:
         """
         Atomically credits a user's wallet and creates an immutable ledger entry.
@@ -57,7 +57,7 @@ class WalletService:
             reference_type=reference_type,
             reference_id=str(reference_id) if reference_id else None,
             note=note,
-            meta_info=meta_info
+            meta_info=meta_info,
         )
         session.add(wallet_tx)
 
@@ -68,7 +68,7 @@ class WalletService:
             tx_type=tx_type,
             method=reference_type or "system",
             status="success",
-            note=note
+            note=note,
         )
         session.add(legacy_tx)
         await session.flush()
@@ -89,7 +89,7 @@ class WalletService:
         reference_type: str | None = None,
         reference_id: str | None = None,
         note: str | None = None,
-        meta_info: str | None = None
+        meta_info: str | None = None,
     ) -> tuple[User, WalletTransaction]:
         """
         Atomically debits a user's wallet with balance validation and creates a ledger entry.
@@ -119,18 +119,13 @@ class WalletService:
             reference_type=reference_type,
             reference_id=str(reference_id) if reference_id else None,
             note=note,
-            meta_info=meta_info
+            meta_info=meta_info,
         )
         session.add(wallet_tx)
 
         # 2. Legacy transaction record
         legacy_tx = Transaction(
-            user_id=user_id,
-            amount=-amount,
-            tx_type=tx_type,
-            method="balance",
-            status="success",
-            note=note
+            user_id=user_id, amount=-amount, tx_type=tx_type, method="balance", status="success", note=note
         )
         session.add(legacy_tx)
         await session.flush()
@@ -149,7 +144,7 @@ class WalletService:
         user_id: int,
         amount: Decimal,
         reason: str,
-        admin_username: str | None = None
+        admin_username: str | None = None,
     ) -> tuple[User, WalletTransaction]:
         """
         Allows an administrator to safely adjust a user's balance with an audit log.
@@ -162,7 +157,7 @@ class WalletService:
                 tx_type="admin_adjustment",
                 reference_type="admin",
                 reference_id=str(admin_id),
-                note=f"Admin tomonidan tuzatish: {reason}"
+                note=f"Admin tomonidan tuzatish: {reason}",
             )
         elif amount < Decimal("0.00"):
             user, tx = await cls.debit_balance(
@@ -172,7 +167,7 @@ class WalletService:
                 tx_type="admin_adjustment",
                 reference_type="admin",
                 reference_id=str(admin_id),
-                note=f"Admin tomonidan yechildi: {reason}"
+                note=f"Admin tomonidan yechildi: {reason}",
             )
         else:
             user = await cls.get_user_locked(session, user_id)
@@ -188,7 +183,7 @@ class WalletService:
             old_value=str(tx.balance_before),
             new_value=str(tx.balance_after),
             reason=reason,
-            details=f"Balans {amount:+,.0f} so'mga o'zgartirildi"
+            details=f"Balans {amount:+,.0f} so'mga o'zgartirildi",
         )
         session.add(audit)
         return user, tx

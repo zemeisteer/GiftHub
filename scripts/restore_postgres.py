@@ -5,6 +5,7 @@ GiftHub PostgreSQL Restore & Verification Utility.
 Restores into a designated target or temporary database and executes
 financial integrity checks to verify data consistency.
 """
+
 import hashlib
 import os
 import subprocess
@@ -49,23 +50,29 @@ def verify_and_restore(backup_path: str, target_db: str = "gifthub_restore_test"
     print(f"[*] Preparing test database '{target_db}'...")
     subprocess.run(
         ["dropdb", "-h", POSTGRES_HOST, "-p", POSTGRES_PORT, "-U", POSTGRES_USER, "--if-exists", target_db],
-        env=env, capture_output=True
+        env=env,
+        capture_output=True,
     )
     subprocess.run(
         ["createdb", "-h", POSTGRES_HOST, "-p", POSTGRES_PORT, "-U", POSTGRES_USER, target_db],
-        env=env, capture_output=True
+        env=env,
+        capture_output=True,
     )
 
     # 3. Execute pg_restore
     print(f"[*] Restoring from {b_path.name} into '{target_db}'...")
     cmd = [
         "pg_restore",
-        "-h", POSTGRES_HOST,
-        "-p", POSTGRES_PORT,
-        "-U", POSTGRES_USER,
-        "-d", target_db,
+        "-h",
+        POSTGRES_HOST,
+        "-p",
+        POSTGRES_PORT,
+        "-U",
+        POSTGRES_USER,
+        "-d",
+        target_db,
         "-v",
-        str(b_path)
+        str(b_path),
     ]
     res = subprocess.run(cmd, env=env, capture_output=True, text=True)
 
@@ -73,12 +80,16 @@ def verify_and_restore(backup_path: str, target_db: str = "gifthub_restore_test"
     print("[*] Running sanity checks on restored database...")
     query_cmd = [
         "psql",
-        "-h", POSTGRES_HOST,
-        "-p", POSTGRES_PORT,
-        "-U", POSTGRES_USER,
-        "-d", target_db,
+        "-h",
+        POSTGRES_HOST,
+        "-p",
+        POSTGRES_PORT,
+        "-U",
+        POSTGRES_USER,
+        "-d",
+        target_db,
         "-c",
-        "SELECT count(*) FROM users; SELECT count(*) FROM orders; SELECT count(*) FROM wallet_transactions;"
+        "SELECT count(*) FROM users; SELECT count(*) FROM orders; SELECT count(*) FROM wallet_transactions;",
     ]
     q_res = subprocess.run(query_cmd, env=env, capture_output=True, text=True)
 

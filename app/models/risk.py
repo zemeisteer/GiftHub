@@ -24,6 +24,7 @@ class RiskAudit(Base):
     """
     Log of risk anomalies, abuse attempts, and fraud flags.
     """
+
     __tablename__ = "risk_audits"
 
     id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
@@ -32,5 +33,5 @@ class RiskAudit(Base):
     severity = Column(String(16), default=RiskSeverity.MEDIUM.value, nullable=False, index=True)
     details = Column(Text, nullable=True)
     metadata_json = Column(JSON, nullable=True, default=dict)
-    is_actioned = Column(Boolean, default=False, nullable=False) # e.g. auto-blocked, admin reviewed
+    is_actioned = Column(Boolean, default=False, nullable=False)  # e.g. auto-blocked, admin reviewed
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False, index=True)

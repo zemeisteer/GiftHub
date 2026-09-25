@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 # ================= STARS FLOW ================= #
 
+
 @router.callback_query(F.data == "shop:stars")
 async def cb_shop_stars(callback: CallbackQuery, state: FSMContext):
     await state.clear()
@@ -50,11 +51,7 @@ async def cb_shop_stars(callback: CallbackQuery, state: FSMContext):
             calc = queries.calculate_stars_price(st, pricing)
             p_uzs = float(calc.get("total_price_uzs") or calc.get("final_price_uzs") or 0.0)
             c_uzs = float(calc.get("cost_total_uzs") or calc.get("base_cost_uzs") or 0.0)
-            packages.append({
-                "stars": st,
-                "price_uzs": p_uzs,
-                "cost_uzs": c_uzs
-            })
+            packages.append({"stars": st, "price_uzs": p_uzs, "cost_uzs": c_uzs})
 
     text = (
         "⭐ <b>Telegram Stars xaridi</b>\n\n"
@@ -83,7 +80,7 @@ async def cb_stars_package(callback: CallbackQuery, state: FSMContext):
         item_title=f"{stars_amount} Telegram Stars",
         amount=stars_amount,
         total_price=price_val,
-        cost_price=cost_val
+        cost_price=cost_val,
     )
 
     my_username = callback.from_user.username
@@ -138,7 +135,7 @@ async def process_stars_custom_amount(message: Message, state: FSMContext):
         item_title=f"{amount} Telegram Stars",
         amount=amount,
         total_price=price_val,
-        cost_price=cost_val
+        cost_price=cost_val,
     )
 
     my_username = message.from_user.username
@@ -151,6 +148,7 @@ async def process_stars_custom_amount(message: Message, state: FSMContext):
 
 
 # ================= PREMIUM FLOW ================= #
+
 
 @router.callback_query(F.data == "shop:premium")
 async def cb_shop_premium(callback: CallbackQuery, state: FSMContext):
@@ -198,7 +196,7 @@ async def cb_premium_package(callback: CallbackQuery, state: FSMContext):
         item_title=f"Telegram Premium ({months} oylik)",
         amount=int(months),
         total_price=price,
-        cost_price=cost
+        cost_price=cost,
     )
 
     my_username = callback.from_user.username
@@ -216,6 +214,7 @@ async def cb_premium_package(callback: CallbackQuery, state: FSMContext):
 
 # ================= GIFTS FLOW ================= #
 
+
 @router.callback_query(F.data == "shop:gifts")
 async def cb_shop_gifts(callback: CallbackQuery, state: FSMContext):
     await state.clear()
@@ -230,17 +229,94 @@ async def cb_shop_gifts(callback: CallbackQuery, state: FSMContext):
         if not gifts:
             gifts = [
                 {"id": "bear", "name": "Teddy Bear", "price_uzs": 64000, "cost_uzs": 50000, "icon": "🧸", "type": "3d"},
-                {"id": "heart", "name": "Neon Heart", "price_uzs": 85000, "cost_uzs": 68000, "icon": "💖", "type": "3d"},
-                {"id": "rocket", "name": "Cosmo Rocket", "price_uzs": 120000, "cost_uzs": 95000, "icon": "🚀", "type": "3d"},
-                {"id": "star", "name": "Cosmic Star", "price_uzs": 60000, "cost_uzs": 45000, "icon": "⭐", "type": "classic"},
-                {"id": "ring", "name": "Diamond Ring", "price_uzs": 165000, "cost_uzs": 130000, "icon": "💍", "type": "3d"},
-                {"id": "trophy", "name": "Gold Trophy", "price_uzs": 195000, "cost_uzs": 155000, "icon": "🏆", "type": "vip"},
-                {"id": "yacht", "name": "Luxury Yacht", "price_uzs": 270000, "cost_uzs": 220000, "icon": "🛥️", "type": "vip"},
-                {"id": "crown", "name": "Ruby Crown", "price_uzs": 225000, "cost_uzs": 180000, "icon": "👑", "type": "vip"},
-                {"id": "medal", "name": "Star Medal", "price_uzs": 95000, "cost_uzs": 75000, "icon": "🎖️", "type": "classic"},
-                {"id": "hat", "name": "Magic Hat", "price_uzs": 78000, "cost_uzs": 60000, "icon": "🎩", "type": "classic"},
-                {"id": "eagle", "name": "Flying Eagle", "price_uzs": 110000, "cost_uzs": 88000, "icon": "🦅", "type": "3d"},
-                {"id": "lion", "name": "Golden Lion", "price_uzs": 175000, "cost_uzs": 140000, "icon": "🦁", "type": "vip"}
+                {
+                    "id": "heart",
+                    "name": "Neon Heart",
+                    "price_uzs": 85000,
+                    "cost_uzs": 68000,
+                    "icon": "💖",
+                    "type": "3d",
+                },
+                {
+                    "id": "rocket",
+                    "name": "Cosmo Rocket",
+                    "price_uzs": 120000,
+                    "cost_uzs": 95000,
+                    "icon": "🚀",
+                    "type": "3d",
+                },
+                {
+                    "id": "star",
+                    "name": "Cosmic Star",
+                    "price_uzs": 60000,
+                    "cost_uzs": 45000,
+                    "icon": "⭐",
+                    "type": "classic",
+                },
+                {
+                    "id": "ring",
+                    "name": "Diamond Ring",
+                    "price_uzs": 165000,
+                    "cost_uzs": 130000,
+                    "icon": "💍",
+                    "type": "3d",
+                },
+                {
+                    "id": "trophy",
+                    "name": "Gold Trophy",
+                    "price_uzs": 195000,
+                    "cost_uzs": 155000,
+                    "icon": "🏆",
+                    "type": "vip",
+                },
+                {
+                    "id": "yacht",
+                    "name": "Luxury Yacht",
+                    "price_uzs": 270000,
+                    "cost_uzs": 220000,
+                    "icon": "🛥️",
+                    "type": "vip",
+                },
+                {
+                    "id": "crown",
+                    "name": "Ruby Crown",
+                    "price_uzs": 225000,
+                    "cost_uzs": 180000,
+                    "icon": "👑",
+                    "type": "vip",
+                },
+                {
+                    "id": "medal",
+                    "name": "Star Medal",
+                    "price_uzs": 95000,
+                    "cost_uzs": 75000,
+                    "icon": "🎖️",
+                    "type": "classic",
+                },
+                {
+                    "id": "hat",
+                    "name": "Magic Hat",
+                    "price_uzs": 78000,
+                    "cost_uzs": 60000,
+                    "icon": "🎩",
+                    "type": "classic",
+                },
+                {
+                    "id": "eagle",
+                    "name": "Flying Eagle",
+                    "price_uzs": 110000,
+                    "cost_uzs": 88000,
+                    "icon": "🦅",
+                    "type": "3d",
+                },
+                {
+                    "id": "lion",
+                    "name": "Golden Lion",
+                    "price_uzs": 175000,
+                    "cost_uzs": 140000,
+                    "icon": "🦁",
+                    "type": "vip",
+                },
             ]
 
     text = (
@@ -273,23 +349,13 @@ async def cb_gift_package(callback: CallbackQuery, state: FSMContext):
 
     price = float(matched.get("price_uzs", 75000))
     cost = float(matched.get("cost_uzs", 65000))
-    matched_name = matched.get('name', "Sovg'a")
+    matched_name = matched.get("name", "Sovg'a")
     name = f"{matched.get('icon', '🎁')} {matched_name}"
 
-    await state.update_data(
-        product_type="gift",
-        item_title=name,
-        amount=1,
-        total_price=price,
-        cost_price=cost
-    )
+    await state.update_data(product_type="gift", item_title=name, amount=1, total_price=price, cost_price=cost)
 
     my_username = callback.from_user.username
-    text = (
-        f"🎁 <b>{name}</b> tanlandi.\n"
-        f"Narxi: <b>{price:,.0f} so'm</b>\n\n"
-        "Sovg'a qaysi profilga yuborilishi kerak?"
-    )
+    text = f"🎁 <b>{name}</b> tanlandi.\nNarxi: <b>{price:,.0f} so'm</b>\n\nSovg'a qaysi profilga yuborilishi kerak?"
     try:
         await callback.message.edit_text(text, reply_markup=get_recipient_keyboard(my_username))
     except Exception:
@@ -298,6 +364,7 @@ async def cb_gift_package(callback: CallbackQuery, state: FSMContext):
 
 
 # ================= RECIPIENT & CONFIRMATION ================= #
+
 
 @router.callback_query(F.data.startswith("recipient:self:"))
 async def cb_recipient_self(callback: CallbackQuery, state: FSMContext):
@@ -344,11 +411,7 @@ async def process_recipient_users_shared(message: Message, state: FSMContext):
     full_name = f"{first_name} {last_name}".strip()
     recipient = username if username else str(shared.user_id)
 
-    await state.update_data(
-        recipient=recipient,
-        recipient_name=full_name,
-        recipient_id=shared.user_id
-    )
+    await state.update_data(recipient=recipient, recipient_name=full_name, recipient_id=shared.user_id)
 
     try:
         rm = await message.answer("✅ Qabul qiluvchi tanlandi!", reply_markup=ReplyKeyboardRemove())
@@ -381,6 +444,7 @@ async def cancel_recipient_selection(message: Message, state: FSMContext):
         user = await queries.get_user_by_id(session, user_id)
         balance = user.balance if user else 0.0
         from app.handlers.users.start import build_main_menu_text, check_admin_status
+
         is_admin = await check_admin_status(user_id, session)
         services = await queries.list_custom_services(session, active_only=True)
 
@@ -392,7 +456,7 @@ async def cancel_recipient_selection(message: Message, state: FSMContext):
 
     await message.answer(
         text=build_main_menu_text(first_name, balance, user_id, services_count=len(services), services=services),
-        reply_markup=get_shop_main_menu(is_admin=is_admin, services_count=len(services), services=services)
+        reply_markup=get_shop_main_menu(is_admin=is_admin, services_count=len(services), services=services),
     )
 
 
@@ -406,7 +470,7 @@ async def process_recipient_text(message: Message, state: FSMContext):
     if len(txt) < 3:
         await message.answer(
             "⚠️ Yaroqsiz username! Kamida 3 ta belgidan iborat bo'lishi kerak. Qaytadan kiriting yoki «👥 Do'stni tanlash» tugmasidan foydalaning:",
-            reply_markup=get_user_request_keyboard()
+            reply_markup=get_user_request_keyboard(),
         )
         return
 
@@ -504,7 +568,7 @@ async def cb_execute_purchase(callback: CallbackQuery, state: FSMContext):
                 amount=amount,
                 total_price=total_price,
                 cost_price=cost_price,
-                recipient_username=recipient
+                recipient_username=recipient,
             )
             new_balance = user.balance
         except Exception as e:
@@ -519,9 +583,8 @@ async def cb_execute_purchase(callback: CallbackQuery, state: FSMContext):
         import asyncio
 
         from app.services.fragment import fragment_client
-        asyncio.create_task(
-            fragment_client.fulfill_order(order_id=order.id, bot=callback.bot)
-        )
+
+        asyncio.create_task(fragment_client.fulfill_order(order_id=order.id, bot=callback.bot))
 
     success_text = (
         "🎉 <b>Xaridingiz muvaffaqiyatli qabul qilindi!</b>\n\n"
@@ -541,6 +604,7 @@ async def cb_execute_purchase(callback: CallbackQuery, state: FSMContext):
 
 
 # ================= CUSTOM SERVICES FLOW ================= #
+
 
 @router.callback_query(F.data == "shop:services")
 async def cb_shop_services(callback: CallbackQuery, state: FSMContext):
@@ -589,7 +653,11 @@ async def cb_service_view(callback: CallbackQuery, state: FSMContext):
         return
 
     can_afford = balance >= service.price_uzs
-    balance_status = f"✅ Mablag' yetarli ({balance:,.0f} so'm)" if can_afford else f"⚠️ Mablag' yetarli emas (Balansingiz: {balance:,.0f} so'm)"
+    balance_status = (
+        f"✅ Mablag' yetarli ({balance:,.0f} so'm)"
+        if can_afford
+        else f"⚠️ Mablag' yetarli emas (Balansingiz: {balance:,.0f} so'm)"
+    )
 
     desc = service.description or "Batafsil ma'lumot berilmagan."
     text = (
@@ -646,7 +714,7 @@ async def cb_service_buy_start(callback: CallbackQuery, state: FSMContext):
         service_icon=service.icon,
         price_uzs=service.price_uzs,
         cost_uzs=service.cost_uzs,
-        category=service.category
+        category=service.category,
     )
 
     text = (
@@ -656,9 +724,9 @@ async def cb_service_buy_start(callback: CallbackQuery, state: FSMContext):
         "<i>(Masalan: Telegram @username, profilingiz havolasi, emailingiz yoki telefon raqamingiz)</i>\n\n"
         "Bekor qilish uchun quyidagi tugmani bosing:"
     )
-    cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Bekor qilish", callback_data=f"srv:view:{service_id}")]
-    ])
+    cancel_kb = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="🔙 Bekor qilish", callback_data=f"srv:view:{service_id}")]]
+    )
     try:
         await callback.message.edit_text(text, reply_markup=cancel_kb)
     except Exception:
@@ -674,16 +742,20 @@ async def msg_service_details(message: Message, state: FSMContext):
         service_id = data.get("service_id")
         await state.clear()
         if service_id:
+
             class DummyCallback:
                 def __init__(self, msg, sid):
                     self.message = msg
                     self.from_user = msg.from_user
                     self.data = f"srv:view:{sid}"
                     self.bot = msg.bot
+
                 async def answer(self, *args, **kwargs):
                     pass
+
             return await cb_service_view(DummyCallback(message, service_id), state)
         from app.handlers.users.start import cmd_start
+
         return await cmd_start(message, None, state)
 
     if len(raw) < 2:
@@ -739,7 +811,7 @@ async def cb_service_purchase_confirm(callback: CallbackQuery, state: FSMContext
                 total_price=price_uzs,
                 cost_price=cost_uzs,
                 recipient_username=recipient_detail,
-                status="pending"
+                status="pending",
             )
             new_balance = user.balance
         except Exception as e:
@@ -775,15 +847,16 @@ async def cb_service_purchase_confirm(callback: CallbackQuery, state: FSMContext
         f"📊 Holati: ⏳ <b>Kutilmoqda (pending)</b>\n\n"
         "💡 <i>Havolani mijozga yuborish yoki bekor qilish uchun quyidagi tugmani bosing:</i>"
     )
-    admin_action_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="🔗 Havola (Link) yuborish", callback_data=f"adm_srv:send:{order.id}"),
-            InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"adm_srv:cancel:{order.id}")
+    admin_action_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔗 Havola (Link) yuborish", callback_data=f"adm_srv:send:{order.id}"),
+                InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"adm_srv:cancel:{order.id}"),
+            ]
         ]
-    ])
+    )
     for adm in config.ADMINS:
         try:
             await callback.bot.send_message(chat_id=int(adm), text=admin_notify_text, reply_markup=admin_action_kb)
         except Exception as e:
             logger.warning(f"Adminga xizmat buyurtmasi xabarini yuborishda xatolik ({adm}): {e}")
-

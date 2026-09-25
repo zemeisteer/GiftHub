@@ -45,9 +45,10 @@ async def get_db():
 
 # ================= SCHEMAS ================= #
 
+
 class CheckoutRequest(BaseModel):
     user_id: int
-    product_type: str # stars, premium, gift, service
+    product_type: str  # stars, premium, gift, service
     quantity: int = 1
     recipient_username: Optional[str] = None
     promo_code: Optional[str] = None
@@ -74,7 +75,7 @@ class ReasonedAdminAction(BaseModel):
 
 
 class ProviderStatusUpdate(ReasonedAdminAction):
-    status: str # healthy, degraded, disabled
+    status: str  # healthy, degraded, disabled
 
 
 class FeatureFlagUpdate(BaseModel):
@@ -96,11 +97,9 @@ class CatalogProductCreate(BaseModel):
 
 # ================= CATALOG (Req 16) ================= #
 
+
 @router.get("/catalog")
-async def get_public_catalog(
-    category: Optional[str] = None,
-    session=Depends(get_db)
-):
+async def get_public_catalog(category: Optional[str] = None, session=Depends(get_db)):
     """Returns database-driven product catalog for Stars bundles, Premium, and Gifts."""
     products = await catalog_service.list_products(session, category=category, active_only=True)
     return {
@@ -116,21 +115,22 @@ async def get_public_catalog(
                 "base_price_uzs": float(p.base_price_uzs),
                 "badge_text": p.badge_text,
                 "description": p.description,
-                "display_order": p.display_order
+                "display_order": p.display_order,
             }
             for p in products
-        ]
+        ],
     }
 
 
 # ================= CHECKOUT WITH IDEMPOTENCY (Req 7 & Req 8) ================= #
+
 
 @router.post("/orders/checkout")
 async def create_checkout_order(
     req: CheckoutRequest,
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     correlation_id: Optional[str] = Header(None, alias="X-Correlation-ID"),
-    session=Depends(get_db)
+    session=Depends(get_db),
 ):
     """
     Creates an order with authoritative pricing, checkout-level idempotency,
@@ -149,7 +149,7 @@ async def create_checkout_order(
             price_lock_id=req.price_lock_id,
             payment_method=req.payment_method,
             idempotency_key=idempotency_key,
-            correlation_id=cid
+            correlation_id=cid,
         )
         return {
             "success": True,
@@ -160,8 +160,8 @@ async def create_checkout_order(
                 "total_price": float(order.total_price),
                 "payment_method": order.payment_method,
                 "fulfillment_status": order.fulfillment_status,
-                "correlation_id": cid
-            }
+                "correlation_id": cid,
+            },
         }
     except InsufficientBalanceError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -173,6 +173,7 @@ async def create_checkout_order(
 
 
 # ================= RECONCILIATION & DASHBOARD (Req 2 & Req 17) ================= #
+
 
 @router.get("/admin/reconciliation/dashboard")
 async def get_reconciliation_dashboard(session=Depends(get_db)):
@@ -191,17 +192,14 @@ async def trigger_reconciliation_audit(session=Depends(get_db)):
         "status": report.status,
         "payments_checked": report.total_payments_checked,
         "orders_checked": report.total_orders_checked,
-        "discrepancies_found": report.discrepancies_count
+        "discrepancies_found": report.discrepancies_count,
     }
 
 
 @router.get("/admin/reconciliation/discrepancies")
-async def list_discrepancies(
-    is_resolved: Optional[bool] = Query(None),
-    limit: int = 50,
-    session=Depends(get_db)
-):
+async def list_discrepancies(is_resolved: Optional[bool] = Query(None), limit: int = 50, session=Depends(get_db)):
     from sqlalchemy import select
+
     stmt = select(ReconciliationDiscrepancy).order_by(ReconciliationDiscrepancy.created_at.desc())
     if is_resolved is not None:
         stmt = stmt.where(ReconciliationDiscrepancy.is_resolved == is_resolved)
@@ -220,19 +218,15 @@ async def list_discrepancies(
                 "actual": d.actual_value,
                 "details": d.details,
                 "is_resolved": d.is_resolved,
-                "created_at": d.created_at.isoformat() if d.created_at else None
+                "created_at": d.created_at.isoformat() if d.created_at else None,
             }
             for d in items
-        ]
+        ],
     }
 
 
 @router.post("/admin/reconciliation/discrepancies/{discrepancy_id}/resolve")
-async def resolve_discrepancy(
-    discrepancy_id: int,
-    action: ReasonedAdminAction,
-    session=Depends(get_db)
-):
+async def resolve_discrepancy(discrepancy_id: int, action: ReasonedAdminAction, session=Depends(get_db)):
     disc = await session.get(ReconciliationDiscrepancy, discrepancy_id)
     if not disc:
         raise HTTPException(status_code=404, detail="Discrepancy record topilmadi.")
@@ -245,11 +239,10 @@ async def resolve_discrepancy(
 
 # ================= DEAD LETTER QUEUE (DLQ) (Req 4) ================= #
 
+
 @router.get("/admin/dlq")
 async def list_dlq_jobs(
-    job_status: Optional[str] = Query(None, alias="status"),
-    limit: int = 50,
-    session=Depends(get_db)
+    job_status: Optional[str] = Query(None, alias="status"), limit: int = 50, session=Depends(get_db)
 ):
     jobs = await dlq_service.list_failed_jobs(session, status=job_status, limit=limit)
     return {
@@ -263,18 +256,15 @@ async def list_dlq_jobs(
                 "error_message": j.error_message,
                 "attempts": j.attempts,
                 "status": j.status,
-                "created_at": j.created_at.isoformat() if j.created_at else None
+                "created_at": j.created_at.isoformat() if j.created_at else None,
             }
             for j in jobs
-        ]
+        ],
     }
 
 
 @router.post("/admin/dlq/{job_id}/retry")
-async def retry_dlq_job(
-    job_id: int,
-    session=Depends(get_db)
-):
+async def retry_dlq_job(job_id: int, session=Depends(get_db)):
     job = await dlq_service.mark_retrying(session, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="DLQ job topilmadi.")
@@ -282,11 +272,7 @@ async def retry_dlq_job(
 
 
 @router.post("/admin/dlq/{job_id}/resolve")
-async def resolve_dlq_job(
-    job_id: int,
-    action: ReasonedAdminAction,
-    session=Depends(get_db)
-):
+async def resolve_dlq_job(job_id: int, action: ReasonedAdminAction, session=Depends(get_db)):
     job = await dlq_service.resolve_job(session, job_id, admin_id=0, notes=action.reason)
     if not job:
         raise HTTPException(status_code=404, detail="DLQ job topilmadi.")
@@ -295,32 +281,32 @@ async def resolve_dlq_job(
 
 # ================= PROVIDER HEALTH & CIRCUIT BREAKER (Req 5 & Req 19) ================= #
 
+
 @router.get("/admin/providers")
 async def list_providers(session=Depends(get_db)):
     from sqlalchemy import select
+
     res = await session.execute(select(ProviderHealth))
     providers = res.scalars().all()
     result = []
     for p in providers:
         st = circuit_breaker._get_or_init_state(p.provider_name)
-        result.append({
-            "provider_name": p.provider_name,
-            "status": p.status,
-            "circuit_state": st["state"],
-            "failure_count": p.failure_count,
-            "success_count": p.success_count,
-            "consecutive_failures": st["consecutive_failures"],
-            "disabled_reason": p.disabled_reason
-        })
+        result.append(
+            {
+                "provider_name": p.provider_name,
+                "status": p.status,
+                "circuit_state": st["state"],
+                "failure_count": p.failure_count,
+                "success_count": p.success_count,
+                "consecutive_failures": st["consecutive_failures"],
+                "disabled_reason": p.disabled_reason,
+            }
+        )
     return {"success": True, "providers": result}
 
 
 @router.post("/admin/providers/{provider_name}/status")
-async def update_provider_status(
-    provider_name: str,
-    action: ProviderStatusUpdate,
-    session=Depends(get_db)
-):
+async def update_provider_status(provider_name: str, action: ProviderStatusUpdate, session=Depends(get_db)):
     """Enforces reason & confirmation for provider disabling."""
     ph = await session.get(ProviderHealth, provider_name)
     now = datetime.now(timezone.utc)
@@ -339,7 +325,7 @@ async def update_provider_status(
         entity_id=provider_name,
         reason=action.reason,
         details=f"Provider {provider_name} holati '{action.status}' ga o'zgartirildi. Sabab: {action.reason}",
-        created_at=now
+        created_at=now,
     )
     session.add(audit)
     await session.flush()
@@ -348,33 +334,24 @@ async def update_provider_status(
 
 # ================= FEATURE FLAGS (Req 6) ================= #
 
+
 @router.get("/admin/feature-flags")
 async def get_feature_flags(session=Depends(get_db)):
     flags = await feature_flag_service.list_all_flags(session)
     return {
         "success": True,
-        "flags": [
-            {
-                "name": f.name,
-                "is_enabled": f.is_enabled,
-                "description": f.description
-            }
-            for f in flags
-        ]
+        "flags": [{"name": f.name, "is_enabled": f.is_enabled, "description": f.description} for f in flags],
     }
 
 
 @router.post("/admin/feature-flags/{name}")
-async def set_feature_flag(
-    name: str,
-    req: FeatureFlagUpdate,
-    session=Depends(get_db)
-):
+async def set_feature_flag(name: str, req: FeatureFlagUpdate, session=Depends(get_db)):
     flag = await feature_flag_service.set_flag(session, name, req.is_enabled, req.description)
     return {"success": True, "flag": {"name": flag.name, "is_enabled": flag.is_enabled}}
 
 
 # ================= CATALOG ADMIN (Req 16) ================= #
+
 
 @router.get("/admin/catalog")
 async def get_admin_catalog(session=Depends(get_db)):
@@ -392,18 +369,15 @@ async def get_admin_catalog(session=Depends(get_db)):
                 "base_price_uzs": float(p.base_price_uzs),
                 "is_active": p.is_active,
                 "badge_text": p.badge_text,
-                "display_order": p.display_order
+                "display_order": p.display_order,
             }
             for p in products
-        ]
+        ],
     }
 
 
 @router.post("/admin/catalog")
-async def create_catalog_item(
-    item: CatalogProductCreate,
-    session=Depends(get_db)
-):
+async def create_catalog_item(item: CatalogProductCreate, session=Depends(get_db)):
     prod = await catalog_service.create_product(
         session=session,
         category=item.category,
@@ -414,12 +388,13 @@ async def create_catalog_item(
         duration_months=item.duration_months,
         description=item.description,
         badge_text=item.badge_text,
-        display_order=item.display_order
+        display_order=item.display_order,
     )
     return {"success": True, "product_id": prod.id}
 
 
 # ================= SYSTEM HEALTH (Req 8) ================= #
+
 
 @router.get("/admin/health/system")
 @router.get("/health/system")
@@ -429,7 +404,9 @@ async def get_system_health(session=Depends(get_db)):
     Bot, PostgreSQL, Redis, Workers, Payment Providers, Fulfillment, Queue Depth, Failed Jobs.
     """
     import time
+
     from sqlalchemy import text
+
     from app.core.config import settings
     from app.core.database import engine
     from app.core.redis import get_redis_client
@@ -437,11 +414,12 @@ async def get_system_health(session=Depends(get_db)):
 
     # 1. Bot status
     from app.web.server import bot_instance, bot_username
+
     bot_info = {
         "status": "online" if (bot_instance and settings.BOT_TOKEN) else "degraded",
         "username": bot_username or "gifthub_bot",
         "mode": getattr(settings, "TELEGRAM_MODE", "polling"),
-        "has_token": bool(settings.BOT_TOKEN)
+        "has_token": bool(settings.BOT_TOKEN),
     }
 
     # 2. Database status
@@ -458,7 +436,7 @@ async def get_system_health(session=Depends(get_db)):
     db_info = {
         "status": "connected" if db_ok else "disconnected",
         "latency_ms": db_latency,
-        "engine": engine.dialect.name
+        "engine": engine.dialect.name,
     }
 
     # 3. Redis status
@@ -474,12 +452,12 @@ async def get_system_health(session=Depends(get_db)):
         except Exception:
             redis_ok = False
     else:
-        redis_ok = (settings.ENVIRONMENT != "production")
+        redis_ok = settings.ENVIRONMENT != "production"
 
     redis_info = {
         "status": "connected" if redis_ok else "disconnected",
         "latency_ms": redis_latency,
-        "fsm_storage": "RedisStorage" if (r_client and settings.REDIS_URL) else "MemoryStorage"
+        "fsm_storage": "RedisStorage" if (r_client and settings.REDIS_URL) else "MemoryStorage",
     }
 
     # 4. Worker status
@@ -491,18 +469,18 @@ async def get_system_health(session=Depends(get_db)):
         "click": {
             "is_active": pay_setting.click_active if pay_setting else True,
             "circuit": circuit_breaker.get_state("click").value,
-            "status": "healthy" if circuit_breaker.get_state("click").value == "CLOSED" else "degraded"
+            "status": "healthy" if circuit_breaker.get_state("click").value == "CLOSED" else "degraded",
         },
         "payme": {
             "is_active": pay_setting.payme_active if pay_setting else True,
             "circuit": circuit_breaker.get_state("payme").value,
-            "status": "healthy" if circuit_breaker.get_state("payme").value == "CLOSED" else "degraded"
+            "status": "healthy" if circuit_breaker.get_state("payme").value == "CLOSED" else "degraded",
         },
         "autopaycard": {
             "is_active": pay_setting.autopaycard_active if pay_setting else False,
             "circuit": circuit_breaker.get_state("autopaycard").value,
-            "status": "healthy" if circuit_breaker.get_state("autopaycard").value == "CLOSED" else "degraded"
-        }
+            "status": "healthy" if circuit_breaker.get_state("autopaycard").value == "CLOSED" else "degraded",
+        },
     }
 
     # 6. Fulfillment providers
@@ -513,7 +491,7 @@ async def get_system_health(session=Depends(get_db)):
             "auto_buy": frag_setting.is_auto_buy if frag_setting else True,
             "simulation_mode": frag_setting.simulation_mode if frag_setting else False,
             "circuit": frag_circuit,
-            "status": "operational" if frag_circuit != "OPEN" else "degraded"
+            "status": "operational" if frag_circuit != "OPEN" else "degraded",
         }
     }
 
@@ -522,17 +500,14 @@ async def get_system_health(session=Depends(get_db)):
     pending_outbox = res_outbox.scalar() or 0
 
     res_unproc_orders = await session.execute(
-        select(func.count(Order.id)).where(
-            Order.status == "paid",
-            Order.fulfillment_status == "pending"
-        )
+        select(func.count(Order.id)).where(Order.status == "paid", Order.fulfillment_status == "pending")
     )
     unproc_orders = res_unproc_orders.scalar() or 0
 
     queue_depth = {
         "pending_outbox_events": pending_outbox,
         "unfulfilled_paid_orders": unproc_orders,
-        "in_memory_queue_size": worker_info["queue_size"]
+        "in_memory_queue_size": worker_info["queue_size"],
     }
 
     # 8. Failed jobs (DLQ)
@@ -545,7 +520,7 @@ async def get_system_health(session=Depends(get_db)):
     failed_jobs = {
         "exhausted_jobs": exhausted_dlq,
         "retrying_jobs": retrying_dlq,
-        "total_active_failures": exhausted_dlq + retrying_dlq
+        "total_active_failures": exhausted_dlq + retrying_dlq,
     }
 
     overall_status = "healthy"
@@ -565,18 +540,15 @@ async def get_system_health(session=Depends(get_db)):
         "payment_providers": payment_providers,
         "fulfillment_providers": fulfillment_providers,
         "queue_depth": queue_depth,
-        "failed_jobs": failed_jobs
+        "failed_jobs": failed_jobs,
     }
 
 
 # ================= PROBLEM ORDERS DASHBOARD (Req 9) ================= #
 
+
 @router.get("/admin/orders/problematic")
-async def get_problem_orders(
-    category: Optional[str] = Query(None),
-    limit: int = 50,
-    session=Depends(get_db)
-):
+async def get_problem_orders(category: Optional[str] = Query(None), limit: int = 50, session=Depends(get_db)):
     """
     Problem Orders dashboard categorizing orders:
     paid-but-not-fulfilled, stuck-processing, payment mismatch, failed fulfillment, pending refund.
@@ -586,41 +558,46 @@ async def get_problem_orders(
     ten_min_ago = now - timedelta(minutes=10)
 
     # 1. Paid but not fulfilled (> 5 minutes)
-    stmt_pnf = select(Order).where(
-        and_(
-            Order.status.in_(["paid", "processing"]),
-            Order.fulfillment_status != "fulfilled",
-            Order.created_at <= five_min_ago
-        )
-    ).order_by(Order.created_at.desc())
-
-    # 2. Stuck processing (> 10 minutes)
-    stmt_stuck = select(Order).where(
-        and_(
-            Order.status == "processing",
-            or_(
-                Order.processing_at <= ten_min_ago,
-                and_(Order.processing_at.is_(None), Order.created_at <= ten_min_ago)
+    stmt_pnf = (
+        select(Order)
+        .where(
+            and_(
+                Order.status.in_(["paid", "processing"]),
+                Order.fulfillment_status != "fulfilled",
+                Order.created_at <= five_min_ago,
             )
         )
-    ).order_by(Order.created_at.desc())
+        .order_by(Order.created_at.desc())
+    )
+
+    # 2. Stuck processing (> 10 minutes)
+    stmt_stuck = (
+        select(Order)
+        .where(
+            and_(
+                Order.status == "processing",
+                or_(
+                    Order.processing_at <= ten_min_ago,
+                    and_(Order.processing_at.is_(None), Order.created_at <= ten_min_ago),
+                ),
+            )
+        )
+        .order_by(Order.created_at.desc())
+    )
 
     # 3. Failed fulfillment
-    stmt_failed = select(Order).where(
-        or_(
-            Order.status == "failed",
-            Order.fulfillment_status == "failed",
-            Order.fulfillment_attempts >= 3
-        )
-    ).order_by(Order.created_at.desc())
+    stmt_failed = (
+        select(Order)
+        .where(or_(Order.status == "failed", Order.fulfillment_status == "failed", Order.fulfillment_attempts >= 3))
+        .order_by(Order.created_at.desc())
+    )
 
     # 4. Pending refund
-    stmt_refund = select(Order).where(
-        and_(
-            Order.status.in_(["failed", "cancelled"]),
-            Order.refunded_at.is_(None)
-        )
-    ).order_by(Order.created_at.desc())
+    stmt_refund = (
+        select(Order)
+        .where(and_(Order.status.in_(["failed", "cancelled"]), Order.refunded_at.is_(None)))
+        .order_by(Order.created_at.desc())
+    )
 
     # Fetch counts
     res_pnf_count = await session.execute(select(func.count(Order.id)).where(stmt_pnf.whereclause))
@@ -637,18 +614,14 @@ async def get_problem_orders(
 
     # 5. Payment mismatch detection
     stmt_mismatch_orders = select(Order).where(
-        and_(
-            Order.payment_method != "balance",
-            Order.status.in_(["paid", "completed", "processing"])
-        )
+        and_(Order.payment_method != "balance", Order.status.in_(["paid", "completed", "processing"]))
     )
     res_mismatch_candidates = await session.execute(stmt_mismatch_orders.limit(50))
     candidate_orders = res_mismatch_candidates.scalars().all()
     mismatch_orders = []
     for o in candidate_orders:
         stmt_pay_sum = select(func.coalesce(func.sum(PaymentTransaction.amount), Decimal("0.00"))).where(
-            PaymentTransaction.order_id == o.id,
-            PaymentTransaction.status == "success"
+            PaymentTransaction.order_id == o.id, PaymentTransaction.status == "success"
         )
         pay_res = await session.execute(stmt_pay_sum)
         total_paid = pay_res.scalar() or Decimal("0.00")
@@ -679,24 +652,34 @@ async def get_problem_orders(
             "fulfillment_error": o.fulfillment_error,
             "recipient_username": o.recipient_username,
             "created_at": o.created_at.isoformat() if o.created_at else None,
-            "problem_detail": extra_note
+            "problem_detail": extra_note,
         }
 
     items = []
     if category == "paid_not_fulfilled":
         res = await session.execute(stmt_pnf.limit(limit))
-        items = [_format_order(o, "To'lov qabul qilingan, lekin 5 daqiqadan beri yetkazilmagan") for o in res.scalars().all()]
+        items = [
+            _format_order(o, "To'lov qabul qilingan, lekin 5 daqiqadan beri yetkazilmagan") for o in res.scalars().all()
+        ]
     elif category == "stuck_processing":
         res = await session.execute(stmt_stuck.limit(limit))
         items = [_format_order(o, "10 daqiqadan ortiq 'processing' holatida qotib qolgan") for o in res.scalars().all()]
     elif category == "payment_mismatch":
-        items = [_format_order(o, f"To'langan summa ({paid} UZS) buyurtma summasiga ({o.total_price} UZS) mos emas") for (o, paid) in mismatch_orders[:limit]]
+        items = [
+            _format_order(o, f"To'langan summa ({paid} UZS) buyurtma summasiga ({o.total_price} UZS) mos emas")
+            for (o, paid) in mismatch_orders[:limit]
+        ]
     elif category == "failed_fulfillment":
         res = await session.execute(stmt_failed.limit(limit))
-        items = [_format_order(o, o.fulfillment_error or "Yetkazib berish xatolikka uchragan") for o in res.scalars().all()]
+        items = [
+            _format_order(o, o.fulfillment_error or "Yetkazib berish xatolikka uchragan") for o in res.scalars().all()
+        ]
     elif category == "pending_refund":
         res = await session.execute(stmt_refund.limit(limit))
-        items = [_format_order(o, "Bekor qilingan, lekin mablag' hali foydalanuvchiga qaytarilmagan") for o in res.scalars().all()]
+        items = [
+            _format_order(o, "Bekor qilingan, lekin mablag' hali foydalanuvchiga qaytarilmagan")
+            for o in res.scalars().all()
+        ]
     else:
         res_p = await session.execute(stmt_pnf.limit(10))
         items.extend([_format_order(o, "To'langan, ammo yetkazilmagan") for o in res_p.scalars().all()])
@@ -711,9 +694,9 @@ async def get_problem_orders(
             "payment_mismatch": mismatch_count,
             "failed_fulfillment": failed_count,
             "pending_refund": refund_count,
-            "total_problematic": pnf_count + stuck_count + mismatch_count + failed_count + refund_count
+            "total_problematic": pnf_count + stuck_count + mismatch_count + failed_count + refund_count,
         },
-        "orders": items
+        "orders": items,
     }
 
 
@@ -729,21 +712,14 @@ async def retry_order_fulfillment(order_id: int, action: ReasonedAdminAction, se
     await session.flush()
 
     res = await fulfillment_service.fulfill_order_automated(session=session, order_id=order_id)
-    return {
-        "success": res.get("success", False),
-        "fulfilled": res.get("fulfilled", False),
-        "result": res
-    }
+    return {"success": res.get("success", False), "fulfilled": res.get("fulfilled", False), "result": res}
 
 
 @router.post("/admin/orders/{order_id}/manual-fulfill")
 async def manual_fulfill_order(order_id: int, action: ReasonedAdminAction, session=Depends(get_db)):
     """Admin manually marks a problematic order as fulfilled with required reason."""
     order = await order_service.transition_order_status(
-        session=session,
-        order_id=order_id,
-        new_status_raw="completed",
-        reason=f"Qo'lda bajarildi: {action.reason}"
+        session=session, order_id=order_id, new_status_raw="completed", reason=f"Qo'lda bajarildi: {action.reason}"
     )
     order.fulfillment_status = "fulfilled"
     order.fulfillment_error = None
@@ -752,6 +728,7 @@ async def manual_fulfill_order(order_id: int, action: ReasonedAdminAction, sessi
 
 
 # ================= ADMIN PRICE CHANGE PREVIEW (Req 17) ================= #
+
 
 @router.post("/admin/pricing/preview")
 async def preview_price_changes(req: PricePreviewRequest, session=Depends(get_db)):
@@ -764,7 +741,9 @@ async def preview_price_changes(req: PricePreviewRequest, session=Depends(get_db
     sim_ton_rate = req.ton_rate_uzs or (current_pricing.ton_rate_uzs if current_pricing else Decimal("14800.00"))
     sim_margin = req.margin_percent or (current_pricing.margin_percent if current_pricing else Decimal("15.00"))
     sim_star_cost_ton = req.stars_cost_ton or (current_pricing.stars_cost_ton if current_pricing else Decimal("0.0021"))
-    sim_star_unit_price = req.star_unit_price_uzs or (current_pricing.star_unit_price_uzs if current_pricing else Decimal("180.00"))
+    sim_star_unit_price = req.star_unit_price_uzs or (
+        current_pricing.star_unit_price_uzs if current_pricing else Decimal("180.00")
+    )
 
     sim_pricing = PricingSetting(
         id=999,
@@ -776,7 +755,7 @@ async def preview_price_changes(req: PricePreviewRequest, session=Depends(get_db
         maximum_discount=Decimal("30.00"),
         minimum_price=Decimal("1000.00"),
         premium_prices_json=current_pricing.premium_prices_json if current_pricing else None,
-        gifts_json=current_pricing.gifts_json if current_pricing else None
+        gifts_json=current_pricing.gifts_json if current_pricing else None,
     )
 
     items_to_test = [
@@ -807,30 +786,33 @@ async def preview_price_changes(req: PricePreviewRequest, session=Depends(get_db
         diff = prev_p - curr_p
         diff_pct = round((diff / curr_p * 100), 2) if curr_p > 0 else 0.0
 
-        comparisons.append({
-            "category": item["category"],
-            "sku": item["sku"],
-            "title": item["title"],
-            "current_price_uzs": curr_p,
-            "preview_price_uzs": prev_p,
-            "diff_uzs": diff,
-            "diff_percent": diff_pct,
-            "formatted_current": f"{int(curr_p):,} UZS".replace(",", " "),
-            "formatted_preview": f"{int(prev_p):,} UZS".replace(",", " ")
-        })
+        comparisons.append(
+            {
+                "category": item["category"],
+                "sku": item["sku"],
+                "title": item["title"],
+                "current_price_uzs": curr_p,
+                "preview_price_uzs": prev_p,
+                "diff_uzs": diff,
+                "diff_percent": diff_pct,
+                "formatted_current": f"{int(curr_p):,} UZS".replace(",", " "),
+                "formatted_preview": f"{int(prev_p):,} UZS".replace(",", " "),
+            }
+        )
 
     return {
         "success": True,
         "parameters": {
             "ton_rate_uzs": float(sim_ton_rate),
             "margin_percent": float(sim_margin),
-            "star_unit_price_uzs": float(sim_star_unit_price)
+            "star_unit_price_uzs": float(sim_star_unit_price),
         },
-        "preview": comparisons
+        "preview": comparisons,
     }
 
 
 # ================= ORDER TIMELINE & RECEIPT (Req 13 & Req 16) ================= #
+
 
 @router.get("/orders/{order_id_or_code}/timeline")
 async def get_order_status_timeline(order_id_or_code: str, session=Depends(get_db)):
@@ -850,9 +832,9 @@ async def get_order_status_timeline(order_id_or_code: str, session=Depends(get_d
                     "to_status": order.status,
                     "actor": "SYSTEM",
                     "note": f"Buyurtma holati: {order.status}",
-                    "created_at": order.created_at.isoformat() if order.created_at else None
+                    "created_at": order.created_at.isoformat() if order.created_at else None,
                 }
-            ]
+            ],
         }
 
     return {
@@ -865,10 +847,10 @@ async def get_order_status_timeline(order_id_or_code: str, session=Depends(get_d
                 "to_status": t.to_status,
                 "actor": t.actor,
                 "note": t.note,
-                "created_at": t.created_at.isoformat() if t.created_at else None
+                "created_at": t.created_at.isoformat() if t.created_at else None,
             }
             for t in timeline
-        ]
+        ],
     }
 
 
@@ -894,11 +876,7 @@ async def get_order_receipt(order_id_or_code: str, session=Depends(get_db)):
             "date": order.created_at.isoformat() if order.created_at else None,
             "paid_at": order.paid_at.isoformat() if order.paid_at else None,
             "user_id": order.user_id,
-            "product": {
-                "product_type": order.product_type,
-                "item_title": order.item_title,
-                "quantity": order.amount
-            },
+            "product": {"product_type": order.product_type, "item_title": order.item_title, "quantity": order.amount},
             "financials": {
                 "unit_price_uzs": float(order.unit_price or 0),
                 "cost_price_uzs": float(order.cost_price or 0),
@@ -907,24 +885,25 @@ async def get_order_receipt(order_id_or_code: str, session=Depends(get_db)):
                 "promo_code": order.promo_code,
                 "exchange_rate": float(order.exchange_rate or 1),
                 "total_price_uzs": float(order.total_price or 0),
-                "currency": getattr(order, "currency", "UZS") or "UZS"
+                "currency": getattr(order, "currency", "UZS") or "UZS",
             },
             "payment": {
                 "method": order.payment_method,
                 "status": order.status,
                 "provider_tx_id": pay_tx.provider_transaction_id if pay_tx else None,
-                "provider": pay_tx.provider if pay_tx else order.payment_method
+                "provider": pay_tx.provider if pay_tx else order.payment_method,
             },
             "delivery": {
                 "recipient_username": order.recipient_username,
                 "fulfillment_status": order.fulfillment_status,
-                "tx_hash": order.fragment_tx_hash
-            }
-        }
+                "tx_hash": order.fragment_tx_hash,
+            },
+        },
     }
 
 
 # ================= BUY AGAIN HELPER (Req 14) ================= #
+
 
 @router.get("/orders/{order_id_or_code}/buy-again-details")
 async def get_buy_again_details(order_id_or_code: str, session=Depends(get_db)):
@@ -937,10 +916,7 @@ async def get_buy_again_details(order_id_or_code: str, session=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Buyurtma topilmadi.")
 
     current_price_info = await pricing_service.get_authoritative_price(
-        session=session,
-        product_type=order.product_type,
-        amount=order.amount,
-        item_title=order.item_title
+        session=session, product_type=order.product_type, amount=order.amount, item_title=order.item_title
     )
 
     return {
@@ -950,13 +926,16 @@ async def get_buy_again_details(order_id_or_code: str, session=Depends(get_db)):
         "amount": order.amount,
         "recipient_username": order.recipient_username,
         "current_total_price_uzs": float(current_price_info["total_price_decimal"]),
-        "formatted_price": current_price_info.get("formatted_price", f"{int(current_price_info['total_price_decimal']):,} UZS"),
+        "formatted_price": current_price_info.get(
+            "formatted_price", f"{int(current_price_info['total_price_decimal']):,} UZS"
+        ),
         "historical_paid_price_uzs": float(order.total_price),
-        "currency": "UZS"
+        "currency": "UZS",
     }
 
 
 # ================= SAVED RECIPIENTS (Req 15) ================= #
+
 
 @router.get("/recipients")
 async def list_saved_recipients(user_id: int = Query(...), session=Depends(get_db)):
@@ -971,10 +950,10 @@ async def list_saved_recipients(user_id: int = Query(...), session=Depends(get_d
                 "id": r.id,
                 "recipient_username": r.recipient_username,
                 "label": r.label,
-                "created_at": r.created_at.isoformat() if r.created_at else None
+                "created_at": r.created_at.isoformat() if r.created_at else None,
             }
             for r in items
-        ]
+        ],
     }
 
 
@@ -986,8 +965,7 @@ async def add_saved_recipient(req: SavedRecipientCreate, session=Depends(get_db)
         raise HTTPException(status_code=400, detail="Qabul qiluvchi username bo'sh bo'lishi mumkin emas.")
 
     stmt = select(SavedRecipient).where(
-        SavedRecipient.user_id == req.user_id,
-        SavedRecipient.recipient_username == clean_username
+        SavedRecipient.user_id == req.user_id, SavedRecipient.recipient_username == clean_username
     )
     res = await session.execute(stmt)
     existing = res.scalars().first()
@@ -997,11 +975,7 @@ async def add_saved_recipient(req: SavedRecipientCreate, session=Depends(get_db)
             await session.commit()
         return {"success": True, "recipient_id": existing.id, "message": "Qabul qiluvchi allaqachon mavjud"}
 
-    rec = SavedRecipient(
-        user_id=req.user_id,
-        recipient_username=clean_username,
-        label=req.label or clean_username
-    )
+    rec = SavedRecipient(user_id=req.user_id, recipient_username=clean_username, label=req.label or clean_username)
     session.add(rec)
     await session.commit()
     await session.refresh(rec)

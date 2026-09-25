@@ -19,6 +19,7 @@ class ReconciliationReport(Base):
     """
     Summary record of an automated or manual financial reconciliation audit scan.
     """
+
     __tablename__ = "reconciliation_reports"
 
     id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
@@ -26,7 +27,7 @@ class ReconciliationReport(Base):
     total_orders_checked = Column(Integer, default=0, nullable=False)
     total_wallet_tx_checked = Column(Integer, default=0, nullable=False)
     discrepancies_count = Column(Integer, default=0, nullable=False)
-    status = Column(String(32), default="clean", nullable=False) # clean, discrepancies_found
+    status = Column(String(32), default="clean", nullable=False)  # clean, discrepancies_found
     summary_json = Column(JSON, nullable=True, default=dict)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False, index=True)
 
@@ -37,10 +38,13 @@ class ReconciliationDiscrepancy(Base):
     """
     Individual audit anomaly detected by the reconciliation engine.
     """
+
     __tablename__ = "reconciliation_discrepancies"
 
     id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
-    report_id = Column(BigInteger, ForeignKey("reconciliation_reports.id", ondelete="CASCADE"), nullable=False, index=True)
+    report_id = Column(
+        BigInteger, ForeignKey("reconciliation_reports.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     discrepancy_type = Column(String(64), nullable=False, index=True)
     order_id = Column(BigInteger, nullable=True, index=True)
     payment_id = Column(BigInteger, nullable=True, index=True)

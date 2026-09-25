@@ -10,9 +10,9 @@ class ChannelRequirement(Base):
     chat_id = Column(BigInteger, nullable=True, index=True)
     username_or_link = Column(String(255), nullable=False)
     title = Column(String(128), nullable=False)
-    req_type = Column(String(32), default="ordinary", nullable=False) # ordinary, join_request, external
+    req_type = Column(String(32), default="ordinary", nullable=False)  # ordinary, join_request, external
     is_active = Column(Boolean, default=True, nullable=False)
-    is_detected = Column(Boolean, default=False, nullable=False) # True if auto-detected via my_chat_member
+    is_detected = Column(Boolean, default=False, nullable=False)  # True if auto-detected via my_chat_member
 
 
 class UserJoinRequest(Base):

@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.correlation import get_correlation_id
@@ -56,7 +57,7 @@ class OrderService:
         price_lock_id: str | None = None,
         payment_method: str = "balance",
         idempotency_key: str | None = None,
-        correlation_id: str | None = None
+        correlation_id: str | None = None,
     ) -> tuple[Order, Decimal, User | None]:
         """
         Creates and processes a new purchase order with server-side authoritative pricing,
@@ -74,7 +75,7 @@ class OrderService:
         flag_map = {
             "stars": "stars_purchases_enabled",
             "premium": "premium_purchases_enabled",
-            "gift": "gifts_purchases_enabled"
+            "gift": "gifts_purchases_enabled",
         }
         if product_type in flag_map:
             if not await feature_flag_service.is_enabled(session, flag_map[product_type], default=True):
@@ -82,39 +83,36 @@ class OrderService:
 
         # 0.1 Check checkout spam
         if not await risk_service.check_checkout_spam(session, user_id):
-            raise GiftHubException("Ko'p sonli to'lanmagan buyurtmalar aniqlandi. Iltimos, avval mavjud buyurtmalaringizni to'lang.")
+            raise GiftHubException(
+                "Ko'p sonli to'lanmagan buyurtmalar aniqlandi. Iltimos, avval mavjud buyurtmalaringizni to'lang."
+            )
 
         # 0.2 Checkout-level Idempotency Check
         if idempotency_key:
             stmt_idemp = select(CheckoutIdempotency).where(
-                CheckoutIdempotency.idempotency_key == idempotency_key,
-                CheckoutIdempotency.user_id == user_id
+                CheckoutIdempotency.idempotency_key == idempotency_key, CheckoutIdempotency.user_id == user_id
             )
             res_idemp = await session.execute(stmt_idemp)
             existing_idemp = res_idemp.scalars().first()
             if existing_idemp and existing_idemp.order_id:
                 existing_order = await session.get(Order, existing_idemp.order_id)
                 if existing_order:
-                    logger.info(f"[Checkout Idempotency] Duplicate request returning existing order {existing_order.order_code}")
+                    logger.info(
+                        f"[Checkout Idempotency] Duplicate request returning existing order {existing_order.order_code}"
+                    )
                     return existing_order, Decimal("0.00"), None
 
         # 1. Authoritative price calculation or price lock consumption
         if price_lock_id:
             lock = await pricing_service.validate_or_consume_price_lock(
-                session=session,
-                lock_id=price_lock_id,
-                product_type=product_type,
-                amount=amount
+                session=session, lock_id=price_lock_id, product_type=product_type, amount=amount
             )
             total_price = Decimal(str(lock.total_price))
             unit_price = Decimal(str(lock.unit_price))
             cost_price = Decimal(str(lock.cost_price))
         else:
             price_info = await pricing_service.get_authoritative_price(
-                session=session,
-                product_type=product_type,
-                amount=amount,
-                item_title=item_title
+                session=session, product_type=product_type, amount=amount, item_title=item_title
             )
             total_price = price_info["total_price_decimal"]
             unit_price = (total_price / Decimal(amount)).quantize(Decimal(1)) if amount else total_price
@@ -129,7 +127,7 @@ class OrderService:
                 code_str=promo_code_str,
                 user_id=user_id,
                 order_total=total_price,
-                product_type=product_type
+                product_type=product_type,
             )
             discount_amount = Decimal(str(promo_res.get("discount_amount", 0)))
             applied_promo = promo_res.get("code")
@@ -137,7 +135,7 @@ class OrderService:
         payable_price = max(Decimal("0.00"), total_price - discount_amount)
         order_code = cls.generate_order_code()
         now = utc_now()
-        is_wallet_payment = (payment_method.lower() in ("wallet", "balance"))
+        is_wallet_payment = payment_method.lower() in ("wallet", "balance")
 
         user = None
         if is_wallet_payment:
@@ -148,7 +146,7 @@ class OrderService:
                 tx_type="purchase",
                 reference_type="order",
                 reference_id=order_code,
-                note=f"{item_title} xaridi ({order_code})"
+                note=f"{item_title} xaridi ({order_code})",
             )
             initial_status = OrderStatus.PAID
             paid_at = now
@@ -157,7 +155,11 @@ class OrderService:
             paid_at = None
 
         pricing_setting = await session.get(PricingSetting, 1)
-        exchange_rate = Decimal(str(pricing_setting.ton_rate_uzs)) if (pricing_setting and pricing_setting.ton_rate_uzs) else Decimal("14800.00")
+        exchange_rate = (
+            Decimal(str(pricing_setting.ton_rate_uzs))
+            if (pricing_setting and pricing_setting.ton_rate_uzs)
+            else Decimal("14800.00")
+        )
         order_margin = max(Decimal("0.00"), payable_price - cost_price)
 
         # 4. Create Order Record with Immutable Financial Snapshot
@@ -183,7 +185,7 @@ class OrderService:
             fulfillment_status="pending",
             fulfillment_attempts=0,
             created_at=now,
-            paid_at=paid_at
+            paid_at=paid_at,
         )
         session.add(order)
         await session.flush()
@@ -196,7 +198,7 @@ class OrderService:
             to_status=initial_status,
             actor="USER",
             note=f"Buyurtma yaratildi: {item_title} (To'lov: {payment_method})",
-            created_at=now
+            created_at=now,
         )
         session.add(initial_history)
 
@@ -204,10 +206,7 @@ class OrderService:
         bonus, referrer = (Decimal("0.00"), None)
         if is_wallet_payment:
             bonus, referrer = await referral_service.process_order_referral_reward(
-                session=session,
-                order_id=order.id,
-                buyer_id=user_id,
-                purchase_amount=payable_price
+                session=session, order_id=order.id, buyer_id=user_id, purchase_amount=payable_price
             )
 
             # Atomic Outbox event for fulfillment dispatch
@@ -222,9 +221,9 @@ class OrderService:
                     "user_id": user_id,
                     "product_type": product_type,
                     "amount": amount,
-                    "recipient_username": recipient_username
+                    "recipient_username": recipient_username,
                 },
-                correlation_id=cid
+                correlation_id=cid,
             )
 
         # 6. Save Checkout Idempotency if key provided
@@ -236,13 +235,31 @@ class OrderService:
                 request_hash=f"{product_type}:{amount}:{payable_price}",
                 response_json={"order_id": order.id, "order_code": order.order_code},
                 created_at=now,
-                expires_at=now + timedelta(hours=24)
+                expires_at=now + timedelta(hours=24),
             )
             session.add(idemp_record)
 
-        await session.commit()
-        await session.refresh(order)
-        logger.info(f"[Order Created] code={order_code}, user={user_id}, total={payable_price} UZS, status={initial_status}")
+        try:
+            await session.commit()
+            await session.refresh(order)
+        except IntegrityError:
+            await session.rollback()
+            if idempotency_key:
+                stmt_idemp = select(CheckoutIdempotency).where(CheckoutIdempotency.idempotency_key == idempotency_key)
+                res_idemp = await session.execute(stmt_idemp)
+                existing_idemp = res_idemp.scalars().first()
+                if existing_idemp and existing_idemp.order_id:
+                    existing_order = await session.get(Order, existing_idemp.order_id)
+                    if existing_order:
+                        logger.info(
+                            f"[Checkout Idempotency] Concurrent race resolved to existing order {existing_order.order_code}"
+                        )
+                        return existing_order, Decimal("0.00"), None
+            raise
+
+        logger.info(
+            f"[Order Created] code={order_code}, user={user_id}, total={payable_price} UZS, status={initial_status}"
+        )
         return order, bonus, referrer
 
     @classmethod
@@ -254,7 +271,7 @@ class OrderService:
         admin_id: int | None = None,
         reason: str | None = None,
         payload: str | None = None,
-        actor: str | None = None
+        actor: str | None = None,
     ) -> Order:
         """
         Transitions order status adhering to the strict order state machine.
@@ -293,7 +310,9 @@ class OrderService:
             order.refunded_at = now
 
             if not reason or len(reason.strip()) < 5:
-                raise GiftHubException("Buyurtmani qaytarish (refund) uchun kamida 5 belgidan iborat sabab ko'rsatilishi shart.")
+                raise GiftHubException(
+                    "Buyurtmani qaytarish (refund) uchun kamida 5 belgidan iborat sabab ko'rsatilishi shart."
+                )
 
             # Process refund balance restoration if paid
             if current_status in (OrderStatus.PAID, OrderStatus.PROCESSING, OrderStatus.COMPLETED, OrderStatus.FAILED):
@@ -304,7 +323,7 @@ class OrderService:
                     tx_type="refund",
                     reference_type="order_refund",
                     reference_id=order.order_code,
-                    note=f"Buyurtma bekor qilindi va qaytarildi: {order.order_code}. Sabab: {reason or 'Admin'}"
+                    note=f"Buyurtma bekor qilindi va qaytarildi: {order.order_code}. Sabab: {reason or 'Admin'}",
                 )
 
                 # Emit Outbox event for refund notification
@@ -318,9 +337,9 @@ class OrderService:
                         "order_code": order.order_code,
                         "user_id": order.user_id,
                         "refund_amount": str(order.total_price),
-                        "reason": reason
+                        "reason": reason,
                     },
-                    correlation_id=order.correlation_id or get_correlation_id()
+                    correlation_id=order.correlation_id or get_correlation_id(),
                 )
 
                 if admin_id:
@@ -331,7 +350,7 @@ class OrderService:
                         entity_id=str(order.id),
                         reason=reason,
                         details=f"Buyurtma #{order.order_code} qaytarildi ({order.total_price} UZS). Sabab: {reason or 'N/A'}",
-                        created_at=now
+                        created_at=now,
                     )
                     session.add(audit)
 
@@ -346,7 +365,7 @@ class OrderService:
             to_status=target_status,
             actor=actor or (f"ADMIN:{admin_id}" if admin_id else "SYSTEM"),
             note=reason or f"Buyurtma holati o'zgartirildi: {current_status} -> {target_status}",
-            created_at=now
+            created_at=now,
         )
         session.add(history)
 
@@ -367,7 +386,7 @@ class OrderService:
         payment_method: str = "wallet",
         promo_code: str | None = None,
         price_lock_id: str | None = None,
-        idempotency_key: str | None = None
+        idempotency_key: str | None = None,
     ) -> Order:
         order, _, _ = await cls.create_order(
             session=session,
@@ -379,7 +398,7 @@ class OrderService:
             promo_code_str=promo_code,
             price_lock_id=price_lock_id,
             payment_method=payment_method,
-            idempotency_key=idempotency_key
+            idempotency_key=idempotency_key,
         )
         return order
 
@@ -390,31 +409,23 @@ class OrderService:
         order_id: int,
         new_status: Any,
         admin_id: int | None = None,
-        reason: str | None = None
+        reason: str | None = None,
     ) -> Order:
         status_str = new_status.value if hasattr(new_status, "value") else str(new_status)
         return await cls.transition_order_status(
-            session=session,
-            order_id=order_id,
-            new_status_raw=status_str,
-            admin_id=admin_id,
-            reason=reason
+            session=session, order_id=order_id, new_status_raw=status_str, admin_id=admin_id, reason=reason
         )
 
     @classmethod
     async def refund_order(
-        cls,
-        session: AsyncSession,
-        order_id: int,
-        admin_telegram_id: int | None = None,
-        reason: str | None = None
+        cls, session: AsyncSession, order_id: int, admin_telegram_id: int | None = None, reason: str | None = None
     ) -> Order:
         return await cls.transition_order_status(
             session=session,
             order_id=order_id,
             new_status_raw=OrderStatus.REFUNDED.value,
             admin_id=admin_telegram_id,
-            reason=reason or "Admin tomonidan qaytarildi"
+            reason=reason or "Admin tomonidan qaytarildi",
         )
 
     @classmethod
@@ -424,9 +435,7 @@ class OrderService:
             return await session.get(Order, int(order_id_or_code))
         code = str(order_id_or_code).strip()
         stmt = select(Order).where(
-            (Order.order_code == code) |
-            (Order.order_code == f"#{code}") |
-            (Order.order_code == code.lstrip("#"))
+            (Order.order_code == code) | (Order.order_code == f"#{code}") | (Order.order_code == code.lstrip("#"))
         )
         res = await session.execute(stmt)
         return res.scalars().first()
@@ -437,7 +446,11 @@ class OrderService:
         order = await cls.get_order_by_id_or_code(session, order_id_or_code)
         if not order:
             return []
-        stmt = select(OrderStatusHistory).where(OrderStatusHistory.order_id == order.id).order_by(OrderStatusHistory.created_at.asc())
+        stmt = (
+            select(OrderStatusHistory)
+            .where(OrderStatusHistory.order_id == order.id)
+            .order_by(OrderStatusHistory.created_at.asc())
+        )
         res = await session.execute(stmt)
         return list(res.scalars().all())
 

@@ -13,5 +13,7 @@ class BasePaymentProvider(ABC):
         """Generates the external payment link for customer checkout."""
 
     @abstractmethod
-    async def process_webhook(self, session: AsyncSession, payload: dict[str, Any], headers: dict[str, str] | None = None) -> dict[str, Any]:
+    async def process_webhook(
+        self, session: AsyncSession, payload: dict[str, Any], headers: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         """Processes provider webhook with signature verification and idempotency."""

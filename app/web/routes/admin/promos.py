@@ -9,7 +9,7 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel
-from sqlalchemy import func, select, or_, and_
+from sqlalchemy import and_, func, or_, select
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
@@ -46,6 +46,7 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
+
 @router.get("/api/admin/promocodes")
 async def get_admin_promocodes(admin: User = Depends(require_permission(Permission.PRICING_READ))):
     async with AsyncSessionLocal() as session:
@@ -60,7 +61,7 @@ async def get_admin_promocodes(admin: User = Depends(require_permission(Permissi
                 "current_uses": p.current_uses,
                 "min_order_amount": float(p.min_order_amount),
                 "is_active": p.is_active,
-                "created_at": p.created_at.strftime("%d %b %Y") if p.created_at else ""
+                "created_at": p.created_at.strftime("%d %b %Y") if p.created_at else "",
             }
             for p in promos
         ]
@@ -76,7 +77,9 @@ class PromoCreateRequest(BaseModel):
 
 
 @router.post("/api/admin/promocodes")
-async def create_admin_promocode(req: PromoCreateRequest, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))):
+async def create_admin_promocode(
+    req: PromoCreateRequest, admin: User = Depends(require_permission(Permission.PRICING_UPDATE))
+):
     async with AsyncSessionLocal() as session:
         try:
             promo = await queries.create_promo_code(
@@ -86,7 +89,7 @@ async def create_admin_promocode(req: PromoCreateRequest, admin: User = Depends(
                 reward_value=req.reward_value,
                 max_uses=req.max_uses,
                 min_order_amount=req.min_order_amount,
-                is_active=req.is_active
+                is_active=req.is_active,
             )
             await queries.log_admin_action(
                 session=session,
@@ -95,7 +98,7 @@ async def create_admin_promocode(req: PromoCreateRequest, admin: User = Depends(
                 action="Yangi promo-kod yaratdi",
                 entity_type="promo",
                 entity_id=str(promo.id),
-                details=f"{promo.code} ({promo.reward_type}: {promo.reward_value})"
+                details=f"{promo.code} ({promo.reward_type}: {promo.reward_value})",
             )
             return {"success": True, "promo_id": promo.id}
         except ValueError as e:
@@ -121,4 +124,3 @@ async def toggle_admin_promocode(promo_id: int, admin: User = Depends(require_pe
 
 
 # ================= ADMIN PAYMENT SETTINGS ================= #
-

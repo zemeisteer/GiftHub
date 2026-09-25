@@ -142,7 +142,7 @@ In `app/web/server.py` (lines 70–121, 122–167):
 async def get_current_user(
     x_telegram_init_data: Optional[str] = Header(None),
     x_auth_user_id: Optional[str] = Header(None),
-    auth_user_id: Optional[int] = Query(None)
+    auth_user_id: Optional[int] = Query(None),
 ):
     ...
     effective_uid = auth_user_id

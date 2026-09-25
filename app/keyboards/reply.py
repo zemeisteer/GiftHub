@@ -9,6 +9,6 @@ def get_reply_main_keyboard() -> ReplyKeyboardMarkup:
     keyboard = [
         [KeyboardButton(text="⭐ Bosh menyu"), KeyboardButton(text="⚡ Yangi xizmatlar")],
         [KeyboardButton(text="💰 Balans"), KeyboardButton(text="👤 Profil")],
-        [KeyboardButton(text="🛟 Yordam")]
+        [KeyboardButton(text="🛟 Yordam")],
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)

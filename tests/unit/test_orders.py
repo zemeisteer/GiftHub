@@ -18,7 +18,7 @@ async def test_order_creation_authoritative_price(db_session: AsyncSession, samp
         quantity=50,
         recipient="self",
         recipient_id=str(sample_user.telegram_id),
-        payment_method="click"
+        payment_method="click",
     )
     assert order.id is not None
     assert order.status == OrderStatus.CREATED.value
@@ -35,7 +35,7 @@ async def test_order_state_transitions_lifecycle(db_session: AsyncSession, sampl
         quantity=100,
         recipient="self",
         recipient_id=str(sample_user.telegram_id),
-        payment_method="click"
+        payment_method="click",
     )
 
     # CREATED -> AWAITING_PAYMENT
@@ -71,7 +71,7 @@ async def test_order_invalid_state_transition_fails(db_session: AsyncSession, sa
         quantity=50,
         recipient="self",
         recipient_id=str(sample_user.telegram_id),
-        payment_method="wallet"
+        payment_method="wallet",
     )
     # Move to COMPLETED: PAID -> COMPLETED
     await orderService.transition_order_state(db_session, order.id, OrderStatus.COMPLETED)

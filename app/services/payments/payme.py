@@ -31,14 +31,7 @@ def make_rpc_error(code: int, message: str, rpc_id: Any) -> dict[str, Any]:
     return {
         "jsonrpc": "2.0",
         "id": rpc_id,
-        "error": {
-            "code": code,
-            "message": {
-                "uz": message,
-                "ru": message,
-                "en": message
-            }
-        }
+        "error": {"code": code, "message": {"uz": message, "ru": message, "en": message}},
     }
 
 
@@ -99,7 +92,7 @@ class PaymeProvider(BasePaymentProvider):
         if not user:
             return make_rpc_error(PAYME_ERR_USER_NOT_FOUND, "Foydalanuvchi topilmadi", rpc_id)
 
-        if amount < 100000: # 1000 UZS = 100,000 tiyin
+        if amount < 100000:  # 1000 UZS = 100,000 tiyin
             return make_rpc_error(PAYME_ERR_AMOUNT, "Minimal to'lov summasi 1000 so'm", rpc_id)
 
         return {"jsonrpc": "2.0", "id": rpc_id, "result": {"allow": True}}
@@ -120,9 +113,7 @@ class PaymeProvider(BasePaymentProvider):
         if not user:
             return make_rpc_error(PAYME_ERR_USER_NOT_FOUND, "Foydalanuvchi topilmadi", rpc_id)
 
-        res = await session.execute(
-            select(PaymeTransaction).where(PaymeTransaction.paycom_id == paycom_id)
-        )
+        res = await session.execute(select(PaymeTransaction).where(PaymeTransaction.paycom_id == paycom_id))
         tx = res.scalars().first()
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
 
@@ -132,16 +123,11 @@ class PaymeProvider(BasePaymentProvider):
             return {
                 "jsonrpc": "2.0",
                 "id": rpc_id,
-                "result": {"create_time": tx.create_time, "transaction": str(tx.id), "state": tx.state}
+                "result": {"create_time": tx.create_time, "transaction": str(tx.id), "state": tx.state},
             }
 
         tx = PaymeTransaction(
-            paycom_id=paycom_id,
-            paycom_time=paycom_time,
-            create_time=now_ms,
-            amount=amount,
-            state=1,
-            user_id=user_id
+            paycom_id=paycom_id, paycom_time=paycom_time, create_time=now_ms, amount=amount, state=1, user_id=user_id
         )
         session.add(tx)
         await session.commit()
@@ -150,7 +136,7 @@ class PaymeProvider(BasePaymentProvider):
         return {
             "jsonrpc": "2.0",
             "id": rpc_id,
-            "result": {"create_time": tx.create_time, "transaction": str(tx.id), "state": tx.state}
+            "result": {"create_time": tx.create_time, "transaction": str(tx.id), "state": tx.state},
         }
 
     async def _perform_tx(self, session: AsyncSession, params: dict[str, Any], rpc_id: Any, bot=None) -> dict[str, Any]:
@@ -175,7 +161,7 @@ class PaymeProvider(BasePaymentProvider):
                 user_id=tx.user_id,
                 amount=amount_uzs,
                 note=f"Payme orqali to'lov (ID: {paycom_id})",
-                raw_payload=str(params)
+                raw_payload=str(params),
             )
 
             tx.state = 2
@@ -188,7 +174,7 @@ class PaymeProvider(BasePaymentProvider):
         return {
             "jsonrpc": "2.0",
             "id": rpc_id,
-            "result": {"transaction": str(tx.id), "perform_time": tx.perform_time, "state": tx.state}
+            "result": {"transaction": str(tx.id), "perform_time": tx.perform_time, "state": tx.state},
         }
 
     async def _cancel_tx(self, session: AsyncSession, params: dict[str, Any], rpc_id: Any) -> dict[str, Any]:
@@ -220,7 +206,7 @@ class PaymeProvider(BasePaymentProvider):
                     tx_type="refund",
                     reference_type="payment_cancellation",
                     reference_id=paycom_id,
-                    note=f"Payme to'lovi bekor qilindi (ID: {paycom_id})"
+                    note=f"Payme to'lovi bekor qilindi (ID: {paycom_id})",
                 )
             except InsufficientBalanceError:
                 logger.warning(
@@ -229,7 +215,7 @@ class PaymeProvider(BasePaymentProvider):
                 return make_rpc_error(
                     PAYME_ERR_CANT_CANCEL,
                     "Mablag' allaqachon sarflanganligi sababli tranzaksiyani bekor qilib bo'lmaydi",
-                    rpc_id
+                    rpc_id,
                 )
             except Exception as e:
                 logger.error(f"Error rolling back cancelled payme payment: {e}")
@@ -243,14 +229,12 @@ class PaymeProvider(BasePaymentProvider):
         return {
             "jsonrpc": "2.0",
             "id": rpc_id,
-            "result": {"transaction": str(tx.id), "cancel_time": tx.cancel_time, "state": tx.state}
+            "result": {"transaction": str(tx.id), "cancel_time": tx.cancel_time, "state": tx.state},
         }
 
     async def _check_tx(self, session: AsyncSession, params: dict[str, Any], rpc_id: Any) -> dict[str, Any]:
         paycom_id = params.get("id")
-        res = await session.execute(
-            select(PaymeTransaction).where(PaymeTransaction.paycom_id == paycom_id)
-        )
+        res = await session.execute(select(PaymeTransaction).where(PaymeTransaction.paycom_id == paycom_id))
         tx = res.scalars().first()
         if not tx:
             return make_rpc_error(PAYME_ERR_TRANSACTION_NOT_FOUND, "Tranzaksiya topilmadi", rpc_id)
@@ -264,8 +248,8 @@ class PaymeProvider(BasePaymentProvider):
                 "cancel_time": tx.cancel_time,
                 "transaction": str(tx.id),
                 "state": tx.state,
-                "reason": tx.reason
-            }
+                "reason": tx.reason,
+            },
         }
 
     async def _get_statement(self, session: AsyncSession, params: dict[str, Any], rpc_id: Any) -> dict[str, Any]:
@@ -274,39 +258,45 @@ class PaymeProvider(BasePaymentProvider):
 
         res = await session.execute(
             select(PaymeTransaction).where(
-                PaymeTransaction.create_time >= from_time,
-                PaymeTransaction.create_time <= to_time
+                PaymeTransaction.create_time >= from_time, PaymeTransaction.create_time <= to_time
             )
         )
         transactions = res.scalars().all()
         items = []
         for tx in transactions:
-            items.append({
-                "id": tx.paycom_id,
-                "time": tx.paycom_time,
-                "amount": tx.amount,
-                "account": {"user_id": str(tx.user_id)},
-                "create_time": tx.create_time,
-                "perform_time": tx.perform_time,
-                "cancel_time": tx.cancel_time,
-                "transaction": str(tx.id),
-                "state": tx.state,
-                "reason": tx.reason
-            })
+            items.append(
+                {
+                    "id": tx.paycom_id,
+                    "time": tx.paycom_time,
+                    "amount": tx.amount,
+                    "account": {"user_id": str(tx.user_id)},
+                    "create_time": tx.create_time,
+                    "perform_time": tx.perform_time,
+                    "cancel_time": tx.cancel_time,
+                    "transaction": str(tx.id),
+                    "state": tx.state,
+                    "reason": tx.reason,
+                }
+            )
         return {"jsonrpc": "2.0", "id": rpc_id, "result": {"transactions": items}}
 
-    async def process_webhook(self, session: AsyncSession, payload: dict[str, Any], headers: dict[str, str] | None = None) -> dict[str, Any]:
+    async def process_webhook(
+        self, session: AsyncSession, payload: dict[str, Any], headers: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         return await self.handle_request(session, payload)
 
 
 payme_provider = PaymeProvider()
 
+
 # Functional wrappers for backward compatibility
 def generate_payme_link(user_id: int, amount_uzs: float) -> str:
     return payme_provider.generate_checkout_url(user_id, Decimal(str(amount_uzs)))
 
+
 def verify_payme_auth(auth_header: str | None) -> bool:
     return payme_provider.verify_auth(auth_header)
+
 
 async def handle_payme_request(session: AsyncSession, payload: dict[str, Any], bot=None) -> dict[str, Any]:
     return await payme_provider.handle_request(session, payload, bot)

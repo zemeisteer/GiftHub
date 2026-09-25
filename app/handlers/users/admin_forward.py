@@ -6,15 +6,20 @@ from aiogram.types import (
     Message,
 )
 
+from app.core.logging import get_logger
 from app.models.broadcast import BroadcastDraft
 from data import config
 from database import queries
 from database.db import AsyncSessionLocal
 
+logger = get_logger(__name__)
+
 router = Router()
+
 
 def is_admin_check(user_id: int) -> bool:
     return str(user_id) in config.ADMINS
+
 
 @router.message(F.forward_origin)
 async def handle_admin_forward(message: Message):
@@ -43,16 +48,22 @@ async def handle_admin_forward(message: Message):
                     mode="postbot",
                     text=message.text or message.caption or "",
                     forward_chat_id=message.chat.id,
-                    forward_message_id=message.message_id
+                    forward_message_id=message.message_id,
                 )
                 session.add(draft)
                 await session.commit()
                 draft_id = draft.id
 
-            kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🚀 Barcha foydalanuvchilarga tarqatish", callback_data=f"send_bc_draft:{draft_id}")],
-                [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_adm")]
-            ])
+            kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🚀 Barcha foydalanuvchilarga tarqatish", callback_data=f"send_bc_draft:{draft_id}"
+                        )
+                    ],
+                    [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_adm")],
+                ]
+            )
 
             await message.reply(
                 text=(
@@ -62,23 +73,23 @@ async def handle_admin_forward(message: Message):
                     f"Tugmalar va formatlash: <i>Saqlab qolindi</i>\n\n"
                     f"Ushbu reklamani barcha foydalanuvchilarga tarqatishni xohlaysizmi?"
                 ),
-                reply_markup=kb
+                reply_markup=kb,
             )
             return
 
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(text="💎 Super Admin", callback_data=f"make_adm:{uid}:super_admin"),
-                InlineKeyboardButton(text="₮ Narx Admin", callback_data=f"make_adm:{uid}:price_admin")
-            ],
-            [
-                InlineKeyboardButton(text="🛟 Support Admin", callback_data=f"make_adm:{uid}:support_admin"),
-                InlineKeyboardButton(text="📣 Marketing Admin", callback_data=f"make_adm:{uid}:marketing_admin")
-            ],
-            [
-                InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_adm")
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="💎 Super Admin", callback_data=f"make_adm:{uid}:super_admin"),
+                    InlineKeyboardButton(text="₮ Narx Admin", callback_data=f"make_adm:{uid}:price_admin"),
+                ],
+                [
+                    InlineKeyboardButton(text="🛟 Support Admin", callback_data=f"make_adm:{uid}:support_admin"),
+                    InlineKeyboardButton(text="📣 Marketing Admin", callback_data=f"make_adm:{uid}:marketing_admin"),
+                ],
+                [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_adm")],
             ]
-        ])
+        )
 
         await message.reply(
             text=(
@@ -88,7 +99,7 @@ async def handle_admin_forward(message: Message):
                 f"User ID: <code>{uid}</code>\n\n"
                 f"Ushbu foydalanuvchiga qaysi rolni bermoqchisiz?"
             ),
-            reply_markup=kb
+            reply_markup=kb,
         )
 
     # Forwarded from Channel or Chat
@@ -102,16 +113,22 @@ async def handle_admin_forward(message: Message):
                 mode="forward",
                 text=message.text or message.caption or "",
                 forward_chat_id=message.chat.id,
-                forward_message_id=message.message_id
+                forward_message_id=message.message_id,
             )
             session.add(draft)
             await session.commit()
             draft_id = draft.id
 
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🚀 Barcha foydalanuvchilarga yuborish", callback_data=f"send_bc_draft:{draft_id}")],
-            [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_adm")]
-        ])
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🚀 Barcha foydalanuvchilarga yuborish", callback_data=f"send_bc_draft:{draft_id}"
+                    )
+                ],
+                [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_adm")],
+            ]
+        )
 
         await message.reply(
             text=(
@@ -120,8 +137,9 @@ async def handle_admin_forward(message: Message):
                 f"Xabar ID: <code>{msg_id}</code>\n\n"
                 f"Ushbu xabarni barcha foydalanuvchilarga copyMessage orqali tarqatishni xohlaysizmi?"
             ),
-            reply_markup=kb
+            reply_markup=kb,
         )
+
 
 @router.message(F.text)
 async def handle_admin_postbot_code(message: Message):
@@ -135,19 +153,22 @@ async def handle_admin_postbot_code(message: Message):
     if "@PostBot" in txt or "t.me/postbot" in txt.lower() or "postbot" in txt.lower():
         async with AsyncSessionLocal() as session:
             draft = BroadcastDraft(
-                mode="postbot",
-                text=txt,
-                forward_chat_id=message.chat.id,
-                forward_message_id=message.message_id
+                mode="postbot", text=txt, forward_chat_id=message.chat.id, forward_message_id=message.message_id
             )
             session.add(draft)
             await session.commit()
             draft_id = draft.id
 
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🚀 Barcha foydalanuvchilarga yuborish", callback_data=f"send_bc_draft:{draft_id}")],
-            [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_adm")]
-        ])
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🚀 Barcha foydalanuvchilarga yuborish", callback_data=f"send_bc_draft:{draft_id}"
+                    )
+                ],
+                [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_adm")],
+            ]
+        )
 
         await message.reply(
             text=(
@@ -155,8 +176,9 @@ async def handle_admin_postbot_code(message: Message):
                 f"Kod / Matn: <code>{txt[:120]}</code>\n\n"
                 f"💡 <i>Ushbu xabarni bot orqali barcha foydalanuvchilarga tarqatishni xohlaysizmi?</i>"
             ),
-            reply_markup=kb
+            reply_markup=kb,
         )
+
 
 @router.callback_query(F.data.startswith("send_bc_"))
 async def cb_send_broadcast_flow(callback: CallbackQuery):
@@ -187,7 +209,11 @@ async def cb_send_broadcast_flow(callback: CallbackQuery):
         target_msg_id = int(arg)
 
     if not target_msg_id:
-        target_msg_id = callback.message.reply_to_message.message_id if callback.message.reply_to_message else callback.message.message_id
+        target_msg_id = (
+            callback.message.reply_to_message.message_id
+            if callback.message.reply_to_message
+            else callback.message.message_id
+        )
 
     async with AsyncSessionLocal() as session:
         recipients = await queries.get_broadcast_recipients(session, segment="all")
@@ -203,13 +229,10 @@ async def cb_send_broadcast_flow(callback: CallbackQuery):
         f"<i>Tugagach hisobot yuboriladi...</i>"
     )
 
-    req = BroadcastRequest(
-        segment="all",
-        mode="postbot",
-        forward_mode=False
-    )
+    req = BroadcastRequest(segment="all", mode="postbot", forward_mode=False)
     # Trigger background queue
     bot = callback.bot
+
     async def _send_copy_queue():
         sent = 0
         blocked = 0
@@ -235,12 +258,13 @@ async def cb_send_broadcast_flow(callback: CallbackQuery):
                     f"✅ Yetkazildi: <b>{sent}</b>\n"
                     f"🚫 Botni bloklagan: <b>{blocked}</b>\n"
                     f"⚠️ Xatoliklar: <b>{failed}</b>"
-                )
+                ),
             )
         except Exception as e:
             logger.error(f"Broadcast xulosasini adminga yuborishda xatolik ({callback.from_user.id}): {e}")
 
     asyncio.create_task(_send_copy_queue())
+
 
 @router.callback_query(F.data.startswith("make_adm:"))
 async def cb_assign_admin(callback: CallbackQuery):
@@ -251,11 +275,7 @@ async def cb_assign_admin(callback: CallbackQuery):
     async with AsyncSessionLocal() as session:
         user = await queries.get_user_by_id(session, uid)
         if not user:
-            user = await queries.get_or_create_user(
-                session=session,
-                user_id=uid,
-                first_name=f"Admin {uid}"
-            )
+            user = await queries.get_or_create_user(session=session, user_id=uid, first_name=f"Admin {uid}")
 
         await queries.set_user_role(session, uid, role)
         await queries.log_admin_action(
@@ -263,12 +283,13 @@ async def cb_assign_admin(callback: CallbackQuery):
             admin_id=callback.from_user.id,
             admin_username=callback.from_user.username,
             action=f"Yangi admin tayinladi (Forward orqali): ID {uid}",
-            details=f"Rol: {role}"
+            details=f"Rol: {role}",
         )
 
     await callback.message.edit_text(
         text=f"✅ Foydalanuvchi (ID: <code>{uid}</code>) muvaffaqiyatli <b>{role}</b> etib tayinlandi!"
     )
+
 
 @router.callback_query(F.data == "cancel_adm")
 async def cb_cancel_adm(callback: CallbackQuery):

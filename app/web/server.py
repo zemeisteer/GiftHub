@@ -1,4 +1,5 @@
 import os
+
 from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -16,7 +17,7 @@ logger = get_logger("GiftHubAPI")
 app = FastAPI(
     title="GiftHub Web App & API",
     description="Official API for GiftHub — Telegram Stars, Premium, Gifts & Services Platform",
-    version="2.0.0"
+    version="2.0.0",
 )
 
 # 1. CORS Middleware
@@ -33,6 +34,7 @@ app.add_middleware(
 @app.middleware("http")
 async def correlation_id_middleware(request: Request, call_next):
     from app.core.correlation import set_correlation_id
+
     incoming_id = request.headers.get("X-Correlation-ID") or request.headers.get("X-Request-ID")
     cid = set_correlation_id(incoming_id)
     response: Response = await call_next(request)
@@ -48,6 +50,7 @@ async def maintenance_mode_middleware(request: Request, call_next):
     if not any(path.startswith(p) for p in exempt_prefixes):
         try:
             from app.services.feature_flags.service import feature_flag_service
+
             async with AsyncSessionLocal() as session:
                 if await feature_flag_service.is_maintenance_mode(session):
                     return JSONResponse(
@@ -55,8 +58,8 @@ async def maintenance_mode_middleware(request: Request, call_next):
                         content={
                             "success": False,
                             "maintenance": True,
-                            "detail": "Platforma texnik ta'mirlash rejimida. Tez orada qayta ishga tushadi."
-                        }
+                            "detail": "Platforma texnik ta'mirlash rejimida. Tez orada qayta ishga tushadi.",
+                        },
                     )
         except Exception as e:
             logger.warning(f"Maintenance rejimi tekshiruvida xatolik: {e}")

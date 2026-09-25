@@ -17,11 +17,7 @@ logger = get_logger(__name__)
 
 # Fragment baseline constants
 FRAGMENT_STAR_BASE_UZS = Decimal("176.46")
-FRAGMENT_PREMIUM_BASE_UZS = {
-    "3": Decimal("138000.00"),
-    "6": Decimal("205000.00"),
-    "12": Decimal("375000.00")
-}
+FRAGMENT_PREMIUM_BASE_UZS = {"3": Decimal("138000.00"), "6": Decimal("205000.00"), "12": Decimal("375000.00")}
 DEFAULT_GIFTS = [
     {"id": "bear", "name": "Teddy Bear", "price_uzs": 64000, "cost_uzs": 50000, "icon": "🧸", "type": "3d"},
     {"id": "heart", "name": "Neon Heart", "price_uzs": 85000, "cost_uzs": 68000, "icon": "💖", "type": "3d"},
@@ -34,7 +30,7 @@ DEFAULT_GIFTS = [
     {"id": "medal", "name": "Star Medal", "price_uzs": 95000, "cost_uzs": 75000, "icon": "🎖️", "type": "classic"},
     {"id": "hat", "name": "Magic Hat", "price_uzs": 78000, "cost_uzs": 60000, "icon": "🎩", "type": "classic"},
     {"id": "eagle", "name": "Flying Eagle", "price_uzs": 110000, "cost_uzs": 88000, "icon": "🦅", "type": "3d"},
-    {"id": "lion", "name": "Golden Lion", "price_uzs": 175000, "cost_uzs": 140000, "icon": "🦁", "type": "vip"}
+    {"id": "lion", "name": "Golden Lion", "price_uzs": 175000, "cost_uzs": 140000, "icon": "🦁", "type": "vip"},
 ]
 
 
@@ -58,8 +54,16 @@ class PricingService:
             unit_cost = Decimal(str(pricing.star_unit_price_uzs))
 
         # Margin with minimum safeguard
-        margin_pct = Decimal(str(pricing.margin_percent)) if (pricing and pricing.margin_percent is not None) else Decimal("15.00")
-        min_margin = Decimal(str(pricing.minimum_margin)) if (pricing and pricing.minimum_margin is not None) else Decimal("5.00")
+        margin_pct = (
+            Decimal(str(pricing.margin_percent))
+            if (pricing and pricing.margin_percent is not None)
+            else Decimal("15.00")
+        )
+        min_margin = (
+            Decimal(str(pricing.minimum_margin))
+            if (pricing and pricing.minimum_margin is not None)
+            else Decimal("5.00")
+        )
         effective_margin = max(margin_pct, min_margin)
 
         unit_sell = unit_cost * (Decimal("1.00") + (effective_margin / Decimal("100.00")))
@@ -69,7 +73,11 @@ class PricingService:
 
         # Bulk discounts with maximum safeguard
         applied_discount = Decimal("0.00")
-        max_discount = Decimal(str(pricing.maximum_discount)) if (pricing and pricing.maximum_discount is not None) else Decimal("30.00")
+        max_discount = (
+            Decimal(str(pricing.maximum_discount))
+            if (pricing and pricing.maximum_discount is not None)
+            else Decimal("30.00")
+        )
 
         if pricing and pricing.stars_discounts_json:
             try:
@@ -87,7 +95,11 @@ class PricingService:
         final_total = cls.round_money(base_total * discount_multiplier)
 
         # Minimum price safeguard
-        min_price = Decimal(str(pricing.minimum_price)) if (pricing and pricing.minimum_price is not None) else Decimal("1000.00")
+        min_price = (
+            Decimal(str(pricing.minimum_price))
+            if (pricing and pricing.minimum_price is not None)
+            else Decimal("1000.00")
+        )
         if final_total < min_price and amount >= 10:
             final_total = min_price
 
@@ -101,7 +113,7 @@ class PricingService:
             "total_price_decimal": final_total,
             "cost_total_uzs": float(cls.round_money(cost_total)),
             "cost_total_decimal": cls.round_money(cost_total),
-            "formatted_price": f"{int(final_total):,} so'm".replace(",", " ")
+            "formatted_price": f"{int(final_total):,} so'm".replace(",", " "),
         }
 
     @classmethod
@@ -121,7 +133,7 @@ class PricingService:
                         "total_price_uzs": float(sell_price),
                         "total_price_decimal": sell_price,
                         "cost_total_decimal": base_cost,
-                        "formatted_price": f"{int(sell_price):,} so'm".replace(",", " ")
+                        "formatted_price": f"{int(sell_price):,} so'm".replace(",", " "),
                     }
             except Exception as e:
                 logger.warning(f"telegram_premium_json ni o'qishda xatolik: {e}")
@@ -133,7 +145,7 @@ class PricingService:
             "total_price_uzs": float(sell_price),
             "total_price_decimal": sell_price,
             "cost_total_decimal": base_cost,
-            "formatted_price": f"{int(sell_price):,} so'm".replace(",", " ")
+            "formatted_price": f"{int(sell_price):,} so'm".replace(",", " "),
         }
 
     @classmethod
@@ -158,7 +170,7 @@ class PricingService:
                     "total_price_uzs": float(p),
                     "total_price_decimal": p,
                     "cost_total_decimal": c,
-                    "formatted_price": f"{int(p):,} so'm".replace(",", " ")
+                    "formatted_price": f"{int(p):,} so'm".replace(",", " "),
                 }
 
         fallback_p = Decimal("60000.00")
@@ -169,16 +181,12 @@ class PricingService:
             "total_price_uzs": float(fallback_p),
             "total_price_decimal": fallback_p,
             "cost_total_decimal": fallback_c,
-            "formatted_price": f"{int(fallback_p):,} so'm".replace(",", " ")
+            "formatted_price": f"{int(fallback_p):,} so'm".replace(",", " "),
         }
 
     @classmethod
     async def get_authoritative_price(
-        cls,
-        session: AsyncSession,
-        product_type: str,
-        amount: int,
-        item_title: str | None = None
+        cls, session: AsyncSession, product_type: str, amount: int, item_title: str | None = None
     ) -> dict[str, Any]:
         """
         CRITICAL SECURITY METHOD: Calculates authoritative backend price.
@@ -198,6 +206,7 @@ class PricingService:
         elif p_type == "service":
             # Lookup custom service
             from app.models.services import CustomService
+
             res_srv = await session.execute(
                 select(CustomService).where(CustomService.name == item_title, CustomService.is_active == True)
             )
@@ -209,7 +218,7 @@ class PricingService:
                     "total_price_decimal": p,
                     "cost_total_decimal": c,
                     "total_price_uzs": float(p),
-                    "formatted_price": f"{int(p):,} so'm".replace(",", " ")
+                    "formatted_price": f"{int(p):,} so'm".replace(",", " "),
                 }
             raise GiftHubException(f"Xizmat topilmadi yoki faol emas: {item_title}")
         else:
@@ -217,11 +226,7 @@ class PricingService:
 
     @classmethod
     async def create_price_lock(
-        cls,
-        session: AsyncSession,
-        product_type: str,
-        amount: int,
-        user_id: int | None = None
+        cls, session: AsyncSession, product_type: str, amount: int, user_id: int | None = None
     ) -> PriceLock:
         """
         Creates a checkout price lock valid for configured duration (e.g., 10 minutes).
@@ -250,21 +255,19 @@ class PricingService:
             user_id=user_id,
             is_used=False,
             expires_at=expires_at,
-            created_at=now
+            created_at=now,
         )
         session.add(lock)
         await session.commit()
         await session.refresh(lock)
-        logger.info(f"[Price Lock Created] id={lock_id}, product={product_type}, total={lock.total_price}, expires_at={expires_at}")
+        logger.info(
+            f"[Price Lock Created] id={lock_id}, product={product_type}, total={lock.total_price}, expires_at={expires_at}"
+        )
         return lock
 
     @classmethod
     async def validate_or_consume_price_lock(
-        cls,
-        session: AsyncSession,
-        lock_id: str,
-        product_type: str,
-        amount: int
+        cls, session: AsyncSession, lock_id: str, product_type: str, amount: int
     ) -> PriceLock:
         """
         Validates active price lock and marks it as consumed upon order placement.

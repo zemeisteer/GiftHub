@@ -14,6 +14,7 @@ class FeatureFlag(Base):
       - gifts_purchases_enabled (bool)
       - maintenance_mode (bool)
     """
+
     __tablename__ = "feature_flags"
 
     name = Column(String(64), primary_key=True)

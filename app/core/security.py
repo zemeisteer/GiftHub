@@ -13,10 +13,9 @@ logger = get_logger(__name__)
 
 # ================= TELEGRAM WEBAPP AUTHENTICATION ================= #
 
+
 def validate_telegram_init_data(
-    init_data: str,
-    bot_token: str | None = None,
-    max_age_seconds: int | None = None
+    init_data: str, bot_token: str | None = None, max_age_seconds: int | None = None
 ) -> dict[str, Any] | None:
     """
     Validates Telegram Web App initData string with the bot token using official HMAC-SHA256.
@@ -53,16 +52,14 @@ def validate_telegram_init_data(
                 logger.warning(f"Telegram initData validation failed: auth_date in future ({auth_date} > {now})")
                 return None
             if now - auth_date > max_age:
-                logger.warning(f"Telegram initData validation failed: token expired (age={now - auth_date}s > {max_age}s)")
+                logger.warning(
+                    f"Telegram initData validation failed: token expired (age={now - auth_date}s > {max_age}s)"
+                )
                 return None
 
         # Standard Telegram HMAC-SHA256 signature algorithm
         # 1. secret_key = HMAC-SHA256(key="WebAppData", msg=bot_token)
-        secret_key = hmac.new(
-            key=b"WebAppData",
-            msg=token.encode("utf-8"),
-            digestmod=hashlib.sha256
-        ).digest()
+        secret_key = hmac.new(key=b"WebAppData", msg=token.encode("utf-8"), digestmod=hashlib.sha256).digest()
 
         # 2. data_check_string = sorted key=value pairs joined with newline
         data_check_list = [f"{k}={v}" for k, v in sorted(parsed_data.items(), key=lambda x: x[0])]
@@ -70,9 +67,7 @@ def validate_telegram_init_data(
 
         # 3. calculated_hash = HMAC-SHA256(key=secret_key, msg=data_check_string)
         calculated_hash = hmac.new(
-            key=secret_key,
-            msg=data_check_string.encode("utf-8"),
-            digestmod=hashlib.sha256
+            key=secret_key, msg=data_check_string.encode("utf-8"), digestmod=hashlib.sha256
         ).hexdigest()
 
         if hmac.compare_digest(calculated_hash, received_hash):
@@ -98,6 +93,7 @@ def validate_telegram_init_data(
 
 
 # ================= RBAC PERMISSIONS ================= #
+
 
 class Permission:
     USERS_READ = "users.read"
@@ -165,7 +161,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         Permission.PRICING_READ,
         Permission.USERS_READ,
     },
-    "user": set()
+    "user": set(),
 }
 
 

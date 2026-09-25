@@ -36,11 +36,9 @@ def get_redis_client():
             return None
         try:
             import redis.asyncio as aioredis
+
             _redis_client = aioredis.from_url(
-                settings.REDIS_URL,
-                decode_responses=True,
-                socket_timeout=2.0,
-                socket_connect_timeout=2.0
+                settings.REDIS_URL, decode_responses=True, socket_timeout=2.0, socket_connect_timeout=2.0
             )
         except Exception as e:
             logger.warning(f"Could not connect to Redis: {e}")
@@ -57,11 +55,12 @@ def get_fsm_storage() -> BaseStorage:
     if _fsm_storage is not None:
         return _fsm_storage
 
-    is_prod = (getattr(settings, "ENVIRONMENT", "").lower() == "production")
+    is_prod = getattr(settings, "ENVIRONMENT", "").lower() == "production"
 
     if settings.REDIS_URL and is_redis_reachable(settings.REDIS_URL):
         try:
             from aiogram.fsm.storage.redis import RedisStorage
+
             _fsm_storage = RedisStorage.from_url(settings.REDIS_URL)
             logger.info("Aiogram FSM configured with RedisStorage.")
             return _fsm_storage
@@ -72,7 +71,9 @@ def get_fsm_storage() -> BaseStorage:
             logger.warning(f"Failed to initialize Redis FSM storage ({e}). Falling back to MemoryStorage.")
     elif is_prod:
         logger.critical("FATAL: REDIS_URL is not configured or Redis is unreachable in production environment!")
-        raise RuntimeError("Production environment requires RedisStorage! Please configure REDIS_URL and ensure Redis is running.")
+        raise RuntimeError(
+            "Production environment requires RedisStorage! Please configure REDIS_URL and ensure Redis is running."
+        )
 
     logger.info("Aiogram FSM configured with MemoryStorage fallback (development/test only).")
     _fsm_storage = MemoryStorage()
@@ -127,7 +128,7 @@ async def check_rate_limit(key: str, max_requests: int = 20, window_seconds: int
     """
     client = get_redis_client()
     if not client:
-        return True # Soft pass if Redis is not configured
+        return True  # Soft pass if Redis is not configured
 
     try:
         current = await client.incr(f"ratelimit:{key}")

@@ -2,6 +2,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
@@ -16,11 +17,7 @@ logger = get_logger(__name__)
 class ReferralService:
     @classmethod
     async def process_order_referral_reward(
-        cls,
-        session: AsyncSession,
-        order_id: int,
-        buyer_id: int,
-        purchase_amount: Decimal
+        cls, session: AsyncSession, order_id: int, buyer_id: int, purchase_amount: Decimal
     ) -> tuple[Decimal, User | None]:
         """
         Processes referral reward for a completed/paid order idempotently.
@@ -29,12 +26,10 @@ class ReferralService:
         # 1. Fetch buyer
         buyer = await session.get(User, buyer_id)
         if not buyer or not buyer.referrer_id or buyer.referrer_id == buyer.id:
-            return Decimal("0.00"), None # Self-referral prevention
+            return Decimal("0.00"), None  # Self-referral prevention
 
         # 2. Idempotency Check: Verify if reward already exists for this order_id
-        res_existing = await session.execute(
-            select(ReferralReward).where(ReferralReward.order_id == order_id)
-        )
+        res_existing = await session.execute(select(ReferralReward).where(ReferralReward.order_id == order_id))
         if res_existing.scalars().first():
             logger.warning(f"[Referral] Duplicate reward attempt blocked for order_id={order_id}")
             return Decimal("0.00"), None
@@ -80,7 +75,7 @@ class ReferralService:
             order_id=order_id,
             commission_rate=rate,
             commission_amount=commission_amount,
-            status="paid" if ref_settings.auto_reward else "pending"
+            status="paid" if ref_settings.auto_reward else "pending",
         )
         session.add(reward)
 
@@ -93,9 +88,16 @@ class ReferralService:
                 tx_type="referral_bonus",
                 reference_type="order",
                 reference_id=str(order_id),
-                note=f"Referal bonusi ({buyer.first_name or 'Foydalanuvchi'} xarididan, #{order_id})"
+                note=f"Referal bonusi ({buyer.first_name or 'Foydalanuvchi'} xarididan, #{order_id})",
             )
             referrer.referral_earnings = Decimal(str(referrer.referral_earnings)) + commission_amount
+
+        try:
+            await session.flush()
+        except IntegrityError:
+            await session.rollback()
+            logger.warning(f"[Referral] Duplicate reward race caught for order_id={order_id}")
+            return Decimal("0.00"), None
 
         logger.info(
             f"[Referral Reward Credited] referrer={referrer.id}, buyer={buyer.id}, "
@@ -107,9 +109,7 @@ class ReferralService:
     async def get_referral_analytics(cls, session: AsyncSession, user_id: int) -> dict[str, Any]:
         """Provides transparent referral statistics for a user."""
         # Total referrals
-        res_total = await session.execute(
-            select(func.count(User.id)).where(User.referrer_id == user_id)
-        )
+        res_total = await session.execute(select(func.count(User.id)).where(User.referrer_id == user_id))
         total_referrals = res_total.scalar() or 0
 
         # Purchasing referrals (users who have at least one completed order)
@@ -117,10 +117,7 @@ class ReferralService:
             select(func.count(func.distinct(Order.user_id)))
             .select_from(Order)
             .join(User, Order.user_id == User.id)
-            .where(
-                User.referrer_id == user_id,
-                Order.status.in_([OrderStatus.COMPLETED, OrderStatus.PAID, "done"])
-            )
+            .where(User.referrer_id == user_id, Order.status.in_([OrderStatus.COMPLETED, OrderStatus.PAID, "done"]))
         )
         purchasing_referrals = res_purchasing.scalar() or 0
 
@@ -129,17 +126,15 @@ class ReferralService:
             select(func.coalesce(func.sum(Order.total_price), 0))
             .select_from(Order)
             .join(User, Order.user_id == User.id)
-            .where(
-                User.referrer_id == user_id,
-                Order.status.in_([OrderStatus.COMPLETED, OrderStatus.PAID, "done"])
-            )
+            .where(User.referrer_id == user_id, Order.status.in_([OrderStatus.COMPLETED, OrderStatus.PAID, "done"]))
         )
         referral_revenue = Decimal(str(res_revenue.scalar() or 0))
 
         # Total earned commissions
         res_earned = await session.execute(
-            select(func.coalesce(func.sum(ReferralReward.commission_amount), 0))
-            .where(ReferralReward.referrer_id == user_id, ReferralReward.status == "paid")
+            select(func.coalesce(func.sum(ReferralReward.commission_amount), 0)).where(
+                ReferralReward.referrer_id == user_id, ReferralReward.status == "paid"
+            )
         )
         total_earned = Decimal(str(res_earned.scalar() or 0))
 
@@ -153,7 +148,7 @@ class ReferralService:
             "referral_revenue": float(referral_revenue),
             "total_earned": float(total_earned),
             "commission_rate": base_rate,
-            "min_purchase_uzs": float(ref_settings.min_purchase_uzs) if ref_settings else 20000.0
+            "min_purchase_uzs": float(ref_settings.min_purchase_uzs) if ref_settings else 20000.0,
         }
 
 

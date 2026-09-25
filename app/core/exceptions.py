@@ -2,8 +2,10 @@
 GiftHub Core Domain Exceptions
 """
 
+
 class GiftHubException(Exception):
     """Base domain exception for GiftHub platform."""
+
     def __init__(self, message: str, code: str = "ERROR", status_code: int = 400):
         super().__init__(message)
         self.message = message

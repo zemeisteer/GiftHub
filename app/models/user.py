@@ -22,7 +22,7 @@ class User(Base):
         CheckConstraint("referral_earnings >= 0", name="chk_users_ref_earnings_non_neg"),
     )
 
-    id = Column(BigInteger, primary_key=True, index=True) # Telegram User ID
+    id = Column(BigInteger, primary_key=True, index=True)  # Telegram User ID
     first_name = Column(String(128), nullable=False, default="")
     last_name = Column(String(128), nullable=True, default="")
     username = Column(String(64), nullable=True, index=True)
@@ -31,7 +31,9 @@ class User(Base):
     referrer_id = Column(BigInteger, nullable=True, index=True)
     referral_earnings = Column(Numeric(18, 2), default=Decimal("0.00"), nullable=False)
     referrals_count = Column(Integer, default=0, nullable=False)
-    role = Column(String(32), default="user", nullable=False) # super_admin, price_admin, support_admin, marketing_admin, user
+    role = Column(
+        String(32), default="user", nullable=False
+    )  # super_admin, price_admin, support_admin, marketing_admin, user
     is_blocked = Column(Boolean, default=False, nullable=False)
     is_flagged_for_abuse = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utc_now)

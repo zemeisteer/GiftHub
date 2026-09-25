@@ -37,7 +37,7 @@ class ClickProvider(BasePaymentProvider):
             "service_id": settings.CLICK_SERVICE_ID,
             "merchant_id": settings.CLICK_MERCHANT_ID,
             "amount": f"{amount:.2f}",
-            "transaction_param": str(user_id)
+            "transaction_param": str(user_id),
         }
         if return_url:
             params["return_url"] = return_url
@@ -81,17 +81,19 @@ class ClickProvider(BasePaymentProvider):
                 "click_trans_id": click_trans_id,
                 "merchant_trans_id": merchant_trans_id,
                 "error": CLICK_SIGN_CHECK_FAILED,
-                "error_note": "SIGN CHECK FAILED!"
+                "error_note": "SIGN CHECK FAILED!",
             }
 
         # Verify service_id against configured Click service (Req 3)
         if settings.CLICK_SERVICE_ID and str(service_id) != str(settings.CLICK_SERVICE_ID):
-            logger.warning(f"[Click Prepare] Service ID mismatch: received {service_id}, expected {settings.CLICK_SERVICE_ID}")
+            logger.warning(
+                f"[Click Prepare] Service ID mismatch: received {service_id}, expected {settings.CLICK_SERVICE_ID}"
+            )
             return {
                 "click_trans_id": click_trans_id,
                 "merchant_trans_id": merchant_trans_id,
                 "error": CLICK_ERROR_FAILED,
-                "error_note": "Service ID mos kelmadi"
+                "error_note": "Service ID mos kelmadi",
             }
 
         try:
@@ -101,7 +103,7 @@ class ClickProvider(BasePaymentProvider):
                 "click_trans_id": click_trans_id,
                 "merchant_trans_id": merchant_trans_id,
                 "error": CLICK_USER_NOT_FOUND,
-                "error_note": "Foydalanuvchi parametri yaroqsiz"
+                "error_note": "Foydalanuvchi parametri yaroqsiz",
             }
 
         user = await session.get(User, user_id)
@@ -110,7 +112,7 @@ class ClickProvider(BasePaymentProvider):
                 "click_trans_id": click_trans_id,
                 "merchant_trans_id": merchant_trans_id,
                 "error": CLICK_USER_NOT_FOUND,
-                "error_note": "Foydalanuvchi topilmadi"
+                "error_note": "Foydalanuvchi topilmadi",
             }
 
         if amount < Decimal("1000.00"):
@@ -118,7 +120,7 @@ class ClickProvider(BasePaymentProvider):
                 "click_trans_id": click_trans_id,
                 "merchant_trans_id": merchant_trans_id,
                 "error": CLICK_INVALID_AMOUNT,
-                "error_note": "Minimal to'lov summasi 1000 so'm"
+                "error_note": "Minimal to'lov summasi 1000 so'm",
             }
 
         # Check existing transaction with row-level lock (Req 3)
@@ -134,21 +136,21 @@ class ClickProvider(BasePaymentProvider):
                     "click_trans_id": click_trans_id,
                     "merchant_trans_id": merchant_trans_id,
                     "error": CLICK_TRANSACTION_NOT_FOUND,
-                    "error_note": "merchant_trans_id mavjud tranzaksiyaga mos kelmadi"
+                    "error_note": "merchant_trans_id mavjud tranzaksiyaga mos kelmadi",
                 }
             if Decimal(str(tx.amount)) != amount:
                 return {
                     "click_trans_id": click_trans_id,
                     "merchant_trans_id": merchant_trans_id,
                     "error": CLICK_INVALID_AMOUNT,
-                    "error_note": "To'lov summasi mavjud tranzaksiyaga mos kelmadi"
+                    "error_note": "To'lov summasi mavjud tranzaksiyaga mos kelmadi",
                 }
             return {
                 "click_trans_id": click_trans_id,
                 "merchant_trans_id": merchant_trans_id,
                 "merchant_prepare_id": tx.id,
                 "error": CLICK_SUCCESS,
-                "error_note": "Success"
+                "error_note": "Success",
             }
 
         # Safe insert with savepoint for concurrency-safe race condition handling
@@ -163,7 +165,7 @@ class ClickProvider(BasePaymentProvider):
                     sign_time=sign_time,
                     sign_string=sign_string,
                     user_id=user_id,
-                    status="prepared"
+                    status="prepared",
                 )
                 session.add(tx)
                 await session.flush()
@@ -180,7 +182,7 @@ class ClickProvider(BasePaymentProvider):
                     "click_trans_id": click_trans_id,
                     "merchant_trans_id": merchant_trans_id,
                     "error": CLICK_ERROR_FAILED,
-                    "error_note": "Tranzaksiyani yaratishda ziddiyat yuz berdi"
+                    "error_note": "Tranzaksiyani yaratishda ziddiyat yuz berdi",
                 }
 
         return {
@@ -188,7 +190,7 @@ class ClickProvider(BasePaymentProvider):
             "merchant_trans_id": merchant_trans_id,
             "merchant_prepare_id": tx.id,
             "error": CLICK_SUCCESS,
-            "error_note": "Success"
+            "error_note": "Success",
         }
 
     async def process_complete(self, session: AsyncSession, data: dict[str, Any], bot=None) -> dict[str, Any]:
@@ -203,7 +205,7 @@ class ClickProvider(BasePaymentProvider):
                 "click_trans_id": click_trans_id,
                 "merchant_trans_id": merchant_trans_id,
                 "error": CLICK_SIGN_CHECK_FAILED,
-                "error_note": "SIGN CHECK FAILED!"
+                "error_note": "SIGN CHECK FAILED!",
             }
 
         res = await session.execute(
@@ -215,7 +217,7 @@ class ClickProvider(BasePaymentProvider):
                 "click_trans_id": click_trans_id,
                 "merchant_trans_id": merchant_trans_id,
                 "error": CLICK_TRANSACTION_NOT_FOUND,
-                "error_note": "Tranzaksiya topilmadi"
+                "error_note": "Tranzaksiya topilmadi",
             }
 
         if merchant_prepare_id and tx.id != merchant_prepare_id:
@@ -223,7 +225,7 @@ class ClickProvider(BasePaymentProvider):
                 "click_trans_id": click_trans_id,
                 "merchant_trans_id": merchant_trans_id,
                 "error": CLICK_TRANSACTION_NOT_FOUND,
-                "error_note": "merchant_prepare_id mos kelmadi"
+                "error_note": "merchant_prepare_id mos kelmadi",
             }
 
         if Decimal(str(tx.amount)) != amount:
@@ -231,7 +233,7 @@ class ClickProvider(BasePaymentProvider):
                 "click_trans_id": click_trans_id,
                 "merchant_trans_id": merchant_trans_id,
                 "error": CLICK_INVALID_AMOUNT,
-                "error_note": "To'lov summasi PREPARE tranzaksiyasiga mos kelmadi"
+                "error_note": "To'lov summasi PREPARE tranzaksiyasiga mos kelmadi",
             }
 
         if tx.status == "completed":
@@ -240,7 +242,7 @@ class ClickProvider(BasePaymentProvider):
                 "merchant_trans_id": merchant_trans_id,
                 "merchant_confirm_id": tx.id,
                 "error": CLICK_ALREADY_PAID,
-                "error_note": "Tranzaksiya allaqachon yakunlangan"
+                "error_note": "Tranzaksiya allaqachon yakunlangan",
             }
 
         if error < 0:
@@ -251,8 +253,12 @@ class ClickProvider(BasePaymentProvider):
                 "click_trans_id": click_trans_id,
                 "merchant_trans_id": merchant_trans_id,
                 "error": CLICK_TRANSACTION_CANCELLED,
-                "error_note": "Tranzaksiya bekor qilindi"
+                "error_note": "Tranzaksiya bekor qilindi",
             }
+
+        # Mark completed in this transaction so simultaneous lock-waiter sees completed upon commit
+        tx.status = "completed"
+        tx.action = 1
 
         # Idempotent payment processing
         payment_tx, user, is_new = await payment_service.process_successful_payment_idempotent(
@@ -262,22 +268,29 @@ class ClickProvider(BasePaymentProvider):
             user_id=tx.user_id,
             amount=amount,
             note=f"Click orqali to'lov (ID: {click_trans_id})",
-            raw_payload=str(data)
+            raw_payload=str(data),
         )
 
-        tx.status = "completed"
-        tx.action = 1
-        await session.commit()
+        if not is_new:
+            return {
+                "click_trans_id": click_trans_id,
+                "merchant_trans_id": merchant_trans_id,
+                "merchant_confirm_id": tx.id,
+                "error": CLICK_ALREADY_PAID,
+                "error_note": "Tranzaksiya allaqachon yakunlangan",
+            }
 
         return {
             "click_trans_id": click_trans_id,
             "merchant_trans_id": merchant_trans_id,
             "merchant_confirm_id": tx.id,
             "error": CLICK_SUCCESS,
-            "error_note": "Success"
+            "error_note": "Success",
         }
 
-    async def process_webhook(self, session: AsyncSession, payload: dict[str, Any], headers: dict[str, str] | None = None) -> dict[str, Any]:
+    async def process_webhook(
+        self, session: AsyncSession, payload: dict[str, Any], headers: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         action = int(payload.get("action", 0))
         if action == 0:
             return await self.process_prepare(session, payload)
@@ -288,15 +301,19 @@ class ClickProvider(BasePaymentProvider):
 
 click_provider = ClickProvider()
 
+
 # Backward-compatibility functional wrappers
 def generate_click_link(user_id: int, amount: float, return_url: str | None = None) -> str:
     return click_provider.generate_checkout_url(user_id, Decimal(str(amount)), return_url)
 
+
 async def process_click_prepare(session: AsyncSession, data: dict[str, Any]) -> dict[str, Any]:
     return await click_provider.process_prepare(session, data)
 
+
 async def process_click_complete(session: AsyncSession, data: dict[str, Any], bot=None) -> dict[str, Any]:
     return await click_provider.process_complete(session, data, bot)
+
 
 def verify_click_signature(data: dict[str, Any]) -> bool:
     return click_provider.verify_signature(data)

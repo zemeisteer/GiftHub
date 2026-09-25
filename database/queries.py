@@ -1,29 +1,45 @@
 import json
-from decimal import Decimal
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy import select, update, delete, func, desc, String
+from decimal import Decimal
+from typing import Any, Dict, List, Optional, Tuple
+
+from sqlalchemy import String, delete, desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import (
-    User, PricingSetting, Order, OrderStatus, Transaction, WalletTransaction,
-    ChannelRequirement, AdminAuditLog, ReferralSetting, PaymentSetting,
-    BroadcastDraft, PromoCode, PromoRedemption, PromoCodeUsage,
-    FragmentSetting, UserJoinRequest, CustomService, PaymentCard
-)
-from app.models.base import utc_now
-from app.services.wallet.service import wallet_service
-from app.services.pricing.service import pricing_service
-from app.services.orders.service import order_service
-from app.services.promotions.service import promotion_service
-from app.services.referrals.service import referral_service
 from app.core.exceptions import GiftHubException, OrderNotFoundError
 from app.core.logging import get_logger
+from app.models import (
+    AdminAuditLog,
+    BroadcastDraft,
+    ChannelRequirement,
+    CustomService,
+    FragmentSetting,
+    Order,
+    OrderStatus,
+    PaymentCard,
+    PaymentSetting,
+    PricingSetting,
+    PromoCode,
+    PromoCodeUsage,
+    PromoRedemption,
+    ReferralSetting,
+    Transaction,
+    User,
+    UserJoinRequest,
+    WalletTransaction,
+)
+from app.models.base import utc_now
+from app.services.orders.service import order_service
+from app.services.pricing.service import pricing_service
+from app.services.promotions.service import promotion_service
+from app.services.referrals.service import referral_service
+from app.services.wallet.service import wallet_service
 
 logger = get_logger(__name__)
 
 
 # ================= USER QUERIES ================= #
+
 
 async def get_or_create_user(
     session: AsyncSession,
@@ -32,7 +48,7 @@ async def get_or_create_user(
     last_name: Optional[str] = None,
     username: Optional[str] = None,
     photo_url: Optional[str] = None,
-    referrer_id: Optional[int] = None
+    referrer_id: Optional[int] = None,
 ) -> User:
     user = await session.get(User, user_id)
     if not user:
@@ -56,7 +72,7 @@ async def get_or_create_user(
             role="user",
             is_blocked=False,
             created_at=utc_now(),
-            updated_at=utc_now()
+            updated_at=utc_now(),
         )
         session.add(user)
         await session.commit()
@@ -92,18 +108,15 @@ async def get_user_by_username(session: AsyncSession, username: str) -> Optional
 
 
 async def list_users(
-    session: AsyncSession,
-    search: Optional[str] = None,
-    limit: int = 50,
-    offset: int = 0
+    session: AsyncSession, search: Optional[str] = None, limit: int = 50, offset: int = 0
 ) -> List[User]:
     query = select(User).order_by(desc(User.created_at))
     if search:
         search_term = f"%{search.strip().lower()}%"
         query = query.where(
-            func.lower(User.first_name).like(search_term) |
-            func.lower(User.username).like(search_term) |
-            User.id.cast(String).like(search_term)
+            func.lower(User.first_name).like(search_term)
+            | func.lower(User.username).like(search_term)
+            | User.id.cast(String).like(search_term)
         )
     res = await session.execute(query.offset(offset).limit(limit))
     return list(res.scalars().all())
@@ -115,7 +128,7 @@ async def update_user_balance(
     amount: float,
     tx_type: str,
     method: str = "balance",
-    note: Optional[str] = None
+    note: Optional[str] = None,
 ) -> Optional[User]:
     """
     Safely mutates user balance by routing through the immutable wallet ledger.
@@ -123,21 +136,11 @@ async def update_user_balance(
     dec_amount = Decimal(str(amount))
     if dec_amount > Decimal("0.00"):
         user, tx = await wallet_service.credit_balance(
-            session=session,
-            user_id=user_id,
-            amount=dec_amount,
-            tx_type=tx_type,
-            reference_type=method,
-            note=note
+            session=session, user_id=user_id, amount=dec_amount, tx_type=tx_type, reference_type=method, note=note
         )
     elif dec_amount < Decimal("0.00"):
         user, tx = await wallet_service.debit_balance(
-            session=session,
-            user_id=user_id,
-            amount=abs(dec_amount),
-            tx_type=tx_type,
-            reference_type=method,
-            note=note
+            session=session, user_id=user_id, amount=abs(dec_amount), tx_type=tx_type, reference_type=method, note=note
         )
     else:
         user = await session.get(User, user_id)
@@ -150,6 +153,7 @@ async def update_user_balance(
 
 # ================= PRICING QUERIES ================= #
 
+
 async def get_pricing(session: AsyncSession) -> PricingSetting:
     pricing = await session.get(PricingSetting, 1)
     if not pricing:
@@ -158,7 +162,7 @@ async def get_pricing(session: AsyncSession) -> PricingSetting:
             stars_cost_ton=Decimal("0.0021"),
             ton_rate_uzs=Decimal("14800.00"),
             margin_percent=Decimal("15.00"),
-            star_unit_price_uzs=Decimal("180.00")
+            star_unit_price_uzs=Decimal("180.00"),
         )
         session.add(pricing)
         await session.commit()
@@ -174,7 +178,7 @@ async def update_pricing(
     star_unit_price_uzs: Optional[float] = None,
     stars_discounts_json: Optional[str] = None,
     premium_prices_json: Optional[str] = None,
-    gifts_json: Optional[str] = None
+    gifts_json: Optional[str] = None,
 ) -> PricingSetting:
     pricing = await get_pricing(session)
     pricing.stars_cost_ton = Decimal(str(stars_cost_ton))
@@ -200,6 +204,7 @@ def calculate_stars_price(amount: int, pricing: Optional[PricingSetting] = None)
 
 # ================= ORDERS & TRANSACTIONS ================= #
 
+
 async def create_order(
     session: AsyncSession,
     user_id: int,
@@ -211,7 +216,7 @@ async def create_order(
     recipient_username: Optional[str] = None,
     status: Optional[str] = None,
     promo_code: Optional[str] = None,
-    price_lock_id: Optional[str] = None
+    price_lock_id: Optional[str] = None,
 ) -> Tuple[Order, Decimal, Optional[User]]:
     """
     Creates order through OrderService with server-authoritative pricing and atomic wallet deduction.
@@ -224,24 +229,17 @@ async def create_order(
         amount=amount,
         recipient_username=recipient_username,
         promo_code_str=promo_code,
-        price_lock_id=price_lock_id
+        price_lock_id=price_lock_id,
     )
 
 
 async def process_referral_reward(session: AsyncSession, buyer: User, purchase_amount: float):
     return await referral_service.process_order_referral_reward(
-        session=session,
-        order_id=0,
-        buyer_id=buyer.id,
-        purchase_amount=Decimal(str(purchase_amount))
+        session=session, order_id=0, buyer_id=buyer.id, purchase_amount=Decimal(str(purchase_amount))
     )
 
 
-async def list_user_orders(
-    session: AsyncSession,
-    user_id: int,
-    status: Optional[str] = None
-) -> List[Order]:
+async def list_user_orders(session: AsyncSession, user_id: int, status: Optional[str] = None) -> List[Order]:
     query = select(Order).where(Order.user_id == user_id).order_by(desc(Order.created_at))
     if status and status != "all":
         norm = OrderStatus.COMPLETED if status == "done" else (OrderStatus.CANCELLED if status == "cancel" else status)
@@ -256,15 +254,13 @@ async def list_all_orders(
     status: Optional[str] = None,
     product_type: Optional[str] = None,
     limit: int = 100,
-    offset: int = 0
+    offset: int = 0,
 ) -> List[Order]:
     query = select(Order).order_by(desc(Order.created_at))
     if search:
         s = f"%{search.strip().lower()}%"
         query = query.where(
-            Order.order_code.like(s) |
-            func.lower(Order.item_title).like(s) |
-            Order.user_id.cast(String).like(s)
+            Order.order_code.like(s) | func.lower(Order.item_title).like(s) | Order.user_id.cast(String).like(s)
         )
     if status and status != "all":
         norm = OrderStatus.COMPLETED if status == "done" else (OrderStatus.CANCELLED if status == "cancel" else status)
@@ -282,19 +278,15 @@ async def update_order_status(
     new_status: str,
     payload: Optional[str] = None,
     admin_id: Optional[int] = None,
-    reason: Optional[str] = None
+    reason: Optional[str] = None,
 ) -> Optional[Order]:
     return await order_service.transition_order_status(
-        session=session,
-        order_id=order_id,
-        new_status_raw=new_status,
-        admin_id=admin_id,
-        reason=reason,
-        payload=payload
+        session=session, order_id=order_id, new_status_raw=new_status, admin_id=admin_id, reason=reason, payload=payload
     )
 
 
 # ================= MANDATORY CHANNELS ================= #
+
 
 async def list_channels(session: AsyncSession, active_only: bool = False) -> List[ChannelRequirement]:
     query = select(ChannelRequirement).order_by(ChannelRequirement.id)
@@ -311,7 +303,7 @@ async def add_or_update_channel(
     req_type: str = "ordinary",
     chat_id: Optional[int] = None,
     is_detected: bool = False,
-    is_active: Optional[bool] = None
+    is_active: Optional[bool] = None,
 ) -> ChannelRequirement:
     res = await session.execute(
         select(ChannelRequirement).where(ChannelRequirement.username_or_link == username_or_link)
@@ -332,7 +324,7 @@ async def add_or_update_channel(
             title=title,
             req_type=req_type,
             is_active=active_flag,
-            is_detected=is_detected
+            is_detected=is_detected,
         )
         session.add(ch)
     await session.commit()
@@ -341,9 +333,7 @@ async def add_or_update_channel(
 
 
 async def confirm_detected_channel(
-    session: AsyncSession,
-    channel_id: int,
-    req_type: str = "ordinary"
+    session: AsyncSession, channel_id: int, req_type: str = "ordinary"
 ) -> Optional[ChannelRequirement]:
     ch = await session.get(ChannelRequirement, channel_id)
     if ch:
@@ -373,10 +363,7 @@ async def update_channel_type(session: AsyncSession, channel_id: int, req_type: 
 
 async def record_user_join_request(session: AsyncSession, user_id: int, chat_id: int):
     res = await session.execute(
-        select(UserJoinRequest).where(
-            UserJoinRequest.user_id == user_id,
-            UserJoinRequest.chat_id == chat_id
-        )
+        select(UserJoinRequest).where(UserJoinRequest.user_id == user_id, UserJoinRequest.chat_id == chat_id)
     )
     if not res.scalars().first():
         req = UserJoinRequest(user_id=user_id, chat_id=chat_id)
@@ -386,15 +373,13 @@ async def record_user_join_request(session: AsyncSession, user_id: int, chat_id:
 
 async def has_user_join_request(session: AsyncSession, user_id: int, chat_id: int) -> bool:
     res = await session.execute(
-        select(UserJoinRequest).where(
-            UserJoinRequest.user_id == user_id,
-            UserJoinRequest.chat_id == chat_id
-        )
+        select(UserJoinRequest).where(UserJoinRequest.user_id == user_id, UserJoinRequest.chat_id == chat_id)
     )
     return res.scalars().first() is not None
 
 
 # ================= ADMINS & AUDIT LOGS ================= #
+
 
 async def log_admin_action(
     session: AsyncSession,
@@ -408,7 +393,7 @@ async def log_admin_action(
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None,
     details: Optional[str] = None,
-    admin_username: Optional[str] = None
+    admin_username: Optional[str] = None,
 ):
     log = AdminAuditLog(
         admin_id=admin_id,
@@ -422,23 +407,19 @@ async def log_admin_action(
         ip_address=ip_address,
         user_agent=user_agent,
         details=details,
-        created_at=utc_now()
+        created_at=utc_now(),
     )
     session.add(log)
     await session.commit()
 
 
 async def list_audit_logs(session: AsyncSession, limit: int = 50) -> List[AdminAuditLog]:
-    res = await session.execute(
-        select(AdminAuditLog).order_by(desc(AdminAuditLog.created_at)).limit(limit)
-    )
+    res = await session.execute(select(AdminAuditLog).order_by(desc(AdminAuditLog.created_at)).limit(limit))
     return list(res.scalars().all())
 
 
 async def list_admins(session: AsyncSession) -> List[User]:
-    res = await session.execute(
-        select(User).where(User.role != "user").order_by(desc(User.created_at))
-    )
+    res = await session.execute(select(User).where(User.role != "user").order_by(desc(User.created_at)))
     return list(res.scalars().all())
 
 
@@ -453,6 +434,7 @@ async def set_user_role(session: AsyncSession, user_id: int, new_role: str) -> O
 
 
 # ================= BROADCAST AUDIENCE ================= #
+
 
 async def get_broadcast_recipients(session: AsyncSession, segment: str = "all") -> List[int]:
     if segment == "all":
@@ -474,6 +456,7 @@ async def get_broadcast_recipients(session: AsyncSession, segment: str = "all") 
 
 # ================= PROMO CODES ================= #
 
+
 async def list_promo_codes(session: AsyncSession) -> List[PromoCode]:
     res = await session.execute(select(PromoCode).order_by(desc(PromoCode.created_at)))
     return list(res.scalars().all())
@@ -487,7 +470,7 @@ async def create_promo_code(
     max_uses: int = 100,
     min_order_amount: float = 0.0,
     is_active: bool = True,
-    expires_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None,
 ) -> PromoCode:
     clean_code = code.strip().upper()
     existing = await session.execute(select(PromoCode).where(PromoCode.code == clean_code))
@@ -503,7 +486,7 @@ async def create_promo_code(
         min_order_amount=Decimal(str(min_order_amount)),
         is_active=is_active,
         expires_at=expires_at,
-        created_at=utc_now()
+        created_at=utc_now(),
     )
     session.add(promo)
     await session.commit()
@@ -529,21 +512,14 @@ async def toggle_promo_code(session: AsyncSession, promo_id: int) -> Optional[Pr
     return promo
 
 
-async def apply_promo_code(
-    session: AsyncSession,
-    code: str,
-    user_id: int,
-    order_total: float = 0.0
-) -> Dict[str, Any]:
+async def apply_promo_code(session: AsyncSession, code: str, user_id: int, order_total: float = 0.0) -> Dict[str, Any]:
     return await promotion_service.apply_promo_code(
-        session=session,
-        code_str=code,
-        user_id=user_id,
-        order_total=Decimal(str(order_total))
+        session=session, code_str=code, user_id=user_id, order_total=Decimal(str(order_total))
     )
 
 
 # ================= FRAGMENT SETTINGS & FULFILLMENT ================= #
+
 
 async def get_fragment_settings(session: AsyncSession) -> FragmentSetting:
     setting = await session.get(FragmentSetting, 1)
@@ -556,7 +532,7 @@ async def get_fragment_settings(session: AsyncSession) -> FragmentSetting:
             tonapi_key="",
             network="mainnet",
             min_ton_balance=Decimal("1.0000"),
-            simulation_mode=False
+            simulation_mode=False,
         )
         session.add(setting)
         await session.commit()
@@ -572,7 +548,7 @@ async def update_fragment_settings(
     tonapi_key: Optional[str] = None,
     network: Optional[str] = None,
     min_ton_balance: Optional[float] = None,
-    simulation_mode: Optional[bool] = None
+    simulation_mode: Optional[bool] = None,
 ) -> FragmentSetting:
     setting = await get_fragment_settings(session)
     if is_auto_buy is not None:
@@ -602,7 +578,7 @@ async def update_order_fulfillment(
     fragment_req_id: Optional[str] = None,
     fragment_payload: Optional[str] = None,
     fragment_tx_hash: Optional[str] = None,
-    fulfillment_error: Optional[str] = None
+    fulfillment_error: Optional[str] = None,
 ) -> Optional[Order]:
     order = await session.get(Order, order_id)
     if not order:
@@ -627,6 +603,7 @@ async def update_order_fulfillment(
 
 # ================= PAYMENT SETTINGS ================= #
 
+
 async def get_payment_settings(session: AsyncSession) -> PaymentSetting:
     setting = await session.get(PaymentSetting, 1)
     if not setting:
@@ -644,7 +621,7 @@ async def update_payment_settings(
     card_active: Optional[bool] = None,
     card_number: Optional[str] = None,
     card_holder: Optional[str] = None,
-    bank_name: Optional[str] = None
+    bank_name: Optional[str] = None,
 ) -> PaymentSetting:
     setting = await get_payment_settings(session)
     if click_active is not None:
@@ -666,6 +643,7 @@ async def update_payment_settings(
 
 # ================= REFERRAL SETTINGS ================= #
 
+
 async def get_referral_settings(session: AsyncSession) -> ReferralSetting:
     ref = await session.get(ReferralSetting, 1)
     if not ref:
@@ -674,7 +652,7 @@ async def get_referral_settings(session: AsyncSession) -> ReferralSetting:
             bonus_percent=Decimal("5.00"),
             min_purchase_uzs=Decimal("20000.00"),
             auto_reward=True,
-            require_purchase=True
+            require_purchase=True,
         )
         session.add(ref)
         await session.commit()
@@ -683,6 +661,7 @@ async def get_referral_settings(session: AsyncSession) -> ReferralSetting:
 
 
 # ================= CUSTOM SERVICES ================= #
+
 
 async def list_custom_services(session: AsyncSession, active_only: bool = False) -> List[CustomService]:
     query = select(CustomService).order_by(CustomService.id)
@@ -704,7 +683,7 @@ async def create_custom_service(
     category: str = "Xizmatlar",
     icon: str = "⚡",
     description: str = "",
-    is_active: bool = True
+    is_active: bool = True,
 ) -> CustomService:
     service = CustomService(
         name=name.strip(),
@@ -714,7 +693,7 @@ async def create_custom_service(
         icon=icon.strip() if icon else "⚡",
         description=description.strip() if description else "",
         is_active=is_active,
-        created_at=utc_now()
+        created_at=utc_now(),
     )
     session.add(service)
     await session.commit()
@@ -731,7 +710,7 @@ async def update_custom_service(
     category: Optional[str] = None,
     icon: Optional[str] = None,
     description: Optional[str] = None,
-    is_active: Optional[bool] = None
+    is_active: Optional[bool] = None,
 ) -> Optional[CustomService]:
     service = await session.get(CustomService, service_id)
     if not service:
@@ -766,6 +745,7 @@ async def delete_custom_service(session: AsyncSession, service_id: int) -> bool:
 
 # ================= PAYMENT CARDS ================= #
 
+
 async def list_payment_cards(session: AsyncSession, active_only: bool = False) -> List[PaymentCard]:
     query = select(PaymentCard).order_by(PaymentCard.id)
     if active_only:
@@ -779,14 +759,18 @@ async def list_active_payment_cards(session: AsyncSession) -> List[PaymentCard]:
     if not cards:
         p = await get_payment_settings(session)
         if p and p.card_active and p.card_number:
-            return [PaymentCard(
-                id=0,
-                card_number=p.card_number,
-                card_holder=p.card_holder,
-                bank_name=p.bank_name,
-                card_type="UZCARD" if p.card_number.startswith("8600") else ("HUMO" if p.card_number.startswith("9860") else "VISA"),
-                is_active=True
-            )]
+            return [
+                PaymentCard(
+                    id=0,
+                    card_number=p.card_number,
+                    card_holder=p.card_holder,
+                    bank_name=p.bank_name,
+                    card_type="UZCARD"
+                    if p.card_number.startswith("8600")
+                    else ("HUMO" if p.card_number.startswith("9860") else "VISA"),
+                    is_active=True,
+                )
+            ]
     return cards
 
 
@@ -800,7 +784,7 @@ async def create_payment_card(
     card_holder: str,
     bank_name: str,
     card_type: str = "UZCARD",
-    is_active: bool = True
+    is_active: bool = True,
 ) -> PaymentCard:
     card = PaymentCard(
         card_number=card_number.strip(),
@@ -808,7 +792,7 @@ async def create_payment_card(
         bank_name=bank_name.strip(),
         card_type=card_type.strip().upper(),
         is_active=is_active,
-        created_at=utc_now()
+        created_at=utc_now(),
     )
     session.add(card)
     await session.commit()
@@ -823,7 +807,7 @@ async def update_payment_card(
     card_holder: Optional[str] = None,
     bank_name: Optional[str] = None,
     card_type: Optional[str] = None,
-    is_active: Optional[bool] = None
+    is_active: Optional[bool] = None,
 ) -> Optional[PaymentCard]:
     card = await session.get(PaymentCard, card_id)
     if not card:

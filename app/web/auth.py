@@ -24,7 +24,7 @@ def validate_init_data(init_data: str, bot_token: str | None = None) -> dict[str
 async def get_current_user(
     x_telegram_init_data: str | None = Header(None),
     x_auth_user_id: str | None = Header(None),
-    auth_user_id: int | None = Query(None)
+    auth_user_id: int | None = Query(None),
 ) -> User:
     """
     Authenticates user authoritatively via Telegram WebApp initData HMAC-SHA256 signature.
@@ -41,7 +41,7 @@ async def get_current_user(
                     first_name=tg_user.get("first_name", "Foydalanuvchi"),
                     last_name=tg_user.get("last_name"),
                     username=tg_user.get("username"),
-                    photo_url=tg_user.get("photo_url")
+                    photo_url=tg_user.get("photo_url"),
                 )
             else:
                 logger.warning("Telegram initData validation failed or signature expired!")
@@ -60,7 +60,7 @@ async def get_current_user(
                     session=session,
                     user_id=effective_uid,
                     first_name=f"Foydalanuvchi {effective_uid}",
-                    username=f"user_{effective_uid}"
+                    username=f"user_{effective_uid}",
                 )
 
             # Standalone browser demo guest
@@ -68,24 +68,21 @@ async def get_current_user(
             user = await queries.get_user_by_id(session, demo_uid)
             if not user:
                 user = await queries.get_or_create_user(
-                    session=session,
-                    user_id=demo_uid,
-                    first_name="Mehmon",
-                    username="mehmon"
+                    session=session, user_id=demo_uid, first_name="Mehmon", username="mehmon"
                 )
             return user
 
         # In production without valid initData: Reject
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Autentifikatsiya talab qilinadi: Telegram initData yaroqsiz."
+            detail="Autentifikatsiya talab qilinadi: Telegram initData yaroqsiz.",
         )
 
 
 async def get_current_admin(
     x_telegram_init_data: str | None = Header(None),
     x_auth_user_id: str | None = Header(None),
-    auth_user_id: int | None = Query(None)
+    auth_user_id: int | None = Query(None),
 ) -> User:
     """
     Authenticates administrator and checks admin status authoritatively on the server.
@@ -100,12 +97,11 @@ async def get_current_admin(
                     first_name=tg_user.get("first_name", "Admin"),
                     last_name=tg_user.get("last_name"),
                     username=tg_user.get("username"),
-                    photo_url=tg_user.get("photo_url")
+                    photo_url=tg_user.get("photo_url"),
                 )
                 if user.role == "user" and user.id not in settings.ADMINS:
                     raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Ruxsat berilmagan: Siz admin emassiz!"
+                        status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Siz admin emassiz!"
                     )
                 return user
 
@@ -120,23 +116,23 @@ async def get_current_admin(
                 if user and (user.role != "user" or user.id in settings.ADMINS):
                     return user
                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Ruxsat berilmagan: Siz admin emassiz!"
+                    status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Siz admin emassiz!"
                 )
 
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Ruxsat berilmagan: Admin huquqi talab qilinadi."
+            status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Admin huquqi talab qilinadi."
         )
 
 
 def require_permission(required_perm: str):
     """RBAC dependency ensuring the authenticated admin has the requested permission."""
+
     async def permission_dependency(admin: User = Depends(get_current_admin)) -> User:
         if not has_permission(admin.role, admin.id, required_perm):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Yetarli huquq mavjud emas: '{required_perm}' talab qilinadi."
+                detail=f"Yetarli huquq mavjud emas: '{required_perm}' talab qilinadi.",
             )
         return admin
+
     return permission_dependency

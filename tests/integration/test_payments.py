@@ -30,7 +30,7 @@ async def test_duplicate_webhook_idempotency(db_session: AsyncSession, sample_us
         first_name="Top",
         last_name="Referrer",
         balance=Decimal("0.00"),
-        role="user"
+        role="user",
     )
     db_session.add(referrer)
     await db_session.flush()
@@ -47,7 +47,7 @@ async def test_duplicate_webhook_idempotency(db_session: AsyncSession, sample_us
         quantity=50,
         recipient="self",
         recipient_id=str(sample_user.telegram_id),
-        payment_method="click"
+        payment_method="click",
     )
     await orderService.transition_order_state(db_session, order.id, OrderStatus.AWAITING_PAYMENT)
     order_amount = order.total_price
@@ -65,7 +65,7 @@ async def test_duplicate_webhook_idempotency(db_session: AsyncSession, sample_us
             amount=order_amount,
             currency="UZS",
             telegram_id=sample_user.telegram_id,
-            order_id=order.id
+            order_id=order.id,
         )
         results.append(ptx)
 
@@ -75,8 +75,7 @@ async def test_duplicate_webhook_idempotency(db_session: AsyncSession, sample_us
     # 5. Check PaymentTransaction count in DB
     ptx_query = await db_session.execute(
         select(PaymentTransaction).where(
-            PaymentTransaction.provider == provider,
-            PaymentTransaction.provider_transaction_id == provider_tx_id
+            PaymentTransaction.provider == provider, PaymentTransaction.provider_transaction_id == provider_tx_id
         )
     )
     ptx_records = ptx_query.scalars().all()
@@ -87,9 +86,7 @@ async def test_duplicate_webhook_idempotency(db_session: AsyncSession, sample_us
     assert order.status == OrderStatus.PAID.value
 
     # 7. Check ReferralReward records
-    ref_query = await db_session.execute(
-        select(ReferralReward).where(ReferralReward.order_id == order.id)
-    )
+    ref_query = await db_session.execute(select(ReferralReward).where(ReferralReward.order_id == order.id))
     ref_records = ref_query.scalars().all()
     assert len(ref_records) == 1
 
@@ -97,6 +94,7 @@ async def test_duplicate_webhook_idempotency(db_session: AsyncSession, sample_us
     await db_session.refresh(referrer)
     assert referrer.balance > initial_referrer_balance
     from decimal import ROUND_HALF_UP
+
     expected_bonus = (order_amount * Decimal("0.05")).quantize(Decimal(1), rounding=ROUND_HALF_UP)
     assert referrer.balance == initial_referrer_balance + expected_bonus
 
@@ -119,7 +117,7 @@ async def test_wallet_topup_webhook_idempotency(db_session: AsyncSession, sample
             amount=topup_amount,
             currency="UZS",
             telegram_id=sample_user.telegram_id,
-            order_id=None
+            order_id=None,
         )
 
     await db_session.refresh(sample_user)

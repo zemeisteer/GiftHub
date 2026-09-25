@@ -9,7 +9,7 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel
-from sqlalchemy import func, select, or_, and_
+from sqlalchemy import and_, func, or_, select
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
@@ -46,6 +46,7 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
+
 class BroadcastRequest(BaseModel):
     segment: str = "all"
     mode: str = "write"
@@ -60,14 +61,7 @@ class BroadcastRequest(BaseModel):
     draft_id: int | None = None
 
 
-latest_broadcast_status = {
-    "is_running": False,
-    "total": 0,
-    "sent": 0,
-    "blocked": 0,
-    "failed": 0,
-    "completed_at": None
-}
+latest_broadcast_status = {"is_running": False, "total": 0, "sent": 0, "blocked": 0, "failed": 0, "completed_at": None}
 
 
 @router.get("/api/admin/broadcast/status")
@@ -79,6 +73,7 @@ async def get_broadcast_status(admin: User = Depends(require_permission(Permissi
 async def get_latest_broadcast_draft_endpoint(admin: User = Depends(require_permission(Permission.BROADCAST_CREATE))):
     async with AsyncSessionLocal() as session:
         from sqlalchemy import select
+
         res = await session.execute(select(BroadcastDraft).order_by(BroadcastDraft.id.desc()).limit(1))
         d = res.scalars().first()
         if not d:
@@ -94,13 +89,15 @@ async def get_latest_broadcast_draft_endpoint(admin: User = Depends(require_perm
                 "button_url": d.button_url,
                 "forward_chat_id": d.forward_chat_id,
                 "forward_message_id": d.forward_message_id,
-                "created_at": d.created_at.strftime("%d %b, %H:%M") if d.created_at else ""
-            }
+                "created_at": d.created_at.strftime("%d %b, %H:%M") if d.created_at else "",
+            },
         }
 
 
 @router.post("/api/admin/broadcast")
-async def send_broadcast_endpoint(req: BroadcastRequest, admin: User = Depends(require_permission(Permission.BROADCAST_SEND))):
+async def send_broadcast_endpoint(
+    req: BroadcastRequest, admin: User = Depends(require_permission(Permission.BROADCAST_SEND))
+):
     async with AsyncSessionLocal() as session:
         recipients = await queries.get_broadcast_recipients(session, req.segment)
         await queries.log_admin_action(
@@ -109,13 +106,13 @@ async def send_broadcast_endpoint(req: BroadcastRequest, admin: User = Depends(r
             admin_username=admin.username,
             action=f"Broadcast boshlandi: {len(recipients)} ta foydalanuvchiga",
             entity_type="broadcast",
-            details=f"Segment: {req.segment}, Rejim: {req.mode}"
+            details=f"Segment: {req.segment}, Rejim: {req.mode}",
         )
         asyncio.create_task(run_broadcast_queue(recipients, req, admin_id=admin.id))
         return {
             "success": True,
             "recipients_count": len(recipients),
-            "message": f"Broadcast {len(recipients)} ta foydalanuvchiga yuborilmoqda..."
+            "message": f"Broadcast {len(recipients)} ta foydalanuvchiga yuborilmoqda...",
         }
 
 
@@ -130,7 +127,7 @@ async def run_broadcast_queue(recipients: list[int], req: BroadcastRequest, admi
         "sent": 0,
         "blocked": 0,
         "failed": 0,
-        "completed_at": None
+        "completed_at": None,
     }
 
     from aiogram.exceptions import TelegramForbiddenError
@@ -175,13 +172,17 @@ async def run_broadcast_queue(recipients: list[int], req: BroadcastRequest, admi
                 if req.forward_mode:
                     await get_bot().forward_message(chat_id=uid, from_chat_id=chat_ref, message_id=msg_id)
                 else:
-                    await get_bot().copy_message(chat_id=uid, from_chat_id=chat_ref, message_id=msg_id, reply_markup=reply_markup)
+                    await get_bot().copy_message(
+                        chat_id=uid, from_chat_id=chat_ref, message_id=msg_id, reply_markup=reply_markup
+                    )
             elif req.photo_url and req.photo_url.startswith("http"):
-                await get_bot().send_photo(chat_id=uid, photo=req.photo_url, caption=req.text or "", reply_markup=reply_markup)
+                await get_bot().send_photo(
+                    chat_id=uid, photo=req.photo_url, caption=req.text or "", reply_markup=reply_markup
+                )
             elif req.text:
                 await get_bot().send_message(chat_id=uid, text=req.text, reply_markup=reply_markup)
             latest_broadcast_status["sent"] += 1
-            await asyncio.sleep(0.04) # ~25-30 msgs/sec
+            await asyncio.sleep(0.04)  # ~25-30 msgs/sec
         except TelegramForbiddenError:
             latest_broadcast_status["blocked"] += 1
         except Exception:
@@ -203,5 +204,3 @@ async def run_broadcast_queue(recipients: list[int], req: BroadcastRequest, admi
             await get_bot().send_message(chat_id=admin_id, text=report)
         except Exception as e:
             logger.warning(f"Adminga ({admin_id}) broadcast xulosasini yuborishda xatolik: {e}")
-
-

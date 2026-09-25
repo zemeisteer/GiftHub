@@ -1,4 +1,3 @@
-
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +19,7 @@ async def test_valid_refund_flow(db_session: AsyncSession, sample_user: User, sa
         quantity=100,
         recipient="self",
         recipient_id=str(sample_user.id),
-        payment_method="wallet"
+        payment_method="wallet",
     )
     order_price = order.total_price
 
@@ -29,7 +28,7 @@ async def test_valid_refund_flow(db_session: AsyncSession, sample_user: User, sa
         session=db_session,
         order_id=order.id,
         admin_telegram_id=sample_admin.id,
-        reason="Customer requested cancellation before delivery"
+        reason="Customer requested cancellation before delivery",
     )
 
     # 3. Assertions
@@ -50,15 +49,12 @@ async def test_duplicate_refund_prevented(db_session: AsyncSession, sample_user:
         quantity=50,
         recipient="self",
         recipient_id=str(sample_user.id),
-        payment_method="wallet"
+        payment_method="wallet",
     )
 
     # First refund succeeds
     await orderService.refund_order(
-        session=db_session,
-        order_id=order.id,
-        admin_telegram_id=sample_admin.id,
-        reason="First refund"
+        session=db_session, order_id=order.id, admin_telegram_id=sample_admin.id, reason="First refund"
     )
 
     await db_session.refresh(sample_user)
@@ -67,10 +63,7 @@ async def test_duplicate_refund_prevented(db_session: AsyncSession, sample_user:
     # Second refund attempt must fail with InvalidOrderStateError
     with pytest.raises(InvalidOrderStateError):
         await orderService.refund_order(
-            session=db_session,
-            order_id=order.id,
-            admin_telegram_id=sample_admin.id,
-            reason="Second refund attempt"
+            session=db_session, order_id=order.id, admin_telegram_id=sample_admin.id, reason="Second refund attempt"
         )
 
     await db_session.refresh(sample_user)
@@ -87,7 +80,7 @@ async def test_refund_unpaid_order_fails(db_session: AsyncSession, sample_user: 
         quantity=50,
         recipient="self",
         recipient_id=str(sample_user.id),
-        payment_method="click"
+        payment_method="click",
     )
     # Order is in CREATED state (unpaid)
     assert order.status == OrderStatus.CREATED.value
@@ -97,5 +90,5 @@ async def test_refund_unpaid_order_fails(db_session: AsyncSession, sample_user: 
             session=db_session,
             order_id=order.id,
             admin_telegram_id=sample_admin.id,
-            reason="Trying to refund unpaid order"
+            reason="Trying to refund unpaid order",
         )

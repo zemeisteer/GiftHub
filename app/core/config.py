@@ -8,15 +8,11 @@ ENV_PATH = os.path.join(BASE_DIR, ".env")
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=ENV_PATH,
-        env_file_encoding="utf-8",
-        extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=ENV_PATH, env_file_encoding="utf-8", extra="ignore")
 
     # General
     PROJECT_NAME: str = "GiftHub"
-    ENVIRONMENT: str = "development" # development, production, test
+    ENVIRONMENT: str = "development"  # development, production, test
     LOG_LEVEL: str = "INFO"
     BASE_DIR: str = BASE_DIR
 
@@ -27,7 +23,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
     TELEGRAM_API_SERVER: str | None = None
     TELEGRAM_PROXY: str | None = None
-    TELEGRAM_MODE: str = "polling" # polling, webhook
+    TELEGRAM_MODE: str = "polling"  # polling, webhook
     TELEGRAM_WEBHOOK_URL: str | None = None
     TELEGRAM_WEBHOOK_SECRET: str | None = None
     DROP_PENDING_UPDATES: bool = False
@@ -60,10 +56,10 @@ class Settings(BaseSettings):
     AUTOPAYCARD_API_KEY: str | None = ""
 
     # Commerce & Price Lock
-    PRICE_LOCK_SECONDS: int = 600 # 10 minutes
+    PRICE_LOCK_SECONDS: int = 600  # 10 minutes
 
     # Security
-    INIT_DATA_MAX_AGE_SECONDS: int = 86400 # 24 hours
+    INIT_DATA_MAX_AGE_SECONDS: int = 86400  # 24 hours
 
     # Demo / Seed
     SEED_DEMO_DATA: bool = False
@@ -98,7 +94,12 @@ class Settings(BaseSettings):
         """Explicit fail-fast check invoked during application startup."""
         if self.ENVIRONMENT == "production":
             errors = []
-            if not self.BOT_TOKEN or "ABCdefGHI" in self.BOT_TOKEN or len(self.BOT_TOKEN) < 20 or "YOUR_" in self.BOT_TOKEN:
+            if (
+                not self.BOT_TOKEN
+                or "ABCdefGHI" in self.BOT_TOKEN
+                or len(self.BOT_TOKEN) < 20
+                or "YOUR_" in self.BOT_TOKEN
+            ):
                 errors.append("BOT_TOKEN must be configured with a valid production Telegram bot token.")
             if not self.ADMINS:
                 errors.append("At least one admin ID must be configured in ADMINS for production.")
@@ -116,23 +117,35 @@ class Settings(BaseSettings):
             # Click validation
             if self.CLICK_ENABLED or bool(self.CLICK_SERVICE_ID or self.CLICK_MERCHANT_ID or self.CLICK_SECRET_KEY):
                 if is_invalid_credential(self.CLICK_SERVICE_ID):
-                    errors.append("CLICK_SERVICE_ID is required and cannot be empty or placeholder when Click is enabled in production.")
+                    errors.append(
+                        "CLICK_SERVICE_ID is required and cannot be empty or placeholder when Click is enabled in production."
+                    )
                 if is_invalid_credential(self.CLICK_MERCHANT_ID):
-                    errors.append("CLICK_MERCHANT_ID is required and cannot be empty or placeholder when Click is enabled in production.")
+                    errors.append(
+                        "CLICK_MERCHANT_ID is required and cannot be empty or placeholder when Click is enabled in production."
+                    )
                 if is_invalid_credential(self.CLICK_SECRET_KEY):
-                    errors.append("CLICK_SECRET_KEY is required and cannot be empty or placeholder when Click is enabled in production.")
+                    errors.append(
+                        "CLICK_SECRET_KEY is required and cannot be empty or placeholder when Click is enabled in production."
+                    )
 
             # Payme validation
             if self.PAYME_ENABLED or bool(self.PAYME_MERCHANT_ID or self.PAYME_SECRET_KEY):
                 if is_invalid_credential(self.PAYME_MERCHANT_ID):
-                    errors.append("PAYME_MERCHANT_ID is required and cannot be empty or placeholder when Payme is enabled in production.")
+                    errors.append(
+                        "PAYME_MERCHANT_ID is required and cannot be empty or placeholder when Payme is enabled in production."
+                    )
                 if is_invalid_credential(self.PAYME_SECRET_KEY):
-                    errors.append("PAYME_SECRET_KEY is required and cannot be empty or placeholder when Payme is enabled in production.")
+                    errors.append(
+                        "PAYME_SECRET_KEY is required and cannot be empty or placeholder when Payme is enabled in production."
+                    )
 
             # AutoPayCard validation
             if self.AUTOPAYCARD_ENABLED or bool(self.AUTOPAYCARD_API_KEY):
                 if is_invalid_credential(self.AUTOPAYCARD_API_KEY):
-                    errors.append("AUTOPAYCARD_API_KEY is required and cannot be empty or placeholder when AutoPayCard is enabled in production.")
+                    errors.append(
+                        "AUTOPAYCARD_API_KEY is required and cannot be empty or placeholder when AutoPayCard is enabled in production."
+                    )
 
             if errors:
                 raise ValueError("Production configuration validation failed:\n - " + "\n - ".join(errors))
@@ -140,9 +153,11 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+
 # Backward compatibility functions
 def get_web_app_url() -> str:
     return settings.WEB_APP_URL
+
 
 def get_admin_app_url() -> str:
     return settings.ADMIN_APP_URL

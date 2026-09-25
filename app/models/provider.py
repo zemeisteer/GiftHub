@@ -12,9 +12,9 @@ class ProviderStatus(str, Enum):
 
 
 class CircuitState(str, Enum):
-    CLOSED = "closed"       # Normal operation
-    OPEN = "open"           # Tripped / rejecting traffic
-    HALF_OPEN = "half_open" # Testing recovery with probe requests
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Tripped / rejecting traffic
+    HALF_OPEN = "half_open"  # Testing recovery with probe requests
 
 
 class ProviderHealth(Base):
@@ -22,6 +22,7 @@ class ProviderHealth(Base):
     Health and Circuit Breaker status for individual payment & fulfillment providers.
     E.g.: click, payme, autopaycard, fragment, telegram_api
     """
+
     __tablename__ = "provider_health"
 
     provider_name = Column(String(32), primary_key=True)

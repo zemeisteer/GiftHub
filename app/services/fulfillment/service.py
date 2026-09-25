@@ -20,12 +20,7 @@ MAX_FULFILLMENT_RETRIES = 3
 
 class FulfillmentService:
     @classmethod
-    async def fulfill_order_automated(
-        cls,
-        session: AsyncSession,
-        order_id: int,
-        bot=None
-    ) -> dict[str, Any]:
+    async def fulfill_order_automated(cls, session: AsyncSession, order_id: int, bot=None) -> dict[str, Any]:
         """
         Executes automated Fragment/blockchain delivery with retry limits,
         circuit breaker protection, and Dead Letter Queue (DLQ) persistent storage.
@@ -44,7 +39,9 @@ class FulfillmentService:
 
         # CIRCUIT BREAKER CHECK
         if not circuit_breaker.can_execute("fragment"):
-            logger.warning(f"[Fulfillment] Fragment provider circuit breaker is OPEN. Deferring order {order.order_code}")
+            logger.warning(
+                f"[Fulfillment] Fragment provider circuit breaker is OPEN. Deferring order {order.order_code}"
+            )
             return {"success": False, "circuit_open": True, "error": "Fragment provayderi vaqtincha nofaol"}
 
         # RETRY LIMIT CHECK -> Route to DLQ
@@ -62,10 +59,14 @@ class FulfillmentService:
                 error_message=order.fulfillment_error or "Maksimal urinishlar soni tugadi",
                 order_id=order.id,
                 attempts=order.fulfillment_attempts,
-                correlation_id=order.correlation_id
+                correlation_id=order.correlation_id,
             )
             await session.commit()
-            return {"success": False, "manual_review": True, "error": "Maksimal urinishlar soni tugadi, DLQ ga yuborildi"}
+            return {
+                "success": False,
+                "manual_review": True,
+                "error": "Maksimal urinishlar soni tugadi, DLQ ga yuborildi",
+            }
 
         order.fulfillment_attempts += 1
         order.fulfillment_status = "processing"
@@ -82,12 +83,13 @@ class FulfillmentService:
                 await circuit_breaker.sync_to_db(session, "fragment", is_success=True)
 
                 from app.services.orders.service import order_service
+
                 await order_service.transition_order_status(
                     session=session,
                     order_id=order.id,
                     new_status_raw=OrderStatus.COMPLETED,
                     actor="SYSTEM",
-                    reason=f"Fragment orqali muvaffaqiyatli yetkazildi (tx: {tx_hash})"
+                    reason=f"Fragment orqali muvaffaqiyatli yetkazildi (tx: {tx_hash})",
                 )
                 order.fulfillment_status = "fulfilled"
                 order.completed_at = utc_now()
@@ -101,7 +103,7 @@ class FulfillmentService:
                     type_="order",
                     title="Buyurtmangiz yetkazildi! ⭐",
                     message=f"{order.item_title} muvaffaqiyatli yetkazildi. Buyurtma ID: {order.order_code}",
-                    related_entity=f"order:{order.order_code}"
+                    related_entity=f"order:{order.order_code}",
                 )
 
                 logger.info(f"[Fulfillment Succeeded] order={order.order_code}, tx={tx_hash}")
@@ -115,28 +117,35 @@ class FulfillmentService:
                 if order.fulfillment_attempts >= MAX_FULFILLMENT_RETRIES:
                     order.fulfillment_status = "manual_review"
                     from app.services.orders.service import order_service
+
                     await order_service.transition_order_status(
                         session=session,
                         order_id=order.id,
                         new_status_raw=OrderStatus.FAILED,
                         actor="SYSTEM",
-                        reason=f"Maksimal urinishlar soni tugadi: {err_msg}"
+                        reason=f"Maksimal urinishlar soni tugadi: {err_msg}",
                     )
                     # Route to DLQ
                     await dlq_service.record_failed_job(
                         session=session,
                         job_type="fulfillment",
-                        payload={"order_id": order.id, "order_code": order.order_code, "recipient": order.recipient_username},
+                        payload={
+                            "order_id": order.id,
+                            "order_code": order.order_code,
+                            "recipient": order.recipient_username,
+                        },
                         error_message=err_msg,
                         order_id=order.id,
                         attempts=order.fulfillment_attempts,
-                        correlation_id=order.correlation_id
+                        correlation_id=order.correlation_id,
                     )
                 else:
                     order.fulfillment_status = "retry_scheduled"
                 await session.commit()
 
-                logger.error(f"[Fulfillment Failed] order={order.order_code}, attempt={order.fulfillment_attempts}, error={err_msg}")
+                logger.error(
+                    f"[Fulfillment Failed] order={order.order_code}, attempt={order.fulfillment_attempts}, error={err_msg}"
+                )
                 return {"success": False, "error": err_msg}
 
         except Exception as e:
@@ -149,22 +158,27 @@ class FulfillmentService:
             if order.fulfillment_attempts >= MAX_FULFILLMENT_RETRIES:
                 order.fulfillment_status = "manual_review"
                 from app.services.orders.service import order_service
+
                 await order_service.transition_order_status(
                     session=session,
                     order_id=order.id,
                     new_status_raw=OrderStatus.FAILED,
                     actor="SYSTEM",
-                    reason=f"Yetkazib berish istisnosi: {err_str}"
+                    reason=f"Yetkazib berish istisnosi: {err_str}",
                 )
                 await dlq_service.record_failed_job(
                     session=session,
                     job_type="fulfillment",
-                    payload={"order_id": order.id, "order_code": order.order_code, "recipient": order.recipient_username},
+                    payload={
+                        "order_id": order.id,
+                        "order_code": order.order_code,
+                        "recipient": order.recipient_username,
+                    },
                     error_message=err_str,
                     tb=traceback.format_exc(),
                     order_id=order.id,
                     attempts=order.fulfillment_attempts,
-                    correlation_id=order.correlation_id
+                    correlation_id=order.correlation_id,
                 )
             await session.commit()
             return {"success": False, "error": err_str}

@@ -1,4 +1,3 @@
-
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +17,7 @@ class NotificationService:
         type_: str,
         title: str,
         message: str,
-        related_entity: str | None = None
+        related_entity: str | None = None,
     ) -> InAppNotification:
         """Creates an in-app notification entry for the user."""
         notif = InAppNotification(
@@ -28,7 +27,7 @@ class NotificationService:
             message=message,
             related_entity=related_entity,
             is_read=False,
-            created_at=utc_now()
+            created_at=utc_now(),
         )
         session.add(notif)
         await session.commit()
@@ -36,12 +35,7 @@ class NotificationService:
         return notif
 
     @classmethod
-    async def list_notifications(
-        cls,
-        session: AsyncSession,
-        user_id: int,
-        limit: int = 50
-    ) -> list[InAppNotification]:
+    async def list_notifications(cls, session: AsyncSession, user_id: int, limit: int = 50) -> list[InAppNotification]:
         res = await session.execute(
             select(InAppNotification)
             .where(InAppNotification.user_id == user_id)
@@ -62,6 +56,7 @@ class NotificationService:
     @classmethod
     async def mark_all_as_read(cls, session: AsyncSession, user_id: int) -> int:
         from sqlalchemy import update
+
         res = await session.execute(
             update(InAppNotification)
             .where(InAppNotification.user_id == user_id, InAppNotification.is_read == False)

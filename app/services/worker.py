@@ -24,12 +24,7 @@ logger = get_logger("GiftHubWorker")
 _async_queue = asyncio.Queue()
 _shutdown_event = asyncio.Event()
 
-_worker_stats = {
-    "is_running": False,
-    "last_heartbeat": None,
-    "cycle_count": 0,
-    "tasks_processed": 0
-}
+_worker_stats = {"is_running": False, "last_heartbeat": None, "cycle_count": 0, "tasks_processed": 0}
 
 
 def get_worker_status() -> dict[str, Any]:
@@ -42,7 +37,7 @@ def get_worker_status() -> dict[str, Any]:
         "last_heartbeat": hb.isoformat() if hb else None,
         "seconds_since_heartbeat": round(sec_since, 1) if sec_since is not None else None,
         "cycle_count": _worker_stats["cycle_count"],
-        "queue_size": _async_queue.qsize()
+        "queue_size": _async_queue.qsize(),
     }
 
 
@@ -71,17 +66,12 @@ async def process_task(task: dict[str, Any], bot=None):
     elif t_type == "cleanup_expired_price_locks":
         async with async_session_scope() as session:
             now = utc_now()
-            await session.execute(
-                delete(PriceLock).where(PriceLock.expires_at < now, PriceLock.is_used == False)
-            )
+            await session.execute(delete(PriceLock).where(PriceLock.expires_at < now, PriceLock.is_used == False))
 
     elif t_type == "retry_failed_fulfillments":
         async with async_session_scope() as session:
             res = await session.execute(
-                select(Order.id).where(
-                    Order.fulfillment_status == "retry_scheduled",
-                    Order.fulfillment_attempts < 3
-                )
+                select(Order.id).where(Order.fulfillment_status == "retry_scheduled", Order.fulfillment_attempts < 3)
             )
             order_ids = res.scalars().all()
             for oid in order_ids:
@@ -102,21 +92,19 @@ async def _process_outbox_events_with_session(session: AsyncSession, bot=None):
             elif ev.event_type in ("WALLET_DEPOSIT_COMPLETED", "PAYMENT_TOPUP_NOTIFICATION"):
                 if bot:
                     from app.utils.notifications import send_topup_notification
+
                     user_id = int(ev.payload.get("user_id"))
                     amount = float(ev.payload.get("amount", 0))
                     method = ev.payload.get("provider", "payment")
                     new_balance = float(ev.payload.get("new_balance", 0))
                     await send_topup_notification(
-                        bot=bot,
-                        user_id=user_id,
-                        amount=amount,
-                        method=method,
-                        new_balance=new_balance
+                        bot=bot, user_id=user_id, amount=amount, method=method, new_balance=new_balance
                     )
                 await outbox_service.mark_processed(session, ev.id)
             elif ev.event_type == "ORDER_CREATED_NOTIFICATION":
                 if bot:
                     from app.utils.notifications import send_order_created_notification
+
                     order_dict = ev.payload.get("order")
                     recipient_id = ev.payload.get("recipient_id")
                     if order_dict:
@@ -152,10 +140,7 @@ async def _process_dlq_retries_with_session(session: AsyncSession, bot=None):
                 res = await fulfillment_service.fulfill_order_automated(session=session, order_id=job.order_id, bot=bot)
                 if res.get("success") and res.get("fulfilled"):
                     await dlq_service.resolve_job(
-                        session=session,
-                        job_id=job.id,
-                        admin_id=job.resolved_by or 0,
-                        notes="Admin re-try succeeded."
+                        session=session, job_id=job.id, admin_id=job.resolved_by or 0, notes="Admin re-try succeeded."
                     )
                 else:
                     job.status = DLQStatus.EXHAUSTED.value
@@ -184,7 +169,9 @@ async def get_distributed_worker_heartbeat() -> dict[str, Any]:
     """
     try:
         import json
+
         from app.core.redis import get_redis_client
+
         r = get_redis_client()
         if r:
             raw = await r.get("gifthub:worker:heartbeat")
@@ -197,9 +184,9 @@ async def get_distributed_worker_heartbeat() -> dict[str, Any]:
     return {
         "worker_id": "worker-local",
         "status": "running" if stats["is_running"] else "idle",
-        "last_heartbeat": stats["last_heartbeat"].isoformat() if stats.get("last_heartbeat") else None,
+        "last_heartbeat": stats.get("last_heartbeat"),
         "cycle_count": stats.get("cycle_count", 0),
-        "queue_size": stats.get("queue_size", 0)
+        "queue_size": stats.get("queue_size", 0),
     }
 
 
@@ -217,16 +204,20 @@ async def run_worker_loop(bot=None):
         # 0. Distributed Heartbeat Publication to Redis (Req 9)
         try:
             import json
+
             from app.core.redis import get_redis_client
+
             r = get_redis_client()
             if r:
-                hb_payload = json.dumps({
-                    "worker_id": "worker-main",
-                    "status": "running",
-                    "last_heartbeat": now_dt.isoformat(),
-                    "cycle_count": cycle_counter,
-                    "queue_size": _async_queue.qsize()
-                })
+                hb_payload = json.dumps(
+                    {
+                        "worker_id": "worker-main",
+                        "status": "running",
+                        "last_heartbeat": now_dt.isoformat(),
+                        "cycle_count": cycle_counter,
+                        "queue_size": _async_queue.qsize(),
+                    }
+                )
                 await r.set("gifthub:worker:heartbeat", hb_payload, ex=60)
         except Exception as hb_err:
             logger.debug(f"Failed writing worker heartbeat to Redis: {hb_err}")
@@ -242,18 +233,18 @@ async def run_worker_loop(bot=None):
                 finally:
                     _async_queue.task_done()
             except asyncio.TimeoutError:
-                pass # Queue was empty during timeout, proceed to outbox check
+                pass  # Queue was empty during timeout, proceed to outbox check
 
             # 2. Process Transactional Outbox events
             await process_outbox_events_cycle(bot=bot)
 
             # 3. Periodically check DLQ manual retries
             cycle_counter += 1
-            if cycle_counter % 15 == 0: # Every ~30s
+            if cycle_counter % 15 == 0:  # Every ~30s
                 await process_dlq_retries_cycle(bot=bot)
 
             # 4. Periodically run reconciliation audit
-            if cycle_counter % 1800 == 0: # Every ~1 hour
+            if cycle_counter % 1800 == 0:  # Every ~1 hour
                 async with async_session_scope() as session:
                     await reconciliation_service.run_reconciliation_audit(session)
 
@@ -269,6 +260,7 @@ async def run_worker_loop(bot=None):
 
 if __name__ == "__main__":
     from app.core.logging import setup_logger
+
     setup_logger("INFO")
     logger.info("Running standalone GiftHub worker process...")
     asyncio.run(run_worker_loop())

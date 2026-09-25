@@ -27,7 +27,7 @@ async def liveness_probe():
         "live": True,
         "app": "GiftHub",
         "environment": settings.ENVIRONMENT,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -66,10 +66,11 @@ async def readiness_probe():
             redis_ok = False
     else:
         # In non-production, Redis may be optional fallback
-        redis_ok = (settings.ENVIRONMENT != "production")
+        redis_ok = settings.ENVIRONMENT != "production"
 
     # 3. Worker Status (Distributed Redis Heartbeat, Req 8 & 9)
     from app.services.worker import get_distributed_worker_heartbeat
+
     worker_hb = await get_distributed_worker_heartbeat()
     worker_last_hb = worker_hb.get("last_heartbeat")
     worker_alive = False
@@ -79,7 +80,7 @@ async def readiness_probe():
         try:
             hb_dt = datetime.fromisoformat(worker_last_hb)
             worker_age_sec = round((datetime.now(timezone.utc) - hb_dt).total_seconds(), 1)
-            worker_alive = (worker_age_sec <= 60.0)
+            worker_alive = worker_age_sec <= 60.0
         except Exception:
             worker_alive = False
     elif settings.ENVIRONMENT != "production":
@@ -87,9 +88,9 @@ async def readiness_probe():
 
     # 4. Critical Provider Circuit Breakers
     fragment_circuit = circuit_breaker.get_state("fragment").value
-    fragment_ok = (fragment_circuit != "OPEN")
+    fragment_ok = fragment_circuit != "OPEN"
 
-    is_prod = (settings.ENVIRONMENT == "production")
+    is_prod = settings.ENVIRONMENT == "production"
     critical_ok = db_ok and (redis_ok and worker_alive if is_prod else True)
 
     status_code = status.HTTP_200_OK if critical_ok else status.HTTP_503_SERVICE_UNAVAILABLE
@@ -100,28 +101,25 @@ async def readiness_probe():
             "environment": settings.ENVIRONMENT,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "dependencies": {
-                "database": {
-                    "status": "healthy" if db_ok else "unhealthy",
-                    "latency_ms": db_latency_ms
-                },
+                "database": {"status": "healthy" if db_ok else "unhealthy", "latency_ms": db_latency_ms},
                 "redis": {
                     "status": "healthy" if redis_ok else "unhealthy",
                     "latency_ms": redis_latency_ms,
-                    "required": is_prod
+                    "required": is_prod,
                 },
                 "worker": {
                     "status": "healthy" if worker_alive else ("stale" if worker_last_hb else "unavailable"),
                     "last_heartbeat": worker_last_hb,
                     "staleness_seconds": worker_age_sec,
                     "worker_id": worker_hb.get("worker_id"),
-                    "required": is_prod
+                    "required": is_prod,
                 },
                 "fragment_provider": {
                     "status": "operational" if fragment_ok else "degraded",
-                    "circuit": fragment_circuit
-                }
-            }
-        }
+                    "circuit": fragment_circuit,
+                },
+            },
+        },
     )
 
 

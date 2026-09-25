@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 # ================= PROFILE & REFERRALS ================= #
 
+
 @router.callback_query(F.data == "profile:view")
 async def cb_profile_view(callback: CallbackQuery, state: FSMContext, bot: Bot):
     await state.clear()
@@ -54,6 +55,7 @@ async def cb_profile_view(callback: CallbackQuery, state: FSMContext, bot: Bot):
 
 # ================= PROMO CODE ================= #
 
+
 @router.callback_query(F.data == "promo:enter")
 async def cb_promo_enter(callback: CallbackQuery, state: FSMContext):
     await state.set_state(PromoCodeState.entering_code)
@@ -80,26 +82,31 @@ async def process_promo_code_text(message: Message, state: FSMContext):
     await state.clear()
 
     if res.get("success"):
-        success_msg = res.get('message', "Promo-kod muvaffaqiyatli qo'llandi!")
-        await message.answer(
-            f"{success_msg}",
-            reply_markup=get_back_to_main_keyboard()
-        )
+        success_msg = res.get("message", "Promo-kod muvaffaqiyatli qo'llandi!")
+        await message.answer(f"{success_msg}", reply_markup=get_back_to_main_keyboard())
     else:
         await message.answer(
-            f"❌ <b>Xatolik:</b> {res.get('detail', 'Yaroqsiz promo-kod')}",
-            reply_markup=get_back_to_main_keyboard()
+            f"❌ <b>Xatolik:</b> {res.get('detail', 'Yaroqsiz promo-kod')}", reply_markup=get_back_to_main_keyboard()
         )
 
 
 # ================= HELP & INFO ================= #
 
+
 @router.callback_query(F.data == "help:view")
 async def cb_help_view(callback: CallbackQuery):
-    support_link = config.SUPPORT_URL if config.SUPPORT_URL.startswith("http") else f"https://t.me/{config.SUPPORT_URL.lstrip('@')}"
+    support_link = (
+        config.SUPPORT_URL
+        if config.SUPPORT_URL.startswith("http")
+        else f"https://t.me/{config.SUPPORT_URL.lstrip('@')}"
+    )
     extra_news = ""
     if config.NEWS_CHANNEL_URL:
-        news_link = config.NEWS_CHANNEL_URL if config.NEWS_CHANNEL_URL.startswith("http") else f"https://t.me/{config.NEWS_CHANNEL_URL.lstrip('@')}"
+        news_link = (
+            config.NEWS_CHANNEL_URL
+            if config.NEWS_CHANNEL_URL.startswith("http")
+            else f"https://t.me/{config.NEWS_CHANNEL_URL.lstrip('@')}"
+        )
         extra_news = f"\n📢 Yangiliklar va chegirmalar kanali: {news_link}"
 
     text = (

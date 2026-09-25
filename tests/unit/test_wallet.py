@@ -19,7 +19,7 @@ async def test_credit_balance(db_session: AsyncSession, sample_user: User):
         amount=credit_amount,
         tx_type="deposit",
         reference_type="click",
-        reference_id="click_tx_123"
+        reference_id="click_tx_123",
     )
 
     await db_session.refresh(sample_user)
@@ -41,7 +41,7 @@ async def test_debit_balance_success(db_session: AsyncSession, sample_user: User
         amount=debit_amount,
         tx_type="purchase",
         reference_type="order",
-        reference_id="order_999"
+        reference_id="order_999",
     )
 
     await db_session.refresh(sample_user)
@@ -63,7 +63,7 @@ async def test_debit_balance_insufficient_funds(db_session: AsyncSession, sample
             amount=excessive_amount,
             tx_type="purchase",
             reference_type="order",
-            reference_id="order_1000"
+            reference_id="order_1000",
         )
 
     await db_session.refresh(sample_user)
@@ -80,7 +80,7 @@ async def test_admin_adjustment(db_session: AsyncSession, sample_user: User, sam
         admin_id=sample_admin.id,
         user_id=sample_user.id,
         amount=adjustment_amount,
-        reason="Manual correction for overcharge"
+        reason="Manual correction for overcharge",
     )
 
     await db_session.refresh(sample_user)

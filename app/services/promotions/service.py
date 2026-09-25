@@ -28,7 +28,7 @@ class PromotionService:
         user_id: int,
         order_total: Decimal,
         product_type: str = "all",
-        order_id: int | None = None
+        order_id: int | None = None,
     ) -> dict[str, Any]:
         """
         Atomically validates and redeems a promo code under row-level lock.
@@ -53,7 +53,9 @@ class PromotionService:
                 raise PromoCodeExpiredError("Ushbu promo-kod hali kuchga kirmagan.")
 
         if promo.expires_at:
-            expires = promo.expires_at.replace(tzinfo=timezone.utc) if promo.expires_at.tzinfo is None else promo.expires_at
+            expires = (
+                promo.expires_at.replace(tzinfo=timezone.utc) if promo.expires_at.tzinfo is None else promo.expires_at
+            )
             if now > expires:
                 raise PromoCodeExpiredError("Promo-kodning amal qilish muddati tugagan.")
 
@@ -66,13 +68,12 @@ class PromotionService:
             if product_type.lower() not in allowed:
                 raise GiftHubException(
                     f"Ushbu promo-kod faqat quyidagi mahsulotlar uchun amal qiladi: {promo.applicable_products}",
-                    code="PROMO_PRODUCT_MISMATCH"
+                    code="PROMO_PRODUCT_MISMATCH",
                 )
 
         # Check per-user usage limit
         user_usages_count_stmt = select(func.count(PromoRedemption.id)).where(
-            PromoRedemption.promo_code_id == promo.id,
-            PromoRedemption.user_id == user_id
+            PromoRedemption.promo_code_id == promo.id, PromoRedemption.user_id == user_id
         )
         count_res = await session.execute(user_usages_count_stmt)
         user_count = count_res.scalar() or 0
@@ -84,7 +85,7 @@ class PromotionService:
         if order_total < min_order:
             raise GiftHubException(
                 f"Ushbu promo-kod faqat kamida {min_order:,.0f} so'mlik buyurtmalar uchun amal qiladi.",
-                code="MIN_ORDER_NOT_MET"
+                code="MIN_ORDER_NOT_MET",
             )
 
         reward_val = Decimal(str(promo.reward_value))
@@ -105,16 +106,13 @@ class PromotionService:
                 user_id=user_id,
                 order_id=order_id,
                 benefit_amount=discount_amount,
-                redeemed_at=now
+                redeemed_at=now,
             )
             session.add(redemption)
 
             # Legacy usage
             legacy_usage = PromoCodeUsage(
-                promo_code_id=promo.id,
-                user_id=user_id,
-                benefit_amount=discount_amount,
-                used_at=now
+                promo_code_id=promo.id, user_id=user_id, benefit_amount=discount_amount, used_at=now
             )
             session.add(legacy_usage)
             await session.flush()
@@ -129,7 +127,7 @@ class PromotionService:
                 "original_total": float(order_total),
                 "new_total": float(new_total),
                 "new_total_decimal": new_total,
-                "message": f"🎉 {reward_val:.0f}% chegirma qo'llandi! (-{discount_amount:,.0f} so'm)"
+                "message": f"🎉 {reward_val:.0f}% chegirma qo'llandi! (-{discount_amount:,.0f} so'm)",
             }
 
         elif promo.reward_type in ("fixed_discount", "fixed"):
@@ -142,15 +140,12 @@ class PromotionService:
                 user_id=user_id,
                 order_id=order_id,
                 benefit_amount=discount_amount,
-                redeemed_at=now
+                redeemed_at=now,
             )
             session.add(redemption)
 
             legacy_usage = PromoCodeUsage(
-                promo_code_id=promo.id,
-                user_id=user_id,
-                benefit_amount=discount_amount,
-                used_at=now
+                promo_code_id=promo.id, user_id=user_id, benefit_amount=discount_amount, used_at=now
             )
             session.add(legacy_usage)
             await session.flush()
@@ -165,7 +160,7 @@ class PromotionService:
                 "original_total": float(order_total),
                 "new_total": float(new_total),
                 "new_total_decimal": new_total,
-                "message": f"🎉 {discount_amount:,.0f} so'm chegirma qo'llandi!"
+                "message": f"🎉 {discount_amount:,.0f} so'm chegirma qo'llandi!",
             }
 
         elif promo.reward_type == "balance_bonus":
@@ -177,23 +172,17 @@ class PromotionService:
                 tx_type="promo_bonus",
                 reference_type="promo",
                 reference_id=str(promo.id),
-                note=f"Promo-kod ({clean_code}) bonusi"
+                note=f"Promo-kod ({clean_code}) bonusi",
             )
 
             promo.current_uses += 1
             redemption = PromoRedemption(
-                promo_code_id=promo.id,
-                user_id=user_id,
-                benefit_amount=reward_val,
-                redeemed_at=now
+                promo_code_id=promo.id, user_id=user_id, benefit_amount=reward_val, redeemed_at=now
             )
             session.add(redemption)
 
             legacy_usage = PromoCodeUsage(
-                promo_code_id=promo.id,
-                user_id=user_id,
-                benefit_amount=reward_val,
-                used_at=now
+                promo_code_id=promo.id, user_id=user_id, benefit_amount=reward_val, used_at=now
             )
             session.add(legacy_usage)
 
@@ -204,7 +193,7 @@ class PromotionService:
                 "code": clean_code,
                 "bonus_amount": float(reward_val),
                 "new_balance": float(user.balance),
-                "message": f"🎁 Hamyoningizga +{reward_val:,.0f} so'm bonus qo'shildi!"
+                "message": f"🎁 Hamyoningizga +{reward_val:,.0f} so'm bonus qo'shildi!",
             }
 
         raise GiftHubException(f"Noma'lum promo-kod turi: {promo.reward_type}")

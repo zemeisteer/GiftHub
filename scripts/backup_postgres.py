@@ -2,6 +2,7 @@
 GiftHub Automated PostgreSQL Backup Utility.
 Creates compressed, verified backups with SHA-256 checksums and automatic rotation.
 """
+
 import hashlib
 import os
 import subprocess
@@ -37,14 +38,20 @@ def run_backup() -> Path:
 
     cmd = [
         "pg_dump",
-        "-h", POSTGRES_HOST,
-        "-p", POSTGRES_PORT,
-        "-U", POSTGRES_USER,
-        "-d", POSTGRES_DB,
-        "-F", "c", # Custom format (compressed, supports pg_restore)
-        "-b",      # Include large objects
+        "-h",
+        POSTGRES_HOST,
+        "-p",
+        POSTGRES_PORT,
+        "-U",
+        POSTGRES_USER,
+        "-d",
+        POSTGRES_DB,
+        "-F",
+        "c",  # Custom format (compressed, supports pg_restore)
+        "-b",  # Include large objects
         "-v",
-        "-f", str(backup_file)
+        "-f",
+        str(backup_file),
     ]
 
     print(f"[*] Starting PostgreSQL backup for '{POSTGRES_DB}' -> {backup_file}...")

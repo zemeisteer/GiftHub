@@ -1,4 +1,5 @@
 import os
+
 from app.core.config import settings
 
 BASE_DIR = settings.BASE_DIR

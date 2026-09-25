@@ -29,6 +29,7 @@ async def test_crash_after_payment_commit_outbox_recovery(db_session: AsyncSessi
     Transactional Outbox guarantees that the event is picked up and fulfilled on worker restart.
     """
     from app.services.fragment import fragment_client
+
     async def mock_success(*args, **kwargs):
         return {"success": True, "tx_hash": "mock_tx_hash_12345", "fulfilled": True}
 
@@ -48,7 +49,7 @@ async def test_crash_after_payment_commit_outbox_recovery(db_session: AsyncSessi
         unit_price=Decimal("11000.00"),
         total_price=Decimal("11000.00"),
         status=OrderStatus.CREATED.value,
-        fulfillment_status="pending"
+        fulfillment_status="pending",
     )
     db_session.add(order)
     await db_session.commit()
@@ -60,7 +61,7 @@ async def test_crash_after_payment_commit_outbox_recovery(db_session: AsyncSessi
         provider_transaction_id="click_outbox_test_101",
         amount=Decimal("11000.00"),
         user_id=user.id,
-        order_id=order.id
+        order_id=order.id,
     )
     assert res.is_new is True
 
@@ -69,8 +70,7 @@ async def test_crash_after_payment_commit_outbox_recovery(db_session: AsyncSessi
     assert order.status == OrderStatus.PAID.value
 
     outbox_stmt = select(OutboxEvent).where(
-        OutboxEvent.aggregate_id == str(order.id),
-        OutboxEvent.event_type == "ORDER_FULFILLMENT_REQUESTED"
+        OutboxEvent.aggregate_id == str(order.id), OutboxEvent.event_type == "ORDER_FULFILLMENT_REQUESTED"
     )
     outbox_res = await db_session.execute(outbox_stmt)
     event = outbox_res.scalars().first()
@@ -108,19 +108,21 @@ async def test_fulfillment_retries_exhausted_routes_to_dlq(db_session: AsyncSess
         total_price=Decimal("21500.00"),
         status=OrderStatus.PAID.value,
         fulfillment_status="pending",
-        fulfillment_attempts=2 # Already failed twice
+        fulfillment_attempts=2,  # Already failed twice
     )
     db_session.add(order)
     await db_session.commit()
 
     # Mock fragment client to fail
     from app.services.fragment import fragment_client
+
     async def mock_fail(*args, **kwargs):
         return {"success": False, "error": "Fragment network timeout 504 Gateway Error"}
 
     monkeypatch.setattr(fragment_client, "fulfill_order", mock_fail)
 
     from app.services.fulfillment.service import fulfillment_service
+
     res = await fulfillment_service.fulfill_order_automated(session=db_session, order_id=order.id)
     assert res["success"] is False
 
@@ -185,7 +187,7 @@ async def test_checkout_idempotency_prevents_duplicate_purchases(db_session: Asy
         item_title="50 Stars",
         amount=50,
         payment_method="balance",
-        idempotency_key=idemp_key
+        idempotency_key=idemp_key,
     )
 
     await db_session.refresh(user)
@@ -199,7 +201,7 @@ async def test_checkout_idempotency_prevents_duplicate_purchases(db_session: Asy
         item_title="50 Stars",
         amount=50,
         payment_method="balance",
-        idempotency_key=idemp_key
+        idempotency_key=idemp_key,
     )
 
     # Must return the identical order
@@ -234,9 +236,9 @@ async def test_database_financial_constraints(db_session: AsyncSession):
     bad_tx = WalletTransaction(
         user_id=good_user_id,
         tx_type="deposit",
-        amount=Decimal("0.00"), # Zero amount forbidden by check constraint
+        amount=Decimal("0.00"),  # Zero amount forbidden by check constraint
         balance_before=Decimal("100.00"),
-        balance_after=Decimal("100.00")
+        balance_after=Decimal("100.00"),
     )
     db_session.add(bad_tx)
     with pytest.raises(IntegrityError):
@@ -250,7 +252,7 @@ async def test_database_financial_constraints(db_session: AsyncSession):
         tx_type="purchase",
         amount=Decimal("-200.00"),
         balance_before=Decimal("100.00"),
-        balance_after=Decimal("-100.00") # Negative balance forbidden
+        balance_after=Decimal("-100.00"),  # Negative balance forbidden
     )
     db_session.add(bad_balance_tx)
     with pytest.raises(IntegrityError):

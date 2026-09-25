@@ -20,14 +20,16 @@ class PromoCode(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     code = Column(String(32), unique=True, index=True, nullable=False)
-    reward_type = Column(String(32), default="discount_percent", nullable=False) # discount_percent, fixed_discount, balance_bonus
+    reward_type = Column(
+        String(32), default="discount_percent", nullable=False
+    )  # discount_percent, fixed_discount, balance_bonus
     reward_value = Column(Numeric(18, 2), default=Decimal("10.00"), nullable=False)
-    max_discount = Column(Numeric(18, 2), nullable=True) # Cap for percentage discounts
+    max_discount = Column(Numeric(18, 2), nullable=True)  # Cap for percentage discounts
     min_order_amount = Column(Numeric(18, 2), default=Decimal("0.00"), nullable=False)
     max_uses = Column(Integer, default=100, nullable=False)
     current_uses = Column(Integer, default=0, nullable=False)
     max_uses_per_user = Column(Integer, default=1, nullable=False)
-    applicable_products = Column(String(128), default="all", nullable=False) # all, stars, premium, gift, service
+    applicable_products = Column(String(128), default="all", nullable=False)  # all, stars, premium, gift, service
     is_active = Column(Boolean, default=True, nullable=False)
     starts_at = Column(DateTime(timezone=True), nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=True)
@@ -52,6 +54,7 @@ class PromoRedemption(Base):
 
 class PromoCodeUsage(Base):
     """Legacy usage tracking table preserved for backward compatibility."""
+
     __tablename__ = "promo_code_usages"
 
     id = Column(Integer, primary_key=True, autoincrement=True)

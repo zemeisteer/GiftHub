@@ -18,7 +18,7 @@ DEFAULT_FLAGS = {
     "premium_purchases_enabled": (True, "Enables Telegram Premium subscription plans."),
     "gifts_purchases_enabled": (True, "Enables Telegram Digital Gifts purchases."),
     "promocodes_enabled": (True, "Enables discount promo code redemption."),
-    "referrals_enabled": (True, "Enables referral tracking and bonus reward distribution.")
+    "referrals_enabled": (True, "Enables referral tracking and bonus reward distribution."),
 }
 
 
@@ -26,7 +26,7 @@ class FeatureFlagService:
     def __init__(self):
         self._cache: Dict[str, bool] = {}
         self._cache_ts: float = 0.0
-        self._cache_ttl: float = 15.0 # Cache for 15s to minimize DB reads
+        self._cache_ttl: float = 15.0  # Cache for 15s to minimize DB reads
 
     async def _refresh_cache(self, session: AsyncSession) -> None:
         try:
@@ -51,11 +51,7 @@ class FeatureFlagService:
         return await self.is_enabled(session, "maintenance_mode", default=False)
 
     async def set_flag(
-        self,
-        session: AsyncSession,
-        name: str,
-        is_enabled: bool,
-        description: Optional[str] = None
+        self, session: AsyncSession, name: str, is_enabled: bool, description: Optional[str] = None
     ) -> FeatureFlag:
         """Sets a feature flag and invalidates cache."""
         flag = await session.get(FeatureFlag, name)
@@ -70,7 +66,7 @@ class FeatureFlagService:
             flag.updated_at = now
 
         await session.flush()
-        self._cache_ts = 0.0 # Invalidate cache immediately
+        self._cache_ts = 0.0  # Invalidate cache immediately
         logger.info(f"Feature flag '{name}' updated to {is_enabled}")
         return flag
 
@@ -90,7 +86,7 @@ class FeatureFlagService:
                     is_enabled=is_enabled,
                     description=desc,
                     metadata_json={},
-                    updated_at=datetime.now(timezone.utc)
+                    updated_at=datetime.now(timezone.utc),
                 )
                 session.add(flag)
         await session.flush()

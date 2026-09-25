@@ -36,6 +36,7 @@ class ReferralReward(Base):
     Transparent, idempotent referral reward ledger.
     Unique constraint on order_id ensures an order can never be rewarded twice.
     """
+
     __tablename__ = "referral_rewards"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -44,5 +45,5 @@ class ReferralReward(Base):
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     commission_rate = Column(Numeric(18, 2), nullable=False)
     commission_amount = Column(Numeric(18, 2), nullable=False)
-    status = Column(String(32), default="paid", nullable=False) # pending, paid, cancelled
+    status = Column(String(32), default="paid", nullable=False)  # pending, paid, cancelled
     created_at = Column(DateTime(timezone=True), default=utc_now)

@@ -21,11 +21,7 @@ class AutoPayCardProvider(BasePaymentProvider):
         return ""
 
     async def handle_webhook(
-        self,
-        session: AsyncSession,
-        payload: dict[str, Any],
-        headers: dict[str, str] | None = None,
-        bot=None
+        self, session: AsyncSession, payload: dict[str, Any], headers: dict[str, str] | None = None, bot=None
     ) -> dict[str, Any]:
         import hmac
         import time
@@ -61,7 +57,7 @@ class AutoPayCardProvider(BasePaymentProvider):
                 if ts_float > 1e11:
                     ts_float = ts_float / 1000.0
                 now_sec = time.time()
-                if abs(now_sec - ts_float) > 600: # 10 minutes tolerance window
+                if abs(now_sec - ts_float) > 600:  # 10 minutes tolerance window
                     logger.warning(f"[AutoPayCard] Webhook rejected: timestamp expired ({ts_float} vs {now_sec})")
                     return {"success": False, "detail": "Vaqt tamg'asi eskirgan (replay protection)"}
             except (ValueError, TypeError):
@@ -106,21 +102,26 @@ class AutoPayCardProvider(BasePaymentProvider):
             user_id=user_id,
             amount=amount,
             note=f"AutoPayCard ({card_last4}) orqali to'ldirildi",
-            raw_payload=str(payload)
+            raw_payload=str(payload),
         )
 
         return {
             "success": True,
             "user_id": user_id,
             "new_balance": round(float(updated_user.balance)),
-            "amount": float(amount)
+            "amount": float(amount),
         }
 
-    async def process_webhook(self, session: AsyncSession, payload: dict[str, Any], headers: dict[str, str] | None = None) -> dict[str, Any]:
+    async def process_webhook(
+        self, session: AsyncSession, payload: dict[str, Any], headers: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         return await self.handle_webhook(session, payload, headers=headers)
 
 
 autopaycard_provider = AutoPayCardProvider()
 
-async def handle_autopaycard_webhook(session: AsyncSession, payload: dict[str, Any], headers: dict[str, str] | None = None, bot=None) -> dict[str, Any]:
+
+async def handle_autopaycard_webhook(
+    session: AsyncSession, payload: dict[str, Any], headers: dict[str, str] | None = None, bot=None
+) -> dict[str, Any]:
     return await autopaycard_provider.handle_webhook(session, payload, headers=headers, bot=bot)
