@@ -72,6 +72,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def correlation_id_middleware(request: Request, call_next):
+    from app.core.correlation import set_correlation_id
+    incoming_id = request.headers.get("X-Correlation-ID") or request.headers.get("X-Request-ID")
+    cid = set_correlation_id(incoming_id)
+    response: Response = await call_next(request)
+    response.headers["X-Correlation-ID"] = cid
+    return response
+
+
+@app.middleware("http")
+async def maintenance_mode_middleware(request: Request, call_next):
+    path = request.url.path
+    exempt_prefixes = ("/health", "/ready", "/admin", "/webhook", "/static", "/docs", "/openapi.json")
+    if not any(path.startswith(p) for p in exempt_prefixes):
+        try:
+            from app.services.feature_flags.service import feature_flag_service
+            async with AsyncSessionLocal() as session:
+                if await feature_flag_service.is_maintenance_mode(session):
+                    return JSONResponse(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        content={
+                            "success": False,
+                            "maintenance": True,
+                            "detail": "Platforma texnik ta'mirlash rejimida. Tez orada qayta ishga tushadi."
+                        }
+                    )
+        except Exception:
+            pass
+    return await call_next(request)
+
+
+# Include Versioned /api/v1 Router
+from app.api.v1.router import router as v1_router
+
+app.include_router(v1_router, prefix="/api/v1")
+
 # Reference to the running bot instance (set during startup in main.py)
 bot_instance = None
 bot_username = None
@@ -82,6 +120,34 @@ def set_bot(bot, username: str | None = None):
     bot_instance = bot
     if username:
         bot_username = username
+
+
+# ================= TELEGRAM WEBHOOK (Req 14) ================= #
+
+@app.post("/webhook/telegram")
+async def telegram_webhook(
+    request: Request,
+    x_telegram_bot_api_secret_token: str | None = Header(None, alias="X-Telegram-Bot-Api-Secret-Token")
+):
+    """
+    Receives Telegram updates in production Webhook mode.
+    Validated with X-Telegram-Bot-Api-Secret-Token.
+    """
+    if settings.TELEGRAM_WEBHOOK_SECRET:
+        if x_telegram_bot_api_secret_token != settings.TELEGRAM_WEBHOOK_SECRET:
+            logger.warning("Unauthorized webhook request with invalid secret token.")
+            raise HTTPException(status_code=403, detail="Invalid webhook secret token.")
+
+    update_dict = await request.json()
+    if bot_instance:
+        from aiogram.types import Update
+
+        from main import dp
+        update_obj = Update(**update_dict)
+        await dp.feed_webhook_update(bot_instance, update_obj)
+        return {"ok": True}
+    return {"ok": False, "error": "Bot instance not initialized"}
+
 
 
 # ================= HEALTH & READINESS ================= #

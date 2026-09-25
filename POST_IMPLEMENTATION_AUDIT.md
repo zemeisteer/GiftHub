@@ -136,3 +136,30 @@ Before public production launch, the following credentials should be rotated if 
 - Telegram `BOT_TOKEN`
 - Click `CLICK_SECRET_KEY`
 - Payme `PAYME_SECRET_KEY`
+
+---
+
+## 6. Reliability & Resilience Upgrade (20 Additional Requirements Verified)
+
+| # | Requirement | Implementation & Verification Status |
+|---|---|---|
+| **1** | **GiftHub Branding Migration** | Replaced all legacy branding across UI text, logs, DB defaults, docs, and mockups (`gifthub-mockup.html`, `gifthub-admin-mockup.html`, `gifthub-tz-v2.md`). |
+| **2** | **Payment Reconciliation Engine** | Implemented `app/services/reconciliation/` & `ReconciliationReport` / `ReconciliationDiscrepancy` models. Detects: paid payment without order, paid order missing wallet tx, unfulfilled order (> 5m), amount mismatch, duplicate provider tx, refund mismatch. |
+| **3** | **Transactional Outbox Pattern** | `app/models/outbox.py` & `app/services/outbox/service.py`. Post-payment events (`ORDER_FULFILLMENT_REQUESTED`, `WALLET_DEPOSIT_COMPLETED`, `ORDER_REFUNDED`) committed atomically with financial updates. |
+| **4** | **Dead Letter Queue (DLQ)** | `app/models/dlq.py` & `app/services/dlq/service.py`. Exhausted jobs preserved in persistent DLQ with error traces; retryable via Admin Panel (`/api/v1/admin/dlq/{id}/retry`). |
+| **5** | **Provider Health & Circuit Breakers** | `app/models/provider.py` & `app/services/providers/circuit_breaker.py`. State machine (`HEALTHY`, `DEGRADED`, `DISABLED`) with `CLOSED`/`OPEN`/`HALF_OPEN` states protecting payment and Fragment providers. |
+| **6** | **Feature Flags & Maintenance Mode** | `app/models/feature_flags.py` & `app/services/feature_flags/service.py`. Fast in-memory cache with DB fallback. Global maintenance mode middleware returns 503 for non-exempt routes. |
+| **7** | **Checkout-Level Idempotency** | `app/models/order.py` (`CheckoutIdempotency`). Client idempotency key guarantees rapid clicks or retries return existing order without double charging. |
+| **8** | **Correlation / Request IDs** | `app/core/correlation.py` (`X-Correlation-ID`). ContextVar propagates correlation IDs through HTTP requests, worker cycles, payments, and fulfillment logs. |
+| **9** | **Database-Level Financial Constraints** | Engine `CHECK` constraints on `users` (`balance >= 0`, `referral_earnings >= 0`), `wallet_transactions` (`amount != 0`, `balance_before >= 0`, `balance_after >= 0`), `orders` (`total_price >= 0`, `unit_price >= 0`), and `payment_transactions` (`amount > 0`). |
+| **10** | **Automated PostgreSQL Backup & Restore** | `scripts/backup_postgres.py` (pg_dump `-Fc` + SHA-256 integrity + rotation) & `scripts/restore_postgres.py` (checksum verification + test restore). |
+| **11** | **Separated Runtime Roles** | `main.py --mode=combined|api|bot|worker`. Scalable isolated production microservices alongside combined dev mode. |
+| **12** | **Graceful Startup / Shutdown** | Registered signal handlers (`SIGTERM`, `SIGINT`) in `main.py` properly disposing database engine pool, stopping worker loops, closing Redis connections and HTTP clients. |
+| **13** | **Configurable drop_pending_updates** | `DROP_PENDING_UPDATES` environment variable configurable per environment rather than unconditional. |
+| **14** | **Telegram Webhook Mode** | `/webhook/telegram` endpoint with `X-Telegram-Bot-Api-Secret-Token` verification alongside long polling for local dev. |
+| **15** | **REST API v1 Versioning** | Mounted under `/api/v1` for catalog, orders, payments, DLQ, reconciliation, and feature flags. |
+| **16** | **Database-Driven Product Catalog** | `app/models/catalog.py` & `app/services/catalog/service.py`. Dynamic administration of Stars bundles, Premium durations, and Gifts without redeploying. |
+| **17** | **Financial Reconciliation Dashboard** | `/api/v1/admin/reconciliation/dashboard` exposing total payments received, wallet credits, paid orders, fulfilled orders, refunds, and active discrepancy counts. |
+| **18** | **Risk & Abuse Controls** | `app/models/risk.py` & `app/services/risk/service.py`. Detects referral velocity anomalies, promo bruteforce, checkout spam, and flags suspicious users. |
+| **19** | **Mandatory Admin Reason & Audit Log** | Enforced 5-character minimum `reason` on all sensitive admin operations (refunds, provider disabling, balance adjustments) with immutable audit records. |
+| **20** | **Automated Crash & Resilience Tests** | `tests/integration/test_crash_recovery.py`: 5 automated tests verifying crash recovery after payment commit, DLQ routing after retry exhaustion, circuit breaker tripping, checkout idempotency, and database financial check constraints. Full test suite: **31 of 31 passing (100%)**. |

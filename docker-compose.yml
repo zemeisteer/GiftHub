@@ -33,16 +33,16 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
+  api:
     build: .
-    container_name: gifthub-app
+    container_name: gifthub-api
     restart: unless-stopped
     ports:
       - "8000:8000"
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-gifthub_user}:${POSTGRES_PASSWORD:-gifthub_secure_pass}@postgres:5432/${POSTGRES_DB:-gifthub}
+      - DB_URL=postgresql+asyncpg://${POSTGRES_USER:-gifthub_user}:${POSTGRES_PASSWORD:-gifthub_secure_pass}@postgres:5432/${POSTGRES_DB:-gifthub}
       - REDIS_URL=redis://redis:6379/0
       - WEB_HOST=0.0.0.0
       - WEB_PORT=8000
@@ -52,7 +52,23 @@ services:
       redis:
         condition: service_healthy
     command: >
-      sh -c "alembic upgrade head && python main.py"
+      sh -c "alembic upgrade head && python main.py --mode=api"
+
+  bot:
+    build: .
+    container_name: gifthub-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DB_URL=postgresql+asyncpg://${POSTGRES_USER:-gifthub_user}:${POSTGRES_PASSWORD:-gifthub_secure_pass}@postgres:5432/${POSTGRES_DB:-gifthub}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python main.py --mode=bot
 
   worker:
     build: .
@@ -61,14 +77,14 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-gifthub_user}:${POSTGRES_PASSWORD:-gifthub_secure_pass}@postgres:5432/${POSTGRES_DB:-gifthub}
+      - DB_URL=postgresql+asyncpg://${POSTGRES_USER:-gifthub_user}:${POSTGRES_PASSWORD:-gifthub_secure_pass}@postgres:5432/${POSTGRES_DB:-gifthub}
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: python -m app.services.worker
+    command: python main.py --mode=worker
 
 volumes:
   pgdata:

@@ -11,8 +11,17 @@ SECRET_PATTERNS = [
 ]
 
 class SecretMaskingFormatter(logging.Formatter):
-    """Filters out known sensitive keys from log messages."""
+    """Filters out known sensitive keys from log messages and injects correlation ID."""
     def format(self, record: logging.LogRecord) -> str:
+        try:
+            from app.core.correlation import correlation_id_ctx
+            cid = correlation_id_ctx.get()
+            if cid and not getattr(record, "_cid_injected", False):
+                record.msg = f"[{cid}] {record.msg}"
+                record._cid_injected = True
+        except Exception:
+            pass
+
         original = super().format(record)
         masked = original
         for pattern in SECRET_PATTERNS:

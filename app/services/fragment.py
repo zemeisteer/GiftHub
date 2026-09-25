@@ -128,7 +128,7 @@ import httpx
 
 from database import queries
 from database.db import AsyncSessionLocal
-from database.models import FragmentSetting, Order
+from database.models import FragmentSetting, Order, User
 
 # Fragment Telegram Stars & Premium official contract addresses on TON Mainnet
 FRAGMENT_STARS_CONTRACT = "EQCA14o1-VWhsuGhpqhkoPt6vJWZwuoBmms43Sy0GC9DDC36"
@@ -273,7 +273,8 @@ class FragmentService:
                 return {"success": False, "error": "Buyurtma topilmadi"}
 
             setting = await queries.get_fragment_settings(session)
-            recipient = order.recipient_username or (order.user.username if order.user else "")
+            user = await session.get(User, order.user_id) if order.user_id else None
+            recipient = order.recipient_username or (user.username if user and user.username else "")
             if not recipient:
                 recipient = str(order.user_id)
 

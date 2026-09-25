@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     PORT: int = 8000
     TELEGRAM_API_SERVER: str | None = None
     TELEGRAM_PROXY: str | None = None
+    TELEGRAM_MODE: str = "polling" # polling, webhook
+    TELEGRAM_WEBHOOK_URL: str | None = None
+    TELEGRAM_WEBHOOK_SECRET: str | None = None
+    DROP_PENDING_UPDATES: bool = False
 
     # Web & URLs
     WEB_HOST: str = "0.0.0.0"

@@ -2,7 +2,9 @@ from decimal import Decimal
 from enum import Enum
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
+    CheckConstraint,
     Column,
     DateTime,
     ForeignKey,
@@ -98,10 +100,15 @@ def validate_order_transition(current_status: str, new_status: str) -> None:
 
 class Order(Base):
     __tablename__ = "orders"
+    __table_args__ = (
+        CheckConstraint("total_price >= 0", name="chk_orders_total_price_non_neg"),
+        CheckConstraint("amount > 0", name="chk_orders_amount_positive"),
+        CheckConstraint("unit_price >= 0", name="chk_orders_unit_price_non_neg"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     order_code = Column(String(32), unique=True, index=True, nullable=False)
-    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
     product_type = Column(String(32), nullable=False) # stars, premium, gift, service
     item_title = Column(String(128), nullable=False)
     amount = Column(Integer, default=1, nullable=False)
@@ -114,6 +121,7 @@ class Order(Base):
     status = Column(String(32), default=OrderStatus.CREATED, index=True, nullable=False)
     recipient_username = Column(String(64), nullable=True)
     price_lock_id = Column(String(64), nullable=True)
+    correlation_id = Column(String(64), nullable=True, index=True)
 
     # Fragment / Delivery fields
     fragment_req_id = Column(String(64), nullable=True)
@@ -134,3 +142,18 @@ class Order(Base):
     # Relationships
     user = relationship("User", back_populates="orders")
     payment_transactions = relationship("PaymentTransaction", back_populates="order")
+
+
+class CheckoutIdempotency(Base):
+    """
+    Prevents duplicate purchases from rapid clicks or network retries.
+    """
+    __tablename__ = "checkout_idempotency"
+
+    idempotency_key = Column(String(128), primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True)
+    request_hash = Column(String(64), nullable=False)
+    response_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)

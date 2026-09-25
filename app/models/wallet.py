@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
+    CheckConstraint,
     Column,
     DateTime,
     ForeignKey,
@@ -19,11 +20,17 @@ class WalletTransaction(Base):
     """
     Immutable Wallet Ledger table.
     Tracks every balance mutation with before/after snapshots and traceable reference.
+    Enforces non-negative balance constraints at the DB engine level.
     """
     __tablename__ = "wallet_transactions"
+    __table_args__ = (
+        CheckConstraint("amount != 0", name="chk_wallet_amount_non_zero"),
+        CheckConstraint("balance_before >= 0", name="chk_wallet_balance_before_non_neg"),
+        CheckConstraint("balance_after >= 0", name="chk_wallet_balance_after_non_neg"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
     tx_type = Column(String(32), nullable=False) # deposit, purchase, refund, referral_bonus, admin_adjustment, promo_bonus
     amount = Column(Numeric(18, 2), nullable=False)
     currency = Column(String(8), default="UZS", nullable=False)
@@ -45,7 +52,7 @@ class Transaction(Base):
     __tablename__ = "transactions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
     amount = Column(Numeric(18, 2), default=Decimal("0.00"), nullable=False)
     tx_type = Column(String(32), nullable=False) # topup, purchase, refund, referral_bonus, admin_adjustment
     method = Column(String(32), default="balance") # click, payme, autopaycard, balance, admin

@@ -47,22 +47,32 @@ class PaymentService:
         currency: str = "UZS",
         order_id: int | None = None,
         note: str | None = None,
-        raw_payload: str | None = None
+        raw_payload: str | None = None,
+        correlation_id: str | None = None
     ) -> ProcessPaymentResult:
         """
-        ATOMIC, IDEMPOTENT payment confirmation pipeline.
+        ATOMIC, IDEMPOTENT payment confirmation pipeline with Transactional Outbox.
         
         Guarantees that regardless of how many times a payment provider webhook is delivered:
         1. User balance is credited EXACTLY ONCE (if topup) or order is marked PAID EXACTLY ONCE.
         2. PaymentTransaction ledger record is recorded EXACTLY ONCE.
         3. Associated order is marked PAID EXACTLY ONCE.
         4. Referral bonus is awarded EXACTLY ONCE.
+        5. OutboxEvent is committed ATOMICALLY for reliable downstream fulfillment.
         """
+        from app.core.correlation import get_correlation_id
+        from app.services.outbox.service import outbox_service
+        from app.services.providers.circuit_breaker import circuit_breaker
+
+        cid = correlation_id or get_correlation_id()
         effective_user_id = user_id or telegram_id
         if not effective_user_id:
             raise ValueError("user_id yoki telegram_id kiritilishi shart.")
 
         idempotency_key = f"{provider}:{provider_transaction_id}"
+
+        # Record provider success in circuit breaker
+        circuit_breaker.record_success(provider)
 
         # 1. Row-level lock on PaymentTransaction to handle simultaneous concurrent webhooks
         stmt = (
@@ -86,6 +96,8 @@ class PaymentService:
             else:
                 existing_tx.status = "success"
                 existing_tx.paid_at = utc_now()
+                if not existing_tx.correlation_id:
+                    existing_tx.correlation_id = cid
                 payment_tx = existing_tx
         else:
             payment_tx = PaymentTransaction(
@@ -97,6 +109,7 @@ class PaymentService:
                 amount=amount,
                 currency=currency,
                 status="success",
+                correlation_id=cid,
                 raw_payload=raw_payload,
                 created_at=utc_now(),
                 paid_at=utc_now()
@@ -119,6 +132,21 @@ class PaymentService:
                 buyer_id=effective_user_id,
                 purchase_amount=amount
             )
+
+            # Atomic Outbox event for fulfillment dispatch
+            await outbox_service.create_event(
+                session=session,
+                event_type="ORDER_FULFILLMENT_REQUESTED",
+                aggregate_type="order",
+                aggregate_id=str(order_id),
+                payload={
+                    "order_id": order_id,
+                    "provider": provider,
+                    "amount": str(amount),
+                    "user_id": effective_user_id
+                },
+                correlation_id=cid
+            )
             user = await session.get(User, effective_user_id)
         else:
             # 3. Direct wallet balance credit
@@ -130,6 +158,18 @@ class PaymentService:
                 reference_type="payment",
                 reference_id=idempotency_key,
                 note=note or f"{provider.upper()} orqali hisob to'ldirildi (ID: {provider_transaction_id})"
+            )
+            await outbox_service.create_event(
+                session=session,
+                event_type="WALLET_DEPOSIT_COMPLETED",
+                aggregate_type="user",
+                aggregate_id=str(effective_user_id),
+                payload={
+                    "user_id": effective_user_id,
+                    "amount": str(amount),
+                    "provider": provider
+                },
+                correlation_id=cid
             )
 
         await session.flush()

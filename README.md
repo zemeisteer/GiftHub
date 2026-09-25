@@ -83,6 +83,18 @@ Wallet Ledger                  Referral Service                Fulfillment Servi
 - Promo codes supporting percentage and fixed discounts with global and per-user redemption limits.
 - In-app notification center alongside Telegram alerts for real-time order status tracking.
 
+### 8. Enterprise Reliability & Fault-Tolerance Architecture
+- **Transactional Outbox Pattern (`app/models/outbox.py`, `app/services/outbox/`):** Critical post-payment events (`ORDER_FULFILLMENT_REQUESTED`, `WALLET_DEPOSIT_COMPLETED`, `ORDER_REFUNDED`) are committed atomically within the same database transaction as payment ledger mutations. Eliminates lost fulfillment jobs on server crashes.
+- **Dead Letter Queue (DLQ) (`app/models/dlq.py`, `app/services/dlq/`):** Exhausted fulfillment jobs are automatically routed to persistent DLQ storage with complete error diagnostics, payload snapshots, and stack traces for manual retry or resolution from the Admin Panel.
+- **Payment Reconciliation Engine (`app/models/reconciliation.py`, `app/services/reconciliation/`):** Periodically compares provider statements against internal orders and ledger entries to detect paid unpaid orders, missing wallet transactions, unfulfilled orders (> 5 min), amount mismatches, duplicate provider transactions, and refund anomalies.
+- **Provider Health & Circuit Breakers (`app/models/provider.py`, `app/services/providers/`):** Individual payment/fulfillment providers transition between `HEALTHY`, `DEGRADED`, and `DISABLED` statuses. Circuit breakers trip to `OPEN` after repeated provider failures to prevent cascading latency.
+- **Database-Driven Product Catalog (`app/models/catalog.py`, `app/services/catalog/`):** Dynamic catalog management for Telegram Stars, Premium subscriptions, and Gifts without code changes.
+- **Feature Flags & Maintenance Mode (`app/models/feature_flags.py`, `app/services/feature_flags/`):** Immediate in-memory cached feature toggles and platform-wide maintenance mode without service redeployment.
+- **Checkout-Level Idempotency (`app/models/order.py`):** Client-supplied idempotency keys prevent duplicate orders and double debits from rapid user clicks or network retries.
+- **End-to-End Correlation IDs (`app/core/correlation.py`):** Injects unified `X-Correlation-ID` across Telegram → API → Payment → Order → Worker → Fulfillment.
+- **Database-Level Financial Constraints:** Engine-enforced `CHECK` constraints on `balance >= 0`, `referral_earnings >= 0`, `amount != 0`, `balance_before >= 0`, `balance_after >= 0`, and `total_price >= 0`.
+- **Automated Backup & Restore Strategy (`scripts/backup_postgres.py`, `scripts/restore_postgres.py`):** Automated compressed `pg_dump` with SHA-256 integrity verification, retention rotation, and automated restore testing.
+
 ---
 
 ## 🛠️ Technology Stack
@@ -195,7 +207,7 @@ ADMIN_APP_URL=http://localhost:8000/admin
 # Database & Cache (PostgreSQL + Redis for production)
 DATABASE_URL=postgresql+asyncpg://gifthub:password@localhost:5432/gifthub
 # For local SQLite development:
-# DATABASE_URL=sqlite+aiosqlite:///data/stellar.db
+# DATABASE_URL=sqlite+aiosqlite:///data/gifthub.db
 REDIS_URL=redis://localhost:6379/0
 
 # Payment Gateways
@@ -215,19 +227,45 @@ Apply all schema revisions to your database:
 alembic upgrade head
 ```
 
-### 4. Run GiftHub
+### 4. Run GiftHub (Runtime Modes)
 
-Start the application (launches FastAPI server, Telegram Bot polling, and background worker concurrently):
+GiftHub supports dedicated runtime modes for scalable microservice deployments as well as a combined mode for local development:
 
 ```bash
-python main.py
+# 1. Combined Development Mode (FastAPI + Aiogram Bot + Background Worker in one process)
+python main.py --mode=combined
+
+# 2. Production API Service (FastAPI REST API, Mini App & Webhooks only)
+python main.py --mode=api
+
+# 3. Production Bot Service (Telegram Bot polling or webhook dispatch only)
+python main.py --mode=bot
+
+# 4. Production Worker Service (Transactional Outbox, DLQ retries & Reconciliation only)
+python main.py --mode=worker
 ```
 
 Access the interfaces:
 - **Telegram Mini App:** `http://localhost:8000/app`
 - **Admin Control Panel:** `http://localhost:8000/admin`
-- **Interactive OpenAPI Docs:** `http://localhost:8000/docs`
+- **Interactive OpenAPI v1 Docs:** `http://localhost:8000/docs`
 - **Health Check Probe:** `http://localhost:8000/health`
+- **Readiness Dependency Probe:** `http://localhost:8000/ready`
+- **Reconciliation Dashboard:** `http://localhost:8000/api/v1/admin/reconciliation/dashboard`
+
+---
+
+### 5. Automated PostgreSQL Backup & Restore
+
+Automated database backup scripts with SHA-256 integrity checksums and verification:
+
+```bash
+# 1. Create compressed backup (.dump + .sha256)
+python scripts/backup_postgres.py
+
+# 2. Verify and test restore against an isolated test database
+python scripts/restore_postgres.py backups/gifthub_backup_YYYYMMDD_HHMMSS.dump --test-restore
+```
 
 ---
 

@@ -1,4 +1,4 @@
-# Stellar Bot — Loyiha Instructions (TZ) — v2
+# GiftHub — Loyiha Instructions (TZ) — v2
 
 > Bu hujjat dastlabki TZ asosida yangilangan: Broadcast bo'limiga **kanaldan forward qilish** imkoniyati va Admin boshqaruviga **botga yozgan foydalanuvchilar ro'yxatidan tanlab admin qilish** oqimi aniqlashtirilib qo'shildi (o'zgargan joylar **[YANGI]** deb belgilangan).
 
@@ -95,7 +95,7 @@ Bu loyihaning eng muhim va nozik qismi — quyidagilar aniq ishlab chiqilishi ke
 - **Uchta xil xabar yaratish rejimi:**
   1. **Yozish** — matn + rasm + inline tugma admin panelning o'zida yoziladi (asl variant)
   2. **[YANGI] Kanaldan forward qilish** — admin biror kanaldagi tayyor postni (username yoki post havolasini kiritib) tanlaydi, tizim o'sha postni **forward** qiladi (asl formatlash, rasm, tugmalari bilan) — qayta yozish shart emas. Bu marketing kanalida allaqachon joylashtirilgan e'lonni bir tugma bilan foydalanuvchilarga yuborish uchun.
-  3. **[YANGI] PostBotdan olib kelish** — admin PostBot (yoki boshqa post-yaratuvchi bot)da tayyorlagan xabarni Stellar admin botiga **forward** qiladi; tizim forward qilingan xabarni (matn, rasm, tugmalari bilan) tanib oladi va uni tayyor broadcast kontenti sifatida saqlaydi — qayta qo'lda yig'ish shart emas.
+  3. **[YANGI] PostBotdan olib kelish** — admin PostBot (yoki boshqa post-yaratuvchi bot)da tayyorlagan xabarni GiftHub admin botiga **forward** qiladi; tizim forward qilingan xabarni (matn, rasm, tugmalari bilan) tanib oladi va uni tayyor broadcast kontenti sifatida saqlaydi — qayta qo'lda yig'ish shart emas.
   - Backend tomonda: Telegram Bot API'ning `forwardMessage` / `copyMessage` metodidan foydalaniladi (`copyMessage` afzalroq — chunki "Forwarded from" belgisisiz yuboradi va botning o'z nomidan ko'rinadi). PostBot rejimi uchun ham xuddi shu mantiq — admin panelga forward qilingan xabar `message_id` orqali saqlanadi va keyin `copyMessage` bilan barcha foydalanuvchilarga ko'chiriladi.
 - Yuborish tezligini cheklash kerak (Telegram rate limit — soniyasiga ~30 xabar), aks holda bot bloklanishi mumkin — bu ikkala rejim uchun ham amal qiladi
 - Test yuborish (faqat adminning o'ziga) imkoniyati tavsiya etiladi
@@ -157,7 +157,7 @@ Bu loyihaning eng muhim va nozik qismi — quyidagilar aniq ishlab chiqilishi ke
 
 ## 6. Qo'shimcha g'oyalar (ko'rib chiqish uchun)
 
-- **Promo-kodlar / chegirma kodlari** — marketing uchun (masalan "STELLAR10" — 10% chegirma)
+- **Promo-kodlar / chegirma kodlari** — marketing uchun (masalan "GIFTHUB10" — 10% chegirma)
 - **VIP/loyalty daraja tizimi** — ko'p xarid qilgan foydalanuvchilarga avtomatik chegirma
 - **Kam balans haqida eslatma** — foydalanuvchiga push xabar
 - **Fragment xaridi muvaffaqiyatsiz bo'lsa avtomatik qaytarish (refund)** logikasi — bu juda muhim, aks holda pul yo'qolib qolishi mumkin

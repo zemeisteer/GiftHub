@@ -60,7 +60,7 @@ async def cb_promo_enter(callback: CallbackQuery, state: FSMContext):
     text = (
         "🎟 <b>Promo-kod kiritish</b>\n\n"
         "Aksiya yoki chegirma promo-kodini kiriting:\n\n"
-        "<i>Masalan: STELLAR10 yoki YANGI2026</i>"
+        "<i>Masalan: GIFTHUB10 yoki YANGI2026</i>"
     )
     try:
         await callback.message.edit_text(text, reply_markup=get_back_to_main_keyboard())
@@ -104,7 +104,7 @@ async def cb_help_view(callback: CallbackQuery):
 
     text = (
         "🛟 <b>Qo'llab-quvvatlash va Ma'lumot</b>\n\n"
-        "⭐ <b>GiftHub (Stellar)</b> platformasi orqali Telegram Stars, Telegram Premium va raqamli sovg'alarni eng qulay narxlarda xarid qilishingiz mumkin.\n\n"
+        "⭐ <b>GiftHub</b> platformasi orqali Telegram Stars, Telegram Premium va raqamli sovg'alarni eng qulay narxlarda xarid qilishingiz mumkin.\n\n"
         "⚡ <b>Xaridlar qanday amalga oshiriladi?</b>\n"
         "1. «Hamyon» bo'limidan hisobingizni to'ldirasiz (Click, Payme, Karta).\n"
         "2. Stars yoki Premium paketini tanlaysiz.\n"
