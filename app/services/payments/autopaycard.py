@@ -109,23 +109,6 @@ class AutoPayCardProvider(BasePaymentProvider):
             raw_payload=str(payload)
         )
 
-        if bot and is_new:
-            try:
-                import asyncio
-
-                from app.utils.notifications import send_topup_notification
-                asyncio.create_task(
-                    send_topup_notification(
-                        bot=bot,
-                        user_id=user_id,
-                        amount=float(amount),
-                        method="autopaycard",
-                        new_balance=float(updated_user.balance)
-                    )
-                )
-            except Exception as e:
-                logger.warning(f"Notification error: {e}")
-
         return {
             "success": True,
             "user_id": user_id,

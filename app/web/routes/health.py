@@ -68,15 +68,29 @@ async def readiness_probe():
         # In non-production, Redis may be optional fallback
         redis_ok = (settings.ENVIRONMENT != "production")
 
-    # 3. Worker Status
-    worker_status = get_worker_status()
+    # 3. Worker Status (Distributed Redis Heartbeat, Req 8 & 9)
+    from app.services.worker import get_distributed_worker_heartbeat
+    worker_hb = await get_distributed_worker_heartbeat()
+    worker_last_hb = worker_hb.get("last_heartbeat")
+    worker_alive = False
+    worker_age_sec = None
+
+    if worker_last_hb:
+        try:
+            hb_dt = datetime.fromisoformat(worker_last_hb)
+            worker_age_sec = round((datetime.now(timezone.utc) - hb_dt).total_seconds(), 1)
+            worker_alive = (worker_age_sec <= 60.0)
+        except Exception:
+            worker_alive = False
+    elif settings.ENVIRONMENT != "production":
+        worker_alive = True
 
     # 4. Critical Provider Circuit Breakers
     fragment_circuit = circuit_breaker.get_state("fragment").value
     fragment_ok = (fragment_circuit != "OPEN")
 
     is_prod = (settings.ENVIRONMENT == "production")
-    critical_ok = db_ok and (redis_ok if is_prod else True)
+    critical_ok = db_ok and (redis_ok and worker_alive if is_prod else True)
 
     status_code = status.HTTP_200_OK if critical_ok else status.HTTP_503_SERVICE_UNAVAILABLE
     return JSONResponse(
@@ -96,8 +110,11 @@ async def readiness_probe():
                     "required": is_prod
                 },
                 "worker": {
-                    "status": "running" if worker_status["is_running"] else "idle",
-                    "details": worker_status
+                    "status": "healthy" if worker_alive else ("stale" if worker_last_hb else "unavailable"),
+                    "last_heartbeat": worker_last_hb,
+                    "staleness_seconds": worker_age_sec,
+                    "worker_id": worker_hb.get("worker_id"),
+                    "required": is_prod
                 },
                 "fragment_provider": {
                     "status": "operational" if fragment_ok else "degraded",

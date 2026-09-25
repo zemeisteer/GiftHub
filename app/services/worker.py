@@ -89,7 +89,7 @@ async def process_task(task: dict[str, Any], bot=None):
 
 
 async def _process_outbox_events_with_session(session: AsyncSession, bot=None):
-    events = await outbox_service.fetch_pending_events(session=session, limit=10)
+    events = await outbox_service.claim_pending_events(session=session, worker_id="worker-main", limit=10)
     for ev in events:
         try:
             if ev.event_type == "ORDER_FULFILLMENT_REQUESTED":
@@ -99,9 +99,30 @@ async def _process_outbox_events_with_session(session: AsyncSession, bot=None):
                     await outbox_service.mark_processed(session, ev.id)
                 else:
                     await outbox_service.mark_failed(session, ev.id, res.get("error", "Fulfillment failed"))
-            elif ev.event_type == "ORDER_REFUNDED":
+            elif ev.event_type in ("WALLET_DEPOSIT_COMPLETED", "PAYMENT_TOPUP_NOTIFICATION"):
+                if bot:
+                    from app.utils.notifications import send_topup_notification
+                    user_id = int(ev.payload.get("user_id"))
+                    amount = float(ev.payload.get("amount", 0))
+                    method = ev.payload.get("provider", "payment")
+                    new_balance = float(ev.payload.get("new_balance", 0))
+                    await send_topup_notification(
+                        bot=bot,
+                        user_id=user_id,
+                        amount=amount,
+                        method=method,
+                        new_balance=new_balance
+                    )
                 await outbox_service.mark_processed(session, ev.id)
-            elif ev.event_type == "WALLET_DEPOSIT_COMPLETED":
+            elif ev.event_type == "ORDER_CREATED_NOTIFICATION":
+                if bot:
+                    from app.utils.notifications import send_order_created_notification
+                    order_dict = ev.payload.get("order")
+                    recipient_id = ev.payload.get("recipient_id")
+                    if order_dict:
+                        await send_order_created_notification(bot=bot, order=order_dict, recipient_id=recipient_id)
+                await outbox_service.mark_processed(session, ev.id)
+            elif ev.event_type == "ORDER_REFUNDED":
                 await outbox_service.mark_processed(session, ev.id)
             else:
                 await outbox_service.mark_processed(session, ev.id)
@@ -155,15 +176,61 @@ async def process_dlq_retries_cycle(session: Optional[AsyncSession] = None, bot=
             await _process_dlq_retries_with_session(s, bot)
 
 
+async def get_distributed_worker_heartbeat() -> dict[str, Any]:
+    """
+    Retrieves distributed worker heartbeat from Redis.
+    Allows standalone API processes to accurately evaluate background worker health.
+    Falls back to in-memory stats if single-process mode or Redis unavailable.
+    """
+    try:
+        import json
+        from app.core.redis import get_redis_client
+        r = get_redis_client()
+        if r:
+            raw = await r.get("gifthub:worker:heartbeat")
+            if raw:
+                return json.loads(raw)
+    except Exception as e:
+        logger.debug(f"Failed to read Redis worker heartbeat: {e}")
+
+    stats = get_worker_status()
+    return {
+        "worker_id": "worker-local",
+        "status": "running" if stats["is_running"] else "idle",
+        "last_heartbeat": stats["last_heartbeat"].isoformat() if stats.get("last_heartbeat") else None,
+        "cycle_count": stats.get("cycle_count", 0),
+        "queue_size": stats.get("queue_size", 0)
+    }
+
+
 async def run_worker_loop(bot=None):
     """Continuous background worker loop processing jobs from memory queue and database outbox."""
     logger.info("Starting GiftHub background worker loop with Outbox & DLQ support...")
     cycle_counter = 0
 
     while not _shutdown_event.is_set():
+        now_dt = datetime.now(timezone.utc)
         _worker_stats["is_running"] = True
-        _worker_stats["last_heartbeat"] = datetime.now(timezone.utc)
+        _worker_stats["last_heartbeat"] = now_dt
         _worker_stats["cycle_count"] = cycle_counter
+
+        # 0. Distributed Heartbeat Publication to Redis (Req 9)
+        try:
+            import json
+            from app.core.redis import get_redis_client
+            r = get_redis_client()
+            if r:
+                hb_payload = json.dumps({
+                    "worker_id": "worker-main",
+                    "status": "running",
+                    "last_heartbeat": now_dt.isoformat(),
+                    "cycle_count": cycle_counter,
+                    "queue_size": _async_queue.qsize()
+                })
+                await r.set("gifthub:worker:heartbeat", hb_payload, ex=60)
+        except Exception as hb_err:
+            logger.debug(f"Failed writing worker heartbeat to Redis: {hb_err}")
+
         try:
             # 1. Process in-memory tasks if any
             try:

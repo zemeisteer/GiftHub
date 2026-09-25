@@ -10,6 +10,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -27,6 +28,7 @@ class WalletTransaction(Base):
         CheckConstraint("amount != 0", name="chk_wallet_amount_non_zero"),
         CheckConstraint("balance_before >= 0", name="chk_wallet_balance_before_non_neg"),
         CheckConstraint("balance_after >= 0", name="chk_wallet_balance_after_non_neg"),
+        UniqueConstraint("reference_type", "reference_id", "tx_type", name="uq_wallet_reference_tx"),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)

@@ -1,9 +1,11 @@
 import hashlib
+import hmac
 from decimal import Decimal
 from typing import Any
 from urllib.parse import urlencode
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -64,7 +66,7 @@ class ClickProvider(BasePaymentProvider):
         if settings.ENVIRONMENT == "test" and not received_sign:
             return True
 
-        return expected_sign.lower() == received_sign.lower()
+        return hmac.compare_digest(expected_sign.lower(), received_sign.lower())
 
     async def process_prepare(self, session: AsyncSession, data: dict[str, Any]) -> dict[str, Any]:
         click_trans_id = int(data.get("click_trans_id", 0))
@@ -80,6 +82,16 @@ class ClickProvider(BasePaymentProvider):
                 "merchant_trans_id": merchant_trans_id,
                 "error": CLICK_SIGN_CHECK_FAILED,
                 "error_note": "SIGN CHECK FAILED!"
+            }
+
+        # Verify service_id against configured Click service (Req 3)
+        if settings.CLICK_SERVICE_ID and str(service_id) != str(settings.CLICK_SERVICE_ID):
+            logger.warning(f"[Click Prepare] Service ID mismatch: received {service_id}, expected {settings.CLICK_SERVICE_ID}")
+            return {
+                "click_trans_id": click_trans_id,
+                "merchant_trans_id": merchant_trans_id,
+                "error": CLICK_ERROR_FAILED,
+                "error_note": "Service ID mos kelmadi"
             }
 
         try:
@@ -109,25 +121,67 @@ class ClickProvider(BasePaymentProvider):
                 "error_note": "Minimal to'lov summasi 1000 so'm"
             }
 
+        # Check existing transaction with row-level lock (Req 3)
         res = await session.execute(
-            select(ClickTransaction).where(ClickTransaction.click_trans_id == click_trans_id)
+            select(ClickTransaction).where(ClickTransaction.click_trans_id == click_trans_id).with_for_update()
         )
         tx = res.scalars().first()
-        if not tx:
-            tx = ClickTransaction(
-                click_trans_id=click_trans_id,
-                service_id=service_id,
-                merchant_trans_id=merchant_trans_id,
-                amount=amount,
-                action=0,
-                sign_time=sign_time,
-                sign_string=sign_string,
-                user_id=user_id,
-                status="prepared"
-            )
-            session.add(tx)
+
+        if tx:
+            # Validate existing transaction matches the callback parameters
+            if str(tx.merchant_trans_id) != merchant_trans_id:
+                return {
+                    "click_trans_id": click_trans_id,
+                    "merchant_trans_id": merchant_trans_id,
+                    "error": CLICK_TRANSACTION_NOT_FOUND,
+                    "error_note": "merchant_trans_id mavjud tranzaksiyaga mos kelmadi"
+                }
+            if Decimal(str(tx.amount)) != amount:
+                return {
+                    "click_trans_id": click_trans_id,
+                    "merchant_trans_id": merchant_trans_id,
+                    "error": CLICK_INVALID_AMOUNT,
+                    "error_note": "To'lov summasi mavjud tranzaksiyaga mos kelmadi"
+                }
+            return {
+                "click_trans_id": click_trans_id,
+                "merchant_trans_id": merchant_trans_id,
+                "merchant_prepare_id": tx.id,
+                "error": CLICK_SUCCESS,
+                "error_note": "Success"
+            }
+
+        # Safe insert with savepoint for concurrency-safe race condition handling
+        try:
+            async with session.begin_nested():
+                tx = ClickTransaction(
+                    click_trans_id=click_trans_id,
+                    service_id=service_id,
+                    merchant_trans_id=merchant_trans_id,
+                    amount=amount,
+                    action=0,
+                    sign_time=sign_time,
+                    sign_string=sign_string,
+                    user_id=user_id,
+                    status="prepared"
+                )
+                session.add(tx)
+                await session.flush()
             await session.commit()
             await session.refresh(tx)
+        except IntegrityError:
+            # Handle race where another simultaneous request already committed
+            res = await session.execute(
+                select(ClickTransaction).where(ClickTransaction.click_trans_id == click_trans_id)
+            )
+            tx = res.scalars().first()
+            if not tx or Decimal(str(tx.amount)) != amount or str(tx.merchant_trans_id) != merchant_trans_id:
+                return {
+                    "click_trans_id": click_trans_id,
+                    "merchant_trans_id": merchant_trans_id,
+                    "error": CLICK_ERROR_FAILED,
+                    "error_note": "Tranzaksiyani yaratishda ziddiyat yuz berdi"
+                }
 
         return {
             "click_trans_id": click_trans_id,
@@ -214,24 +268,6 @@ class ClickProvider(BasePaymentProvider):
         tx.status = "completed"
         tx.action = 1
         await session.commit()
-
-        # Send Telegram notification if bot available
-        if bot and is_new:
-            try:
-                import asyncio
-
-                from app.utils.notifications import send_topup_notification
-                asyncio.create_task(
-                    send_topup_notification(
-                        bot=bot,
-                        user_id=tx.user_id,
-                        amount=float(amount),
-                        method="click",
-                        new_balance=float(user.balance)
-                    )
-                )
-            except Exception as e:
-                logger.warning(f"Notification error: {e}")
 
         return {
             "click_trans_id": click_trans_id,

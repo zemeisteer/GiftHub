@@ -45,15 +45,18 @@ class Settings(BaseSettings):
     REDIS_URL: str | None = None
 
     # Payment Gateways - Click
+    CLICK_ENABLED: bool = True
     CLICK_SERVICE_ID: str | None = ""
     CLICK_MERCHANT_ID: str | None = ""
     CLICK_SECRET_KEY: str | None = ""
 
     # Payment Gateways - Payme
+    PAYME_ENABLED: bool = True
     PAYME_MERCHANT_ID: str | None = ""
     PAYME_SECRET_KEY: str | None = ""
 
     # Payment Gateways - AutoPayCard
+    AUTOPAYCARD_ENABLED: bool = False
     AUTOPAYCARD_API_KEY: str | None = ""
 
     # Commerce & Price Lock
@@ -95,7 +98,7 @@ class Settings(BaseSettings):
         """Explicit fail-fast check invoked during application startup."""
         if self.ENVIRONMENT == "production":
             errors = []
-            if not self.BOT_TOKEN or "ABCdefGHI" in self.BOT_TOKEN or len(self.BOT_TOKEN) < 20:
+            if not self.BOT_TOKEN or "ABCdefGHI" in self.BOT_TOKEN or len(self.BOT_TOKEN) < 20 or "YOUR_" in self.BOT_TOKEN:
                 errors.append("BOT_TOKEN must be configured with a valid production Telegram bot token.")
             if not self.ADMINS:
                 errors.append("At least one admin ID must be configured in ADMINS for production.")
@@ -103,6 +106,34 @@ class Settings(BaseSettings):
                 errors.append("PostgreSQL (DB_URL) is strictly required for production; SQLite is not allowed.")
             if not self.REDIS_URL:
                 errors.append("REDIS_URL is strictly required for production state and distributed locking.")
+
+            def is_invalid_credential(val: str | None) -> bool:
+                if not val or not val.strip():
+                    return True
+                v = val.strip().lower()
+                return any(p in v for p in ("your_", "placeholder", "dummy", "test_", "fake_"))
+
+            # Click validation
+            if self.CLICK_ENABLED or bool(self.CLICK_SERVICE_ID or self.CLICK_MERCHANT_ID or self.CLICK_SECRET_KEY):
+                if is_invalid_credential(self.CLICK_SERVICE_ID):
+                    errors.append("CLICK_SERVICE_ID is required and cannot be empty or placeholder when Click is enabled in production.")
+                if is_invalid_credential(self.CLICK_MERCHANT_ID):
+                    errors.append("CLICK_MERCHANT_ID is required and cannot be empty or placeholder when Click is enabled in production.")
+                if is_invalid_credential(self.CLICK_SECRET_KEY):
+                    errors.append("CLICK_SECRET_KEY is required and cannot be empty or placeholder when Click is enabled in production.")
+
+            # Payme validation
+            if self.PAYME_ENABLED or bool(self.PAYME_MERCHANT_ID or self.PAYME_SECRET_KEY):
+                if is_invalid_credential(self.PAYME_MERCHANT_ID):
+                    errors.append("PAYME_MERCHANT_ID is required and cannot be empty or placeholder when Payme is enabled in production.")
+                if is_invalid_credential(self.PAYME_SECRET_KEY):
+                    errors.append("PAYME_SECRET_KEY is required and cannot be empty or placeholder when Payme is enabled in production.")
+
+            # AutoPayCard validation
+            if self.AUTOPAYCARD_ENABLED or bool(self.AUTOPAYCARD_API_KEY):
+                if is_invalid_credential(self.AUTOPAYCARD_API_KEY):
+                    errors.append("AUTOPAYCARD_API_KEY is required and cannot be empty or placeholder when AutoPayCard is enabled in production.")
+
             if errors:
                 raise ValueError("Production configuration validation failed:\n - " + "\n - ".join(errors))
 

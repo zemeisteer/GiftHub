@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -124,7 +124,7 @@ class PaymeProvider(BasePaymentProvider):
             select(PaymeTransaction).where(PaymeTransaction.paycom_id == paycom_id)
         )
         tx = res.scalars().first()
-        now_ms = int(datetime.utcnow().timestamp() * 1000)
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
 
         if tx:
             if tx.state != 1:
@@ -162,7 +162,7 @@ class PaymeProvider(BasePaymentProvider):
         if not tx:
             return make_rpc_error(PAYME_ERR_TRANSACTION_NOT_FOUND, "Tranzaksiya topilmadi", rpc_id)
 
-        now_ms = int(datetime.utcnow().timestamp() * 1000)
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
 
         if tx.state == 1:
             amount_uzs = (Decimal(str(tx.amount)) / Decimal("100.00")).quantize(Decimal(1))
@@ -181,23 +181,6 @@ class PaymeProvider(BasePaymentProvider):
             tx.state = 2
             tx.perform_time = now_ms
             await session.commit()
-
-            if bot and is_new:
-                try:
-                    import asyncio
-
-                    from app.utils.notifications import send_topup_notification
-                    asyncio.create_task(
-                        send_topup_notification(
-                            bot=bot,
-                            user_id=tx.user_id,
-                            amount=float(amount_uzs),
-                            method="payme",
-                            new_balance=float(user.balance)
-                        )
-                    )
-                except Exception as e:
-                    logger.warning(f"Notification error: {e}")
 
         elif tx.state != 2:
             return make_rpc_error(PAYME_ERR_CANT_PERFORM, "Tranzaksiya yakunlanmaydi", rpc_id)
@@ -219,7 +202,7 @@ class PaymeProvider(BasePaymentProvider):
         if not tx:
             return make_rpc_error(PAYME_ERR_TRANSACTION_NOT_FOUND, "Tranzaksiya topilmadi", rpc_id)
 
-        now_ms = int(datetime.utcnow().timestamp() * 1000)
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
 
         if tx.state == 1:
             tx.state = -1

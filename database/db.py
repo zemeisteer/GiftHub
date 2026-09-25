@@ -94,8 +94,8 @@ async def init_db():
             )
         )
 
-        # 5. Seed default promo codes only if SEED_DEMO_DATA=True or in local dev
-        if settings.SEED_DEMO_DATA or settings.ENVIRONMENT == "development":
+        # 5. Seed default demo promo codes strictly if SEED_DEMO_DATA=True (Req 11)
+        if settings.SEED_DEMO_DATA:
             res_promo = await session.execute(select(PromoCode))
             if not res_promo.scalars().first():
                 p1 = PromoCode(
@@ -107,8 +107,9 @@ async def init_db():
                     is_active=True
                 )
                 session.add(p1)
+                logger.info("[Demo Seed] Created default promo code GIFTHUB10 (SEED_DEMO_DATA=True)")
 
-        # 6. Seed super admins from config (strictly 0 balance - no free money in production)
+        # 6. Admin Bootstrap: Explicit and audited (Req 12)
         for admin_id in settings.ADMINS:
             user = await session.get(User, admin_id)
             if not user:
@@ -120,9 +121,17 @@ async def init_db():
                     balance=Decimal("0.00")
                 )
                 session.add(user)
+                logger.info(f"[Admin Bootstrap] Initialized super_admin record for id={admin_id} with 0.00 balance.")
             else:
                 if user.role != "super_admin":
-                    user.role = "super_admin"
+                    if settings.ENVIRONMENT != "production":
+                        user.role = "super_admin"
+                        logger.info(f"[Admin Bootstrap] Promoted id={admin_id} to super_admin in development environment.")
+                    else:
+                        logger.warning(
+                            f"[Admin Bootstrap] Configured ADMIN id={admin_id} has role='{user.role}'. "
+                            f"In production, role mutation requires explicit administrative action."
+                        )
 
         await session.commit()
         logger.info("Database essential singletons verified.")

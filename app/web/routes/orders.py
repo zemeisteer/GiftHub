@@ -52,49 +52,38 @@ async def create_order_endpoint(req: PurchaseRequest, user: User = Depends(get_c
         except GiftHubException as e:
             raise HTTPException(status_code=e.status_code, detail=e.message)
 
-        bot = get_bot()
-
-        # Trigger Fragment automated delivery asynchronously
-        from app.services.fragment import fragment_client
-        asyncio.create_task(
-            fragment_client.fulfill_order(order_id=order.id, bot=bot)
-        )
-
-        # Trigger notifications
+        # Queue resilient notification via Outbox (Req 7)
         u = await queries.get_user_by_id(session, user.id)
         current_bal = float(u.balance) if u else 0.0
 
         if bot:
-            asyncio.create_task(
-                send_order_created_notification(
-                    bot=bot,
-                    user_id=user.id,
-                    order_code=order.order_code,
-                    item_title=order.item_title,
-                    amount=order.amount,
-                    total_price=float(order.total_price),
-                    status=order.status,
-                    new_balance=current_bal,
-                    recipient_username=req.recipient_username,
-                    buyer_username=user.username
+            try:
+                from app.services.outbox.service import outbox_service
+                await outbox_service.create_event(
+                    session=session,
+                    event_type="ORDER_CREATED_NOTIFICATION",
+                    aggregate_type="order",
+                    aggregate_id=str(order.id),
+                    payload={
+                        "order": {
+                            "id": order.id,
+                            "order_code": order.order_code,
+                            "item_title": order.item_title,
+                            "amount": order.amount,
+                            "total_price": float(order.total_price),
+                            "cost_price": float(order.cost_price),
+                            "status": order.status,
+                            "recipient_username": req.recipient_username,
+                            "buyer_username": user.username,
+                            "user_id": user.id,
+                            "user_first_name": user.first_name,
+                            "new_balance": current_bal
+                        }
+                    }
                 )
-            )
-            asyncio.create_task(
-                send_admin_order_alert(
-                    bot=bot,
-                    admin_ids=settings.ADMINS,
-                    user_name=user.first_name,
-                    user_id=user.id,
-                    username=user.username,
-                    order_code=order.order_code,
-                    item_title=order.item_title,
-                    amount=order.amount,
-                    total_price=float(order.total_price),
-                    cost_price=float(order.cost_price),
-                    status=order.status,
-                    recipient_username=req.recipient_username
-                )
-            )
+                await session.commit()
+            except Exception as e:
+                logger.warning(f"Failed to queue order notification outbox event: {e}")
 
         return {
             "success": True,

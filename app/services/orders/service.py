@@ -302,7 +302,7 @@ class OrderService:
                     user_id=order.user_id,
                     amount=order.total_price,
                     tx_type="refund",
-                    reference_type="order",
+                    reference_type="order_refund",
                     reference_id=order.order_code,
                     note=f"Buyurtma bekor qilindi va qaytarildi: {order.order_code}. Sabab: {reason or 'Admin'}"
                 )

@@ -8,6 +8,7 @@ from app.models.base import Base, utc_now
 class OutboxStatus(str, Enum):
     PENDING = "pending"
     PROCESSING = "processing"
+    RETRY = "retry"
     PROCESSED = "processed"
     FAILED = "failed"
 
@@ -27,6 +28,9 @@ class OutboxEvent(Base):
     status = Column(String(20), default=OutboxStatus.PENDING.value, nullable=False, index=True)
     retry_count = Column(Integer, default=0, nullable=False)
     max_retries = Column(Integer, default=5, nullable=False)
+    next_retry_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    locked_at = Column(DateTime(timezone=True), nullable=True)
+    locked_by = Column(String(64), nullable=True)
     last_error = Column(Text, nullable=True)
     correlation_id = Column(String(64), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False, index=True)
