@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.exceptions import InsufficientBalanceError
 from app.core.logging import get_logger
 from app.models.payment import PaymeTransaction
 from app.models.user import User
@@ -238,8 +239,18 @@ class PaymeProvider(BasePaymentProvider):
                     reference_id=paycom_id,
                     note=f"Payme to'lovi bekor qilindi (ID: {paycom_id})"
                 )
+            except InsufficientBalanceError:
+                logger.warning(
+                    f"[Payme Cancellation Denied] user={tx.user_id} has already spent funds from payment {paycom_id}"
+                )
+                return make_rpc_error(
+                    PAYME_ERR_CANT_CANCEL,
+                    "Mablag' allaqachon sarflanganligi sababli tranzaksiyani bekor qilib bo'lmaydi",
+                    rpc_id
+                )
             except Exception as e:
                 logger.error(f"Error rolling back cancelled payme payment: {e}")
+                return make_rpc_error(PAYME_ERR_CANT_CANCEL, "Tranzaksiyani bekor qilishda xatolik", rpc_id)
 
             tx.state = -2
             tx.cancel_time = now_ms

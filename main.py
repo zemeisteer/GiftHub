@@ -149,6 +149,7 @@ async def cleanup_resources():
 
 async def main(mode: str = "combined"):
     setup_logger()
+    settings.validate_production()
     logging.info(f"🚀 GiftHub Platform ishga tushirilmoqda (Mode: {mode})...")
 
     # Initialize Database

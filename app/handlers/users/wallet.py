@@ -12,8 +12,7 @@ from app.keyboards.shop_keyboards import (
     get_wallet_keyboard,
 )
 from app.state.user_states import BalanceTopupState
-from app.web.payments.click import generate_click_link
-from app.web.payments.payme import generate_payme_link
+from app.services.payments import generate_click_link, generate_payme_link
 from data import config
 from database import queries
 from database.db import AsyncSessionLocal

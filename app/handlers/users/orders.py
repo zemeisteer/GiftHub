@@ -217,8 +217,7 @@ async def cb_order_confirm_buy_again(callback: CallbackQuery):
             await callback.answer()
             return
 
-        # Deduct balance and create order
-        user.balance -= total_price
+        # Create order and atomically debit balance via WalletService
         new_order, _, _ = await order_service.create_order(
             session=session,
             user_id=user_id,
@@ -228,8 +227,25 @@ async def cb_order_confirm_buy_again(callback: CallbackQuery):
             recipient_username=order.recipient_username,
             payment_method="balance"
         )
-        new_order.status = "paid"
-        new_order.fulfillment_status = "processing"
+
+        from app.services.wallet.service import wallet_service
+        await wallet_service.debit_balance(
+            session=session,
+            user_id=user_id,
+            amount=total_price,
+            tx_type="purchase",
+            reference_type="order",
+            reference_id=new_order.order_code,
+            note=f"Qayta xarid: #{new_order.order_code} ({new_order.item_title})"
+        )
+
+        await order_service.transition_order_status(
+            session=session,
+            order_id=new_order.id,
+            new_status_raw="paid",
+            actor="USER",
+            reason="Hamyon balansidan to'landi"
+        )
         await session.commit()
 
         # Trigger fulfillment asynchronously

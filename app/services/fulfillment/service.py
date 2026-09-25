@@ -77,12 +77,19 @@ class FulfillmentService:
             result = await fragment_client.fulfill_order(order_id=order.id, bot=bot)
 
             if result.get("success") and result.get("fulfilled"):
+                tx_hash = result.get("tx_hash", "")
                 circuit_breaker.record_success("fragment")
                 await circuit_breaker.sync_to_db(session, "fragment", is_success=True)
 
-                tx_hash = result.get("tx_hash", "tx_done")
+                from app.services.orders.service import order_service
+                await order_service.transition_order_status(
+                    session=session,
+                    order_id=order.id,
+                    new_status_raw=OrderStatus.COMPLETED,
+                    actor="SYSTEM",
+                    reason=f"Fragment orqali muvaffaqiyatli yetkazildi (tx: {tx_hash})"
+                )
                 order.fulfillment_status = "fulfilled"
-                order.status = OrderStatus.COMPLETED
                 order.completed_at = utc_now()
                 order.fragment_tx_hash = tx_hash
                 await session.commit()
@@ -107,7 +114,14 @@ class FulfillmentService:
                 order.fulfillment_error = err_msg
                 if order.fulfillment_attempts >= MAX_FULFILLMENT_RETRIES:
                     order.fulfillment_status = "manual_review"
-                    order.status = OrderStatus.FAILED
+                    from app.services.orders.service import order_service
+                    await order_service.transition_order_status(
+                        session=session,
+                        order_id=order.id,
+                        new_status_raw=OrderStatus.FAILED,
+                        actor="SYSTEM",
+                        reason=f"Maksimal urinishlar soni tugadi: {err_msg}"
+                    )
                     # Route to DLQ
                     await dlq_service.record_failed_job(
                         session=session,
@@ -134,7 +148,14 @@ class FulfillmentService:
             order.fulfillment_error = err_str
             if order.fulfillment_attempts >= MAX_FULFILLMENT_RETRIES:
                 order.fulfillment_status = "manual_review"
-                order.status = OrderStatus.FAILED
+                from app.services.orders.service import order_service
+                await order_service.transition_order_status(
+                    session=session,
+                    order_id=order.id,
+                    new_status_raw=OrderStatus.FAILED,
+                    actor="SYSTEM",
+                    reason=f"Yetkazib berish istisnosi: {err_str}"
+                )
                 await dlq_service.record_failed_job(
                     session=session,
                     job_type="fulfillment",

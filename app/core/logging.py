@@ -3,11 +3,13 @@ import re
 import sys
 
 SECRET_PATTERNS = [
-    re.compile(r"(BOT_TOKEN\s*=\s*)([^\s]+)", re.IGNORECASE),
-    re.compile(r"(secret_key\s*[:=]\s*)([^\s,\"']+)", re.IGNORECASE),
-    re.compile(r"(api_key\s*[:=]\s*)([^\s,\"']+)", re.IGNORECASE),
-    re.compile(r"(password\s*[:=]\s*)([^\s,\"']+)", re.IGNORECASE),
-    re.compile(r"(\d{9,11}:[a-zA-Z0-9_-]{35})"), # Telegram bot token pattern
+    (re.compile(r"(BOT_TOKEN\s*=\s*)([^\s]+)", re.IGNORECASE), r"\1***MASKED***"),
+    (re.compile(r"(secret_key\s*[:=]\s*['\"]?)([^'\",\s]+)", re.IGNORECASE), r"\1***MASKED***"),
+    (re.compile(r"(api_key\s*[:=]\s*['\"]?)([^'\",\s]+)", re.IGNORECASE), r"\1***MASKED***"),
+    (re.compile(r"(password\s*[:=]\s*['\"]?)([^'\",\s]+)", re.IGNORECASE), r"\1***MASKED***"),
+    (re.compile(r"(Authorization\s*:\s*(?:Bearer|Basic)\s*)([^\s]+)", re.IGNORECASE), r"\1***MASKED***"),
+    (re.compile(r"(hash=)([a-f0-9]{64})", re.IGNORECASE), r"\1***MASKED***"),
+    (re.compile(r"(\d{9,11}:)([a-zA-Z0-9_-]{35})"), r"\1***MASKED***"),
 ]
 
 class SecretMaskingFormatter(logging.Formatter):
@@ -27,8 +29,8 @@ class SecretMaskingFormatter(logging.Formatter):
 
         original = super().format(record)
         masked = original
-        for pattern in SECRET_PATTERNS:
-            masked = pattern.sub(r"\1***MASKED***", masked)
+        for pattern, replacement in SECRET_PATTERNS:
+            masked = pattern.sub(replacement, masked)
         return masked
 
 

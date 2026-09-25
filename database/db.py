@@ -19,14 +19,17 @@ db_url = settings.DB_URL
 async def init_db():
     """
     Initializes database schema and default records.
-    Schema tables are managed by Alembic; init_db ensures seed data exists.
+    In production, schema tables are managed strictly by Alembic migrations.
     """
-    async with engine.begin() as conn:
-        # Create any tables not yet created (useful for tests and initial bootstrap)
-        await conn.run_sync(Base.metadata.create_all)
+    if settings.ENVIRONMENT != "production":
+        async with engine.begin() as conn:
+            # Create any tables not yet created for local dev / tests
+            await conn.run_sync(Base.metadata.create_all)
+    else:
+        logger.info("Production mode: Schema tables are managed via Alembic migrations.")
 
     async with AsyncSessionLocal() as session:
-        # 1. FragmentSetting
+        # 1. FragmentSetting singleton
         frag_setting = await session.get(FragmentSetting, 1)
         if not frag_setting:
             frag_setting = FragmentSetting(
@@ -41,7 +44,7 @@ async def init_db():
             )
             session.add(frag_setting)
 
-        # 2. PricingSetting
+        # 2. PricingSetting singleton
         pricing = await session.get(PricingSetting, 1)
         if not pricing:
             pricing = PricingSetting(
@@ -56,7 +59,7 @@ async def init_db():
             )
             session.add(pricing)
 
-        # 3. ReferralSetting
+        # 3. ReferralSetting singleton
         referral = await session.get(ReferralSetting, 1)
         if not referral:
             referral = ReferralSetting(
@@ -68,7 +71,7 @@ async def init_db():
             )
             session.add(referral)
 
-        # 4. PaymentSetting
+        # 4. PaymentSetting singleton
         payment = await session.get(PaymentSetting, 1)
         if not payment:
             payment = PaymentSetting(
@@ -76,9 +79,9 @@ async def init_db():
                 click_active=True,
                 payme_active=True,
                 card_active=True,
-                card_number="8600 1234 5678 9012",
-                card_holder="ANVAR S.",
-                bank_name="TBC Bank",
+                card_number="",
+                card_holder="",
+                bank_name="",
                 autopaycard_active=False
             )
             session.add(payment)
@@ -91,27 +94,21 @@ async def init_db():
             )
         )
 
-        # 5. Seed default promo codes if empty
-        res_promo = await session.execute(select(PromoCode))
-        if not res_promo.scalars().first():
-            p1 = PromoCode(
-                code="GIFTHUB10",
-                reward_type="discount_percent",
-                reward_value=Decimal("10.00"),
-                max_uses=500,
-                min_order_amount=Decimal("5000.00"),
-                is_active=True
-            )
-            p2 = PromoCode(
-                code="WELCOME5K",
-                reward_type="balance_bonus",
-                reward_value=Decimal("5000.00"),
-                max_uses=1000,
-                is_active=True
-            )
-            session.add_all([p1, p2])
+        # 5. Seed default promo codes only if SEED_DEMO_DATA=True or in local dev
+        if settings.SEED_DEMO_DATA or settings.ENVIRONMENT == "development":
+            res_promo = await session.execute(select(PromoCode))
+            if not res_promo.scalars().first():
+                p1 = PromoCode(
+                    code="GIFTHUB10",
+                    reward_type="discount_percent",
+                    reward_value=Decimal("10.00"),
+                    max_uses=500,
+                    min_order_amount=Decimal("5000.00"),
+                    is_active=True
+                )
+                session.add(p1)
 
-        # 6. Seed super admins from config
+        # 6. Seed super admins from config (strictly 0 balance - no free money in production)
         for admin_id in settings.ADMINS:
             user = await session.get(User, admin_id)
             if not user:
@@ -120,7 +117,7 @@ async def init_db():
                     first_name="Super Admin",
                     username="superadmin",
                     role="super_admin",
-                    balance=Decimal("500000.00")
+                    balance=Decimal("0.00")
                 )
                 session.add(user)
             else:
@@ -128,4 +125,4 @@ async def init_db():
                     user.role = "super_admin"
 
         await session.commit()
-        logger.info("Database seed records initialized.")
+        logger.info("Database essential singletons verified.")

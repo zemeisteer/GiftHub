@@ -55,6 +55,7 @@ def upgrade() -> None:
             sa.Column('recipient_username', sa.String(length=64), nullable=False),
             sa.Column('label', sa.String(length=64), nullable=True),
             sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+            sa.UniqueConstraint('user_id', 'recipient_username', name='uq_user_recipient'),
         )
 
 

@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     # Security
     INIT_DATA_MAX_AGE_SECONDS: int = 86400 # 24 hours
 
+    # Demo / Seed
+    SEED_DEMO_DATA: bool = False
+
     @field_validator("ADMINS", mode="before")
     @classmethod
     def parse_admins(cls, v: str | int | list[str | int]) -> list[int]:
@@ -87,6 +90,21 @@ class Settings(BaseSettings):
                 abs_path = os.path.join(BASE_DIR, rel).replace("\\", "/")
                 return f"sqlite+aiosqlite:///{abs_path}"
         return v
+
+    def validate_production(self) -> None:
+        """Explicit fail-fast check invoked during application startup."""
+        if self.ENVIRONMENT == "production":
+            errors = []
+            if not self.BOT_TOKEN or "ABCdefGHI" in self.BOT_TOKEN or len(self.BOT_TOKEN) < 20:
+                errors.append("BOT_TOKEN must be configured with a valid production Telegram bot token.")
+            if not self.ADMINS:
+                errors.append("At least one admin ID must be configured in ADMINS for production.")
+            if "sqlite" in self.DB_URL.lower():
+                errors.append("PostgreSQL (DB_URL) is strictly required for production; SQLite is not allowed.")
+            if not self.REDIS_URL:
+                errors.append("REDIS_URL is strictly required for production state and distributed locking.")
+            if errors:
+                raise ValueError("Production configuration validation failed:\n - " + "\n - ".join(errors))
 
 
 settings = Settings()

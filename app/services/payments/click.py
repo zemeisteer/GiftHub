@@ -53,7 +53,12 @@ class ClickProvider(BasePaymentProvider):
         sign_time = str(data.get("sign_time", ""))
         received_sign = str(data.get("sign_string", ""))
 
-        sign_string = f"{click_trans_id}{service_id}{secret_key}{merchant_trans_id}{amount}{action}{sign_time}"
+        if str(action) == "1":
+            merchant_prepare_id = str(data.get("merchant_prepare_id", ""))
+            sign_string = f"{click_trans_id}{service_id}{secret_key}{merchant_trans_id}{merchant_prepare_id}{amount}{action}{sign_time}"
+        else:
+            sign_string = f"{click_trans_id}{service_id}{secret_key}{merchant_trans_id}{amount}{action}{sign_time}"
+
         expected_sign = hashlib.md5(sign_string.encode("utf-8")).hexdigest()
 
         if settings.ENVIRONMENT == "test" and not received_sign:
@@ -157,6 +162,22 @@ class ClickProvider(BasePaymentProvider):
                 "merchant_trans_id": merchant_trans_id,
                 "error": CLICK_TRANSACTION_NOT_FOUND,
                 "error_note": "Tranzaksiya topilmadi"
+            }
+
+        if merchant_prepare_id and tx.id != merchant_prepare_id:
+            return {
+                "click_trans_id": click_trans_id,
+                "merchant_trans_id": merchant_trans_id,
+                "error": CLICK_TRANSACTION_NOT_FOUND,
+                "error_note": "merchant_prepare_id mos kelmadi"
+            }
+
+        if Decimal(str(tx.amount)) != amount:
+            return {
+                "click_trans_id": click_trans_id,
+                "merchant_trans_id": merchant_trans_id,
+                "error": CLICK_INVALID_AMOUNT,
+                "error_note": "To'lov summasi PREPARE tranzaksiyasiga mos kelmadi"
             }
 
         if tx.status == "completed":

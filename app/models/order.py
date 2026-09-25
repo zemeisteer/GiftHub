@@ -51,6 +51,7 @@ VALID_ORDER_TRANSITIONS: dict[str, set[str]] = {
     OrderStatus.PAID: {
         OrderStatus.PROCESSING,
         OrderStatus.COMPLETED,
+        OrderStatus.FAILED,
         OrderStatus.REFUNDED
     },
     OrderStatus.PROCESSING: {
