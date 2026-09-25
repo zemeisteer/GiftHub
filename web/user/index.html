@@ -3,13 +3,75 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Stellar — Web App</title>
+<title>GiftHub — Web App</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@twemoji/api@latest/dist/twemoji.min.js" crossorigin="anonymous"></script>
 <style>
-  :root{
+  /* Apple / iPhone Emojis across all platforms */
+  img.emoji,
+  img.apple-emoji {
+    height: 1.12em !important;
+    width: 1.12em !important;
+    max-width: 1.15em !important;
+    max-height: 1.15em !important;
+    margin: 0 0.12em !important;
+    vertical-align: -0.15em !important;
+    display: inline-block !important;
+    object-fit: contain !important;
+  }
+  .apple-sticker-emoji img.emoji,
+  .apple-sticker-emoji img.apple-emoji {
+    height: 54px !important;
+    width: 54px !important;
+    max-width: 54px !important;
+    max-height: 54px !important;
+    vertical-align: middle !important;
+    filter: drop-shadow(0 8px 16px rgba(0,0,0,0.35));
+    display: block !important;
+    margin: 0 auto !important;
+  }
+  .prod-icon img.emoji,
+  .prod-icon img.apple-emoji {
+    height: 18px !important;
+    width: 18px !important;
+    max-width: 18px !important;
+    max-height: 18px !important;
+    vertical-align: middle !important;
+  }
+  .m-ic img.emoji,
+  .m-ic img.apple-emoji,
+  .ic img.emoji,
+  .ic img.apple-emoji {
+    height: 20px !important;
+    width: 20px !important;
+    max-width: 20px !important;
+    max-height: 20px !important;
+    vertical-align: middle !important;
+  }
+  .subscreen-title img.emoji,
+  .subscreen-title img.apple-emoji,
+  .section-title img.emoji,
+  .section-title img.apple-emoji {
+    height: 1.1em !important;
+    width: 1.1em !important;
+    vertical-align: -0.15em !important;
+  }
+  .rcp-btn img.emoji,
+  .rcp-btn img.apple-emoji,
+  .topup-btn img.emoji,
+  .topup-btn img.apple-emoji,
+  .gate-btn img.emoji,
+  .gate-btn img.apple-emoji {
+    height: 1.05em !important;
+    width: 1.05em !important;
+    vertical-align: -0.12em !important;
+  }
+
+  :root, [data-theme="dark"] {
     --bg:#0A100D;
+    --body-bg:#05070A;
     --surface:#121A16;
     --surface-2:#182019;
     --line:#22302A;
@@ -21,19 +83,37 @@
     --text-faint:#5C7268;
     --warn:#FF8A65;
     --danger:#FF6B6B;
+    --frame-border:#1D2A24;
     --radius-lg:22px;
     --radius-md:14px;
+  }
+  [data-theme="light"] {
+    --bg:#F4F8F6;
+    --body-bg:#E9F0EC;
+    --surface:#FFFFFF;
+    --surface-2:#EDF4F0;
+    --line:#D1E3DA;
+    --green-1:#059669;
+    --green-2:#047857;
+    --mint:#065F46;
+    --text:#0F1A15;
+    --text-dim:#4E685C;
+    --text-faint:#86A195;
+    --warn:#D97706;
+    --danger:#DC2626;
+    --frame-border:#D1E3DA;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   body{
     margin:0;
-    background:#05070A;
+    background:var(--body-bg);
     font-family:'Inter',sans-serif;
     color:var(--text);
     display:flex;
     justify-content:center;
     padding:0;
     min-height:100vh;
+    transition:background-color 0.25s ease, color 0.25s ease;
   }
   @media(min-width:480px){
     body{padding:24px 16px;}
@@ -43,18 +123,19 @@
     width:100%;
     max-width:420px;
     min-height:100vh;
-    background:linear-gradient(180deg,#0C1310 0%,var(--bg) 18%);
+    background:var(--bg);
     position:relative;
     display:flex;
     flex-direction:column;
+    transition:background-color 0.25s ease;
   }
   @media(min-width:480px){
     .frame{
       min-height:820px;
       height:820px;
       border-radius:36px;
-      border:1px solid #1D2A24;
-      box-shadow:0 30px 60px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.02);
+      border:1px solid var(--frame-border);
+      box-shadow:0 30px 60px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.04);
       overflow:hidden;
     }
   }
@@ -112,11 +193,20 @@
     background:linear-gradient(90deg,rgba(18,232,139,.14),rgba(18,232,139,.04));
     border:1px solid rgba(18,232,139,.35);
     border-radius:var(--radius-md);
-    padding:11px 13px;margin-bottom:12px;font-size:12.5px;color:var(--mint);
+    padding:12px 14px;margin-bottom:12px;font-size:12.5px;color:var(--mint);
   }
-  .join-banner b{color:var(--text);font-weight:600;}
+  .join-banner b{color:var(--text);font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .join-banner span.dot{width:6px;height:6px;border-radius:50%;background:var(--green-1);flex-shrink:0;}
-  .join-banner a{margin-left:auto;color:var(--bg);background:var(--green-1);padding:6px 11px;border-radius:8px;font-weight:700;font-size:11.5px;text-decoration:none;white-space:nowrap;}
+  .join-banner a, .join-banner .gate-btn{
+    margin-left:auto;color:var(--bg);background:var(--green-1);
+    border:none;padding:7px 12px;border-radius:8px;font-weight:700;
+    font-size:11.5px;text-decoration:none;white-space:nowrap;cursor:pointer;
+    font-family:'Inter',sans-serif;transition:transform 0.15s ease, opacity 0.15s ease;
+  }
+  .join-banner a:active, .join-banner .gate-btn:active{transform:scale(0.96);}
+  .join-banner .gate-btn.joined{
+    background:rgba(18,232,139,.18);color:var(--green-1);border:1px solid rgba(18,232,139,.35);
+  }
 
   .balance-card{
     background:radial-gradient(120% 160% at 0% 0%, #14332480 0%, transparent 60%), linear-gradient(135deg, #0F211A 0%, #0B1512 100%);
@@ -157,12 +247,118 @@
   .prod-name{font-size:13px;font-weight:600;}
   .prod-sub{font-size:11px;color:var(--text-faint);}
 
+  /* Apple-Style Sticker Cards */
+  .apple-sticker-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .apple-sticker-card {
+    background: linear-gradient(160deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 22px;
+    padding: 16px 12px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    cursor: pointer;
+    overflow: hidden;
+    box-shadow: 0 10px 24px -4px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.15);
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+  .apple-sticker-card:hover, .apple-sticker-card:active {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 16px 32px -4px rgba(0,0,0,0.65), inset 0 1px 1px rgba(255,255,255,0.22);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+  .apple-sticker-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.12);
+    backdrop-filter: blur(8px);
+    color: rgba(255,255,255,0.9);
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  .apple-sticker-stage {
+    width: 84px;
+    height: 84px;
+    margin: 8px 0 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .apple-sticker-stage::before {
+    content: "";
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--halo-color, rgba(255, 194, 75, 0.35)) 0%, transparent 70%);
+    filter: blur(10px);
+    opacity: 0.85;
+  }
+  .apple-sticker-emoji {
+    font-size: 48px;
+    position: relative;
+    z-index: 2;
+    filter: drop-shadow(0 8px 16px rgba(0,0,0,0.35));
+    animation: appleStickerFloat 3.5s ease-in-out infinite alternate;
+  }
+  @keyframes appleStickerFloat {
+    0% { transform: translateY(0px) rotate(0deg) scale(1); }
+    100% { transform: translateY(-5px) rotate(3deg) scale(1.06); }
+  }
+  .apple-sticker-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 2px;
+    letter-spacing: -0.2px;
+  }
+  .apple-sticker-desc {
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-bottom: 10px;
+  }
+  .apple-sticker-price {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 7px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #FFFFFF;
+    letter-spacing: -0.1px;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .apple-sticker-card:hover .apple-sticker-price {
+    background: linear-gradient(135deg, var(--green-1), var(--green-2));
+    color: #05130C;
+    border-color: transparent;
+  }
+
   /* Bottom Nav */
   .bottom-nav{
     display:flex;justify-content:space-around;align-items:center;
     padding:10px 6px calc(12px + env(safe-area-inset-bottom));
     background:#0B120F;border-top:1px solid var(--line);
     margin-top:auto;
+  }
+  body.gate-blocked .bottom-nav,
+  body.gate-blocked #bottomNav {
+    display: none !important;
   }
   .nav-item{
     display:flex;flex-direction:column;align-items:center;gap:3px;
@@ -187,18 +383,35 @@
   .chip.active{background:linear-gradient(135deg,var(--green-1),var(--green-2));color:#05130C;border-color:transparent;}
 
   .order-row{
-    display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;
   }
   .order-icon{width:38px;height:38px;border-radius:10px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
-  .order-info{flex:1;min-width:0;}
+  .order-info{flex:1;min-width:140px;}
   .order-title{font-size:13px;font-weight:600;}
   .order-date{font-size:11px;color:var(--text-faint);margin-top:2px;}
-  .order-right{text-align:right;}
+  .order-right{text-align:right;flex-shrink:0;}
   .order-amt{font-size:13px;font-weight:700;}
   .status{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;margin-top:4px;display:inline-block;}
   .status.done{background:rgba(18,232,139,.14);color:var(--green-1);}
   .status.pending{background:rgba(255,138,101,.14);color:var(--warn);}
   .status.cancel{background:rgba(255,107,107,.14);color:var(--danger);}
+
+  .order-actions{width:100%;display:flex;justify-content:flex-end;gap:6px;margin-top:4px;}
+  .order-btn-sm{
+    background:var(--surface-2);border:1px solid var(--line);color:var(--text);
+    padding:4px 9px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;
+    transition:all 0.15s ease;display:inline-flex;align-items:center;gap:4px;
+  }
+  .order-btn-sm:hover{border-color:var(--green-1);color:var(--green-1);}
+  .order-btn-sm.buy-again{
+    background:rgba(18,232,139,.12);border-color:rgba(18,232,139,.35);color:var(--green-1);
+  }
+
+  .rcp-chip{
+    padding:4px 9px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line);
+    font-size:11px;color:var(--text);cursor:pointer;white-space:nowrap;transition:all 0.15s ease;
+  }
+  .rcp-chip:hover{border-color:var(--green-1);background:rgba(18,232,139,.08);}
 
   .empty{
     display:flex;flex-direction:column;align-items:center;text-align:center;
@@ -266,6 +479,476 @@
     width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;
     padding:11px 12px;color:var(--text);font-size:13.5px;font-family:'Inter';margin-bottom:14px;outline:none;
   }
+
+  /* Subscreen Bar */
+  .subscreen-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+    padding-top: 4px;
+  }
+  .back-btn {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    color: var(--mint);
+    border-radius: 10px;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s;
+  }
+  .back-btn:active {
+    background: var(--surface-2);
+    transform: scale(0.96);
+  }
+  .subscreen-title {
+    font-family: 'Sora', sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+  }
+
+  /* Fragment Live Rate Badge */
+  .fragment-rate-badge {
+    background: linear-gradient(90deg, rgba(18, 232, 139, 0.12), rgba(0, 176, 255, 0.08));
+    border: 1px solid rgba(18, 232, 139, 0.3);
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+    color: var(--mint);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+  }
+
+  /* Custom Calculator Card */
+  .custom-calc-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin-bottom: 22px;
+  }
+  .ccc-title {
+    font-size: 14.5px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .ccc-sub {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+  .calc-input-row {
+    position: relative;
+    margin-bottom: 12px;
+  }
+  .calc-input-row input {
+    margin-bottom: 0;
+    padding-right: 90px;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .calc-input-unit {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--mint);
+    pointer-events: none;
+  }
+  .calc-result-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--surface-2);
+    border-radius: 10px;
+    padding: 11px 14px;
+    margin-bottom: 14px;
+    font-size: 13px;
+    border: 1px dashed var(--line);
+  }
+  .calc-result-price {
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--green-1);
+    font-family: 'Sora', sans-serif;
+  }
+
+  /* Premium benefits card */
+  .prem-benefits-card {
+    background: linear-gradient(135deg, rgba(123, 97, 255, 0.14), rgba(18, 232, 139, 0.05));
+    border: 1px solid rgba(123, 97, 255, 0.3);
+    border-radius: var(--radius-md);
+    padding: 15px;
+    margin-bottom: 20px;
+  }
+  .pbc-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: #DDD6FE;
+  }
+  .pbc-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--text);
+  }
+
+  /* Recipient Selector Toggle */
+  .recipient-toggle-group {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .rcp-btn {
+    flex: 1;
+    padding: 9px 10px;
+    text-align: center;
+    border-radius: 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .rcp-btn.active {
+    background: rgba(18, 232, 139, 0.14);
+    border-color: var(--green-1);
+    color: var(--green-1);
+    font-weight: 700;
+  }
+
+  /* Strict Payment Warning Notice */
+  .payment-strict-warning {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.16) 0%, rgba(245, 158, 11, 0.08) 100%);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 14px;
+    padding: 13px 15px;
+    margin-bottom: 18px;
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.1);
+  }
+  .psw-header {
+    margin-bottom: 6px;
+  }
+  .psw-badge {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    color: #FCA5A5;
+    background: rgba(239, 68, 68, 0.22);
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-block;
+  }
+  .psw-body {
+    font-size: 12px;
+    line-height: 1.5;
+    color: #FEE2E2;
+  }
+  .psw-body b {
+    color: #FFFFFF;
+  }
+  .psw-highlight {
+    margin-top: 5px;
+    color: #F87171;
+    font-weight: 600;
+  }
+
+  /* Light theme fixes for balance card & payment strict warning */
+  [data-theme="light"] .balance-card {
+    background: linear-gradient(135deg, #E6F7ED 0%, #D1FAE5 100%);
+    border: 1px solid #A7F3D0;
+    box-shadow: 0 4px 18px rgba(16, 185, 129, 0.12);
+  }
+  [data-theme="light"] .balance-card::after {
+    background: radial-gradient(circle, rgba(5, 150, 105, 0.15), transparent 70%);
+  }
+  [data-theme="light"] .balance-card .balance-label {
+    color: #047857;
+    font-weight: 600;
+  }
+  [data-theme="light"] .balance-card .balance-value {
+    color: #064E3B;
+  }
+  [data-theme="light"] .balance-card .balance-value span {
+    color: #059669;
+  }
+
+  [data-theme="light"] .payment-strict-warning {
+    background: #FFF1F2;
+    border: 1px solid #FECDD3;
+    box-shadow: 0 4px 16px rgba(225, 29, 72, 0.08);
+  }
+  [data-theme="light"] .psw-badge {
+    color: #BE123C;
+    background: #FFE4E6;
+    border: 1px solid #FDA4AF;
+  }
+  [data-theme="light"] .psw-body {
+    color: #9F1239;
+    font-weight: 500;
+  }
+  [data-theme="light"] .psw-body b {
+    color: #881337;
+    font-weight: 700;
+  }
+  [data-theme="light"] .psw-highlight {
+    color: #BE123C;
+    font-weight: 700;
+  }
+  [data-theme="light"] .amt-pill {
+    background: #FFFFFF;
+    border: 1px solid #D1E3DA;
+    color: #0F1A15;
+  }
+  [data-theme="light"] .amt-pill.sel {
+    border-color: #059669;
+    color: #059669;
+    background: #ECFDF5;
+  }
+  [data-theme="light"] .method {
+    background: #FFFFFF;
+    border: 1px solid #D1E3DA;
+    color: #0F1A15;
+  }
+  [data-theme="light"] .method.active {
+    border-color: #059669;
+    background: #ECFDF5;
+  }
+  [data-theme="light"] .bottom-nav {
+    background: #FFFFFF !important;
+    border-top: 1px solid #D1E3DA !important;
+  }
+  [data-theme="light"] .nav-item {
+    color: #64748B;
+  }
+  [data-theme="light"] .nav-item.active {
+    color: #059669;
+    background: #ECFDF5;
+  }
+  [data-theme="light"] .ref-card {
+    background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%) !important;
+    border: 1px solid #A7F3D0 !important;
+  }
+  [data-theme="light"] .ref-card .ref-title {
+    color: #064E3B;
+  }
+  [data-theme="light"] .ref-card .ref-bonus {
+    background: #A7F3D0;
+    color: #065F46;
+  }
+  [data-theme="light"] .ref-link {
+    background: #FFFFFF !important;
+    border-color: #D1E3DA !important;
+    color: #0F172A !important;
+  }
+  [data-theme="light"] .avatar {
+    border-color: #A7F3D0 !important;
+  }
+  [data-theme="light"] .field-input {
+    background: #F8FAFC !important;
+    border-color: #D1E3DA !important;
+    color: #0F172A !important;
+  }
+  [data-theme="light"] .field-input::placeholder {
+    color: #94A3B8 !important;
+  }
+  [data-theme="light"] .modal-box {
+    background: #FFFFFF !important;
+    border-color: #D1E3DA !important;
+    color: #0F172A !important;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15) !important;
+  }
+  [data-theme="light"] .apple-sticker-price {
+    background: #059669 !important;
+    color: #FFFFFF !important;
+    border-color: transparent !important;
+  }
+  [data-theme="light"] .back-btn {
+    background: #FFFFFF !important;
+    border-color: #D1E3DA !important;
+    color: #059669 !important;
+  }
+  [data-theme="light"] .stat-card {
+    background: #F8FAFC !important;
+    border-color: #D1E3DA !important;
+  }
+  [data-theme="light"] .stat-card .stat-val {
+    color: #0F172A !important;
+  }
+  [data-theme="light"] .search-bar {
+    background: #F8FAFC !important;
+    border-color: #D1E3DA !important;
+  }
+  [data-theme="light"] .search-bar input {
+    color: #0F172A !important;
+  }
+  [data-theme="light"] .chip {
+    background: #F8FAFC !important;
+    border-color: #D1E3DA !important;
+    color: #475569 !important;
+  }
+  [data-theme="light"] .chip.active {
+    background: #059669 !important;
+    color: #FFFFFF !important;
+  }
+  [data-theme="light"] .order-row {
+    border-bottom-color: #D1E3DA !important;
+  }
+  [data-theme="light"] .order-icon {
+    background: #F1F5F9 !important;
+  }
+  [data-theme="light"] .join-banner {
+    background: #ECFDF5 !important;
+    border-color: #A7F3D0 !important;
+    color: #065F46 !important;
+  }
+  [data-theme="light"] .join-banner b {
+    color: #064E3B !important;
+  }
+
+  /* User Theme Toggle Button */
+  .u-theme-btn {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    color: var(--text);
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 15px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  .u-theme-btn:active {
+    transform: scale(0.92);
+  }
+
+  /* Glassmorphic Bank Card */
+  .glass-bank-card {
+    background: linear-gradient(135deg, rgba(20, 38, 30, 0.95) 0%, rgba(10, 20, 16, 0.98) 50%, rgba(18, 232, 139, 0.15) 100%);
+    border: 1px solid rgba(18, 232, 139, 0.4);
+    box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 18px 20px;
+    color: #EFFBF4;
+    position: relative;
+    overflow: hidden;
+    margin-top: 14px;
+    margin-bottom: 14px;
+    transition: all 0.25s ease;
+  }
+  [data-theme="light"] .glass-bank-card {
+    background: linear-gradient(135deg, #064E3B 0%, #047857 50%, #059669 100%);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: #FFFFFF;
+    box-shadow: 0 16px 36px -10px rgba(5, 150, 105, 0.35);
+  }
+  .gbc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .gbc-bank {
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    font-family: 'Sora', sans-serif;
+  }
+  .gbc-brand {
+    font-size: 11px;
+    font-weight: 800;
+    background: rgba(255, 255, 255, 0.18);
+    padding: 3px 9px;
+    border-radius: 6px;
+    letter-spacing: 1px;
+  }
+  .gbc-chip-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .gbc-chip {
+    width: 36px;
+    height: 26px;
+    border-radius: 5px;
+    background: linear-gradient(135deg, #ECC94B, #D69E2E);
+    position: relative;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25);
+  }
+  .gbc-chip-lines {
+    position: absolute;
+    inset: 4px;
+    border: 1px solid rgba(0,0,0,0.25);
+    border-radius: 3px;
+  }
+  .gbc-contactless {
+    opacity: 0.85;
+  }
+  .gbc-number-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 9px 12px;
+    border-radius: 10px;
+    margin-bottom: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .gbc-number {
+    font-family: monospace;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 2px;
+  }
+  .gbc-copy-btn {
+    background: #12E88B;
+    color: #041208;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .gbc-copy-btn:active {
+    transform: scale(0.95);
+  }
+  .gbc-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  .gbc-lbl {
+    font-size: 9px;
+    opacity: 0.75;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 2px;
+  }
+  .gbc-val {
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
 </style>
 </head>
 <body>
@@ -288,10 +971,12 @@
   <div class="screen active" id="home">
     <div class="header-bar">
       <div class="user-badge">
-        <div class="u-avatar-mini" id="uInitials">СА</div>
+        <div class="u-avatar-mini" id="uInitials">⭐</div>
         <span id="uNameTop">Yuklanmoqda…</span>
       </div>
-      <a href="/admin" id="adminBadgeLink" class="u-role-pill" style="display:none;">Admin Panel ⚙</a>
+      <button class="u-theme-btn" id="uThemeToggleBtn" onclick="toggleUserTheme()" title="Rejimni o'zgartirish">
+        <span id="uThemeIcon">🌙</span>
+      </button>
     </div>
 
     <div class="balance-card">
@@ -302,46 +987,106 @@
 
     <div class="section-title">Bo'limlar</div>
     <div class="prod-grid">
-      <div class="prod-card" onclick="scrollToSection('starsSection')">
+      <div class="prod-card" onclick="switchTab('screen-stars')">
         <div class="prod-icon ic-stars">⭐</div>
         <div class="prod-name">Telegram Stars</div>
-        <div class="prod-sub">50 dan 5000 tagacha</div>
+        <div class="prod-sub">50 dan 5000 tagacha ›</div>
       </div>
-      <div class="prod-card" onclick="scrollToSection('premSection')">
+      <div class="prod-card" onclick="switchTab('screen-premium')">
         <div class="prod-icon ic-prem">💎</div>
         <div class="prod-name">Premium</div>
-        <div class="prod-sub">3 / 6 / 12 oy</div>
+        <div class="prod-sub">3 / 6 / 12 oy ›</div>
       </div>
-      <div class="prod-card" onclick="scrollToSection('giftsSection')">
+      <div class="prod-card" onclick="switchTab('screen-gifts')">
         <div class="prod-icon ic-gift">🎁</div>
         <div class="prod-name">Sovg'alar</div>
-        <div class="prod-sub">Cheklangan nushalar</div>
+        <div class="prod-sub">Apple & 3D Stikerlar ›</div>
       </div>
       <div class="prod-card" onclick="switchTab('profile')">
         <div class="prod-icon ic-stars">👥</div>
         <div class="prod-name">Do'stni taklif qil</div>
-        <div class="prod-sub">+5% doimiy bonus</div>
+        <div class="prod-sub">+5% doimiy bonus ›</div>
       </div>
     </div>
 
-    <!-- STARS SECTION -->
-    <div class="section-title" id="starsSection">Ommabop Stars paketlari <small>Stars</small></div>
-    <div class="prod-grid" id="starsGrid">
-      <div class="prod-card"><div class="prod-name">50 ⭐</div><div class="prod-sub">9 400 so'm</div></div>
-      <div class="prod-card"><div class="prod-name">100 ⭐</div><div class="prod-sub">18 700 so'm</div></div>
-      <div class="prod-card"><div class="prod-name">250 ⭐</div><div class="prod-sub">45 900 so'm</div></div>
-      <div class="prod-card"><div class="prod-name">Boshqa miqdor</div><div class="prod-sub">O'zingiz kiriting</div></div>
-    </div>
-
-    <!-- PREMIUM SECTION -->
-    <div class="section-title" id="premSection" style="margin-top:24px;">Telegram Premium <small>Obuna</small></div>
-    <div class="prod-grid" id="premGrid">
+    <!-- POPULAR HIGHLIGHTS ON HOME -->
+    <div class="section-title" style="margin-top:22px;">🔥 Ommabop tanlovlar <small>Tezkor xarid</small></div>
+    <div class="prod-grid" id="popularPicksGrid">
       <!-- Injected via JS -->
     </div>
 
-    <!-- GIFTS SECTION -->
-    <div class="section-title" id="giftsSection" style="margin-top:24px;">Premium Sovg'alar <small>Telegram Gifts</small></div>
-    <div class="prod-grid" id="giftsGrid">
+    <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:14px;margin-top:20px;font-size:12px;line-height:1.6;color:var(--text-dim);">
+      <div style="font-weight:700;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:6px;">
+        <span>🛡️</span> Rasmiy & Avtomatlashtirilgan
+      </div>
+      Barcha mahsulotlar Telegram rasmiy <b>Fragment</b> platformasi orqali yetkaziladi. Xavfsiz, tezkor va eng qulay narxlar kafolatlanadi.
+    </div>
+  </div>
+
+  <!-- SCREEN: STARS -->
+  <div class="screen" id="screen-stars">
+    <div class="subscreen-bar">
+      <button class="back-btn" onclick="switchTab('home')">‹ Orqaga</button>
+      <div class="subscreen-title">⭐ Telegram Stars</div>
+    </div>
+
+    <!-- Custom Stars Calculator -->
+    <div class="custom-calc-card">
+      <div class="ccc-title">Ixtiyoriy miqdorda Stars hisoblagich</div>
+      <div class="ccc-sub">Istalgan miqdorni kiriting (masalan: 105 dona Stars):</div>
+      <div class="calc-input-row">
+        <input type="number" id="calcStarsInput" class="field-input" placeholder="Masalan: 105" min="15" max="50000" value="100">
+        <span class="calc-input-unit">⭐ Stars</span>
+      </div>
+      <div class="calc-result-box">
+        <div>To'lov summasi:</div>
+        <div class="calc-result-price" id="calcStarsTotalPrice">21 200 so'm</div>
+      </div>
+      <button class="topup-btn" id="btnBuyCalcStars" style="width:100%;justify-content:center;font-size:13.5px;padding:12px;">🛍️ Xarid qilish</button>
+    </div>
+
+    <div class="section-title">Tayyor Stars paketlari</div>
+    <div class="prod-grid" id="starsSubGrid">
+      <!-- Injected via JS -->
+    </div>
+  </div>
+
+  <!-- SCREEN: PREMIUM -->
+  <div class="screen" id="screen-premium">
+    <div class="subscreen-bar">
+      <button class="back-btn" onclick="switchTab('home')">‹ Orqaga</button>
+      <div class="subscreen-title">💎 Telegram Premium</div>
+    </div>
+
+    <div class="prem-benefits-card">
+      <div class="pbc-title">Telegram Premium afzalliklari:</div>
+      <div class="pbc-grid">
+        <div>🚀 4 GB fayllar yuklash</div>
+        <div>⚡ Tezkor yuklab olish</div>
+        <div>🎙 Ovozni matnga o'girish</div>
+        <div>✨ Eksklyuziv reaksiyalar</div>
+        <div>🚫 Reklamalarsiz interfeys</div>
+        <div>🌟 Profil nishonlari (badge)</div>
+      </div>
+    </div>
+
+    <div class="section-title">Obuna muddatini tanlang</div>
+    <div class="prod-grid" id="premSubGrid">
+      <!-- Injected via JS -->
+    </div>
+  </div>
+
+  <!-- SCREEN: GIFTS -->
+  <div class="screen" id="screen-gifts">
+    <div class="subscreen-bar">
+      <button class="back-btn" onclick="switchTab('home')">‹ Orqaga</button>
+      <div class="subscreen-title">🎁 Apple 3D Sovg'alar</div>
+    </div>
+
+    <p style="font-size:12px;color:var(--text-dim);margin:0 0 14px;line-height:1.5;">
+      Telegram profilingiz yoki do'stingiz uchun eksklyuziv animatsiyali Apple 3D stiker-sovg'alar.
+    </p>
+    <div class="apple-sticker-grid" id="giftsSubGrid">
       <!-- Injected via JS -->
     </div>
   </div>
@@ -370,10 +1115,56 @@
       <input type="number" id="customAmtInput" class="field-input" placeholder="Summani kiriting (so'mda)…">
     </div>
 
+    <!-- STRICT PAYMENT WARNING -->
+    <div class="payment-strict-warning">
+      <div class="psw-header">
+        <span class="psw-badge">⚠️ DIQQAT: QAT'IY TO'LOV QOIDASI</span>
+      </div>
+      <div class="psw-body">
+        Hisobni to'ldirishda <b>aynan ko'rsatilgan summani</b> to'lang!
+        <div class="psw-highlight">
+          Agar <b>1 so'm kam</b> yoki <b>1 so'm ko'p</b> to'lansa, to'lov tizim tomonidan avtomatik <b>inobatga olinmaydi</b> va hisobga o'tmaydi!
+        </div>
+      </div>
+    </div>
+
     <div class="section-title">To'lov usuli</div>
     <div class="method-grid">
-      <div class="method active" data-method="click"><div class="m-ic">💳</div><div class="method-name">Click</div></div>
-      <div class="method" data-method="payme"><div class="m-ic">💳</div><div class="method-name">Payme</div></div>
+      <div class="method active" data-method="card"><div class="m-ic">💳</div><div class="method-name">Bank Karta (P2P)</div></div>
+      <div class="method" data-method="click"><div class="m-ic">🔹</div><div class="method-name">Click</div></div>
+      <div class="method" data-method="payme"><div class="m-ic">🟢</div><div class="method-name">Payme</div></div>
+    </div>
+
+    <!-- P2P Bank Card Container -->
+    <div id="p2pCardContainer">
+      <div class="glass-bank-card">
+        <div class="gbc-header">
+          <div class="gbc-bank" id="bcBankName">TBC Bank</div>
+          <div class="gbc-brand" id="bcBrandBadge">UZCARD</div>
+        </div>
+        <div class="gbc-chip-row">
+          <div class="gbc-chip">
+            <div class="gbc-chip-lines"></div>
+          </div>
+          <div class="gbc-contactless">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 6a7.5 7.5 0 0 1 10 0"/><path d="M9.5 9.5a4 4 0 0 1 5 0"/><circle cx="12" cy="13" r="1" fill="currentColor"/></svg>
+          </div>
+        </div>
+        <div class="gbc-number-box">
+          <div class="gbc-number" id="bcCardNumber">8600 1234 5678 9012</div>
+          <button class="gbc-copy-btn" type="button" onclick="copyCardNumber()">📋 Nusxa</button>
+        </div>
+        <div class="gbc-footer">
+          <div class="gbc-meta">
+            <span class="gbc-lbl">KARTA EGASI</span>
+            <span class="gbc-val" id="bcCardHolder">ANVAR S.</span>
+          </div>
+          <div class="gbc-meta" style="text-align:right;">
+            <span class="gbc-lbl">TO'LOV TURI</span>
+            <span class="gbc-val" style="color:var(--green-1);">P2P Tezkor</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <button class="topup-btn" id="doTopupBtn" style="width:100%;justify-content:center;font-size:14px;padding:13px;">To'ldirish — 50 000 so'm</button>
@@ -417,7 +1208,7 @@
   <!-- PROFILE -->
   <div class="screen" id="profile">
     <div class="profile-head">
-      <div class="avatar" id="profileAvatar">СА</div>
+      <div class="avatar" id="profileAvatar">⭐</div>
       <div class="p-name" id="profileName">Foydalanuvchi</div>
       <div class="p-user" id="profileUsername">@username</div>
     </div>
@@ -432,17 +1223,17 @@
         <div class="ref-title">Do'stlaringizni taklif qiling</div>
         <div class="ref-bonus">+5% bonus</div>
       </div>
-      <div class="ref-link"><span id="refLinkText">t.me/stellar_bot?start=ref_0</span><button onclick="copyRefLink()">Nusxalash</button></div>
+      <div class="ref-link"><span id="refLinkText">t.me/gifthubuzbot?start=ref_0</span><button onclick="copyRefLink()">Nusxalash</button></div>
       <div class="ref-stats"><div><b id="refCount">0</b> taklif</div><div><b id="refEarned">0</b> so'm bonus</div></div>
     </div>
 
-    <div class="menu-item" onclick="openLink('https://t.me/stellar_news')"><div class="m-ic">📣</div>Yangiliklar kanali<span class="arrow">›</span></div>
-    <div class="menu-item" onclick="openLink('https://t.me/stellar_support')"><div class="m-ic">🛟</div>Qo'llab-quvvatlash<span class="arrow">›</span></div>
-    <div class="menu-item" onclick="alert('Ommaviy oferta: Stellar platformasi orqali raqamli mahsulotlar taqdim etiladi.')"><div class="m-ic">📄</div>Ommaviy oferta<span class="arrow">›</span></div>
+    <div class="menu-item" onclick="openLink('https://t.me/gifthub_news')"><div class="m-ic">📣</div>Yangiliklar kanali<span class="arrow">›</span></div>
+    <div class="menu-item" onclick="openLink('https://t.me/gifthub_support')"><div class="m-ic">🛟</div>Qo'llab-quvvatlash<span class="arrow">›</span></div>
+    <div class="menu-item" onclick="alert('Ommaviy oferta: GiftHub platformasi orqali raqamli mahsulotlar taqdim etiladi.')"><div class="m-ic">📄</div>Ommaviy oferta<span class="arrow">›</span></div>
   </div>
 
   <!-- BOTTOM NAV -->
-  <div class="bottom-nav">
+  <div class="bottom-nav" id="bottomNav">
     <button class="nav-item active" data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Bosh sahifa</button>
     <button class="nav-item" data-tab="wallet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>Hamyon</button>
     <button class="nav-item" data-tab="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>Tarix</button>
@@ -456,18 +1247,69 @@
     <div class="modal-title" id="modalProductTitle">Stars xarid qilish</div>
     <div style="font-size:13px;color:var(--text-dim);margin-bottom:14px;" id="modalProductPrice">Narx: 0 so'm</div>
     
-    <label style="font-size:11.5px;color:var(--text-dim);display:block;margin-bottom:6px;">Qabul qiluvchi Telegram username (ixtiyoriy)</label>
-    <input type="text" id="recipientInput" class="field-input" placeholder="@o'zingiz yoki do'stingiz">
+    <!-- Recipient Mode Selector -->
+    <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:8px;">Qabul qiluvchini tanlang:</label>
+    <div class="recipient-toggle-group">
+      <div class="rcp-btn active" id="rcpSelfBtn" onclick="setRecipientMode('self')">👤 O'zim uchun</div>
+      <div class="rcp-btn" id="rcpFriendBtn" onclick="setRecipientMode('friend')">🎁 Do'stim uchun</div>
+    </div>
+
+    <!-- Self receiver info -->
+    <div id="rcpSelfBox" style="background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:14px;">
+      Qabul qiluvchi: <b id="rcpSelfName">Siz (@username)</b>
+    </div>
+
+    <!-- Friend receiver input -->
+    <div id="rcpFriendBox" style="display:none;margin-bottom:14px;">
+      <!-- Saved Recipients Quick Select (Req 15) -->
+      <div id="savedRecipientsSection" style="margin-bottom:8px;display:none;">
+        <div style="font-size:11px;font-weight:600;color:var(--text-dim);margin-bottom:4px;">⭐ Saqlangan qabul qiluvchilar:</div>
+        <div id="savedRecipientsChips" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;"></div>
+      </div>
+      <input type="text" id="recipientInput" class="field-input" placeholder="@username yoki Telegram ID (masalan: 123456789)" style="margin-bottom:6px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <input type="checkbox" id="chkSaveRecipient" style="cursor:pointer;accent-color:var(--green-1);">
+        <label for="chkSaveRecipient" style="font-size:11.5px;color:var(--text-dim);cursor:pointer;">Ushbu qabul qiluvchini saqlab qo'yish</label>
+      </div>
+      <div style="font-size:11.5px;color:var(--text-dim);line-height:1.4;">
+        💡 <b>Do'stingizda username yo'qmi?</b> Unda uning Telegram ID raqamini kiriting (ID ni @userinfobot orqali bilish mumkin).
+      </div>
+    </div>
 
     <div style="display:flex;gap:8px;margin:10px 0 6px;">
-      <input type="text" id="modalPromoInput" class="field-input" placeholder="Promo-kod (masalan: STELLAR10)" style="text-transform:uppercase;font-size:12px;margin:0;">
+      <input type="text" id="modalPromoInput" class="field-input" placeholder="Promo-kod (masalan: GIFTHUB10)" style="text-transform:uppercase;font-size:12px;margin:0;">
       <button class="topup-btn" id="modalApplyPromoBtn" type="button" style="margin:0;padding:8px 14px;font-size:12px;white-space:nowrap;">Qo'llash</button>
     </div>
     <div id="modalPromoMsg" style="font-size:11.5px;margin-bottom:10px;display:none;"></div>
 
-    <div style="display:flex;gap:10px;margin-top:8px;">
+    <div style="display:flex;gap:10px;margin-top:10px;">
       <button class="topup-btn" id="confirmBuyBtn" style="flex:1;justify-content:center;">Xarid qilish</button>
       <button class="topup-btn" onclick="closeModal()" style="background:var(--surface-2);color:var(--text);border:1px solid var(--line);">Bekor qilish</button>
+    </div>
+  </div>
+</div>
+
+<!-- RECEIPT MODAL (Req 16) -->
+<div class="modal-overlay" id="receiptModal" style="display:none;">
+  <div class="modal-box" style="max-width:380px;background:var(--surface);border-radius:24px;padding:22px;border:1px solid var(--line);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid var(--line);padding-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:22px;">🎁</span>
+        <div>
+          <div style="font-size:15px;font-weight:800;font-family:'Sora',sans-serif;">GiftHub Chek</div>
+          <div style="font-size:10.5px;color:var(--text-dim);" id="rcpNumber">GH-000000</div>
+        </div>
+      </div>
+      <button class="order-btn-sm" onclick="closeReceiptModal()">✕</button>
+    </div>
+
+    <div id="receiptContent" style="font-size:12.5px;line-height:1.6;color:var(--text);">
+      <div style="text-align:center;padding:20px;color:var(--text-dim);">Chek yuklanmoqda...</div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:18px;">
+      <button class="topup-btn" onclick="copyReceiptText()" style="flex:1;justify-content:center;font-size:12.5px;padding:10px;">📋 Nusxa olish</button>
+      <button class="topup-btn" onclick="closeReceiptModal()" style="background:var(--surface-2);color:var(--text);border:1px solid var(--line);font-size:12.5px;padding:10px 16px;">Yopish</button>
     </div>
   </div>
 </div>
@@ -477,10 +1319,72 @@
 <script>
   // State
   let currentUser = null;
+  let botUsername = 'gifthubuzbot';
   let selectedTopupAmount = 50000;
-  let selectedTopupMethod = 'click';
+  let selectedTopupMethod = 'card';
   let activeHistoryStatus = 'all';
   let currentProductToBuy = null;
+
+  async function fetchBotInfo() {
+    try {
+      const res = await fetch('/api/bot-info');
+      if(res.ok) {
+        const data = await res.json();
+        if(data.username) {
+          botUsername = data.username;
+          if(currentUser) {
+            const refLink = `https://t.me/${botUsername}?start=ref_${currentUser.id}`;
+            const el = document.getElementById('refLinkText');
+            if(el) el.innerText = refLink;
+          }
+        }
+      }
+    } catch(e){}
+  }
+
+  // ================= THEME TOGGLE (TUNGI VA TONGI REJIM) ================= //
+  function initUserTheme() {
+    const saved = localStorage.getItem('gifthub_user_theme') || 'dark';
+    setUserTheme(saved);
+  }
+
+  function toggleUserTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    const target = (current === 'dark') ? 'light' : 'dark';
+    setUserTheme(target);
+  }
+
+  function setUserTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('gifthub_user_theme', theme);
+    const iconEl = document.getElementById('uThemeIcon');
+    if(iconEl) iconEl.innerText = (theme === 'dark') ? '🌙' : '☀️';
+  }
+
+  function copyCardNumber() {
+    const cardEl = document.getElementById('bcCardNumber');
+    const cardNum = cardEl ? cardEl.innerText.replace(/\s+/g, '') : '';
+    if(!cardNum) return;
+    if(navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(cardNum).then(() => {
+        showToast("Karta raqami nusxalandi: " + cardNum);
+      }).catch(() => {
+        fallbackCopyCard(cardNum);
+      });
+    } else {
+      fallbackCopyCard(cardNum);
+    }
+  }
+
+  function fallbackCopyCard(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast("Karta raqami nusxalandi!");
+  }
 
   const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
   if(tg) {
@@ -496,6 +1400,12 @@
     const initData = getInitData();
     if(initData) {
       headers['x-telegram-init-data'] = initData;
+    } else {
+      const sp = new URLSearchParams(window.location.search);
+      const uid = sp.get('auth_user_id') || sp.get('user_id');
+      if(uid) {
+        headers['x-auth-user-id'] = uid;
+      }
     }
     return headers;
   }
@@ -508,11 +1418,34 @@
   }
 
   function openLink(url) {
-    if(tg && tg.openTelegramLink && url.includes('t.me/')) {
-      tg.openTelegramLink(url);
-    } else {
-      window.open(url, '_blank');
+    if(tg && tg.openTelegramLink && (url.includes('t.me/') || url.startsWith('tg://'))) {
+      try { tg.openTelegramLink(url); return; } catch(e){}
+    } else if(tg && tg.openLink && url.startsWith('http')) {
+      try { tg.openLink(url); return; } catch(e){}
     }
+    window.open(url, '_blank');
+  }
+
+  function openChannelLink(url) {
+    if(!url) return;
+    try {
+      if(window.Telegram && window.Telegram.WebApp) {
+        if(url.includes('t.me/') || url.startsWith('tg://')) {
+          if(typeof window.Telegram.WebApp.openTelegramLink === 'function') {
+            window.Telegram.WebApp.openTelegramLink(url);
+            return;
+          }
+        } else {
+          if(typeof window.Telegram.WebApp.openLink === 'function') {
+            window.Telegram.WebApp.openLink(url);
+            return;
+          }
+        }
+      }
+    } catch(err) {
+      console.warn("Failed to open channel via WebApp SDK:", err);
+    }
+    window.open(url, '_blank');
   }
 
   // Load User Me
@@ -528,17 +1461,88 @@
     }
   }
 
+  let recipientMode = 'self'; // 'self' or 'friend'
+
+  function setRecipientMode(mode) {
+    recipientMode = mode;
+    const btnSelf = document.getElementById('rcpSelfBtn');
+    const btnFriend = document.getElementById('rcpFriendBtn');
+    const boxSelf = document.getElementById('rcpSelfBox');
+    const boxFriend = document.getElementById('rcpFriendBox');
+    const input = document.getElementById('recipientInput');
+
+    if(mode === 'self') {
+      btnSelf.classList.add('active');
+      btnFriend.classList.remove('active');
+      boxSelf.style.display = 'block';
+      boxFriend.style.display = 'none';
+      if(input) input.value = '';
+    } else {
+      btnSelf.classList.remove('active');
+      btnFriend.classList.add('active');
+      boxSelf.style.display = 'none';
+      boxFriend.style.display = 'block';
+      if(input) input.focus();
+      loadSavedRecipients();
+    }
+  }
+
+  async function loadSavedRecipients() {
+    if(!currentUser) return;
+    try {
+      const res = await fetch(`/api/v1/recipients?user_id=${currentUser.id}`, { headers: authHeaders() });
+      if(!res.ok) return;
+      const data = await res.json();
+      const sec = document.getElementById('savedRecipientsSection');
+      const container = document.getElementById('savedRecipientsChips');
+      if(!sec || !container) return;
+
+      if(data.recipients && data.recipients.length > 0) {
+        sec.style.display = 'block';
+        container.innerHTML = data.recipients.map(r => `
+          <div class="rcp-chip" onclick="selectSavedRecipient('${r.recipient_username}')">
+            👤 @${r.recipient_username}
+          </div>
+        `).join('');
+      } else {
+        sec.style.display = 'none';
+      }
+    } catch(e) {
+      console.warn("loadSavedRecipients error:", e);
+    }
+  }
+
+  function selectSavedRecipient(username) {
+    const input = document.getElementById('recipientInput');
+    if(input) input.value = '@' + username.replace('@', '');
+  }
+
   function updateUserUI() {
     if(!currentUser) return;
     try {
-      const initials = ((currentUser.first_name ? currentUser.first_name[0] : 'S') + (currentUser.last_name ? currentUser.last_name[0] : '')).toUpperCase();
       const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.innerText = val; };
 
-      setVal('uInitials', initials || '⭐');
-      setVal('profileAvatar', initials || '⭐');
+      // Avatar with image support & safe multi-byte unicode fallback
+      const photoUrl = currentUser.photo_url || (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.photo_url);
+      const name = currentUser.first_name || 'F';
+      const initial = Array.from(name)[0] || '⭐';
+
+      const uInitialsEl = document.getElementById('uInitials');
+      const profileAvatarEl = document.getElementById('profileAvatar');
+
+      if(photoUrl) {
+        if(uInitialsEl) uInitialsEl.innerHTML = `<img src="${photoUrl}" alt="Avatar" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.parentElement.innerText='${initial}'">`;
+        if(profileAvatarEl) profileAvatarEl.innerHTML = `<img src="${photoUrl}" alt="Avatar" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.parentElement.innerText='${initial}'">`;
+      } else {
+        if(uInitialsEl) uInitialsEl.innerText = initial;
+        if(profileAvatarEl) profileAvatarEl.innerText = initial;
+      }
+
       setVal('uNameTop', currentUser.first_name || 'Foydalanuvchi');
       setVal('profileName', `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || 'Foydalanuvchi');
-      setVal('profileUsername', currentUser.username ? `@${currentUser.username}` : `ID: ${currentUser.id}`);
+      const unameDisplay = currentUser.username ? `@${currentUser.username}` : `ID: ${currentUser.id}`;
+      setVal('profileUsername', unameDisplay);
+      setVal('rcpSelfName', `Siz (${unameDisplay})`);
 
       const formattedBal = Number(currentUser.balance || 0).toLocaleString('ru-RU');
       setVal('liveBalance', formattedBal);
@@ -548,7 +1552,7 @@
       setVal('profileJoinDate', currentUser.created_at || 'Bugun');
 
       // Referral
-      const refLink = `t.me/stellar_gift_bot?start=ref_${currentUser.id}`;
+      const refLink = `https://t.me/${botUsername}?start=ref_${currentUser.id}`;
       setVal('refLinkText', refLink);
       setVal('refCount', currentUser.referrals_count || 0);
       setVal('refEarned', Number(currentUser.referral_earnings || 0).toLocaleString('ru-RU'));
@@ -563,50 +1567,59 @@
   }
 
   // Check Gate
+  let isGateBlocked = false;
+
   async function checkGate() {
     try {
       const res = await fetch('/api/gate/check', { headers: authHeaders() });
       if(res.ok) {
         const data = await res.json();
         if(!data.all_passed && data.channels && data.channels.length > 0) {
+          isGateBlocked = true;
+          document.body.classList.add('gate-blocked');
           renderGateChannels(data.channels);
           document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
           const gateEl = document.getElementById('gate');
           if(gateEl) gateEl.classList.add('active');
           const nav = document.getElementById('bottomNav');
-          if(nav) nav.style.display = 'none';
+          if(nav) nav.style.setProperty('display', 'none', 'important');
         } else {
+          isGateBlocked = false;
+          document.body.classList.remove('gate-blocked');
           const gateEl = document.getElementById('gate');
           if(gateEl) gateEl.classList.remove('active');
           const nav = document.getElementById('bottomNav');
-          if(nav) nav.style.display = 'flex';
-          if(!document.querySelector('.screen.active')) {
+          if(nav) nav.style.setProperty('display', 'flex', 'important');
+          if(!document.querySelector('.screen.active') || (gateEl && gateEl.classList.contains('active'))) {
             const homeEl = document.getElementById('home');
             if(homeEl) homeEl.classList.add('active');
           }
         }
       }
     } catch(e) {
-      console.warn("Gate check bypass on network error:", e);
-      const gateEl = document.getElementById('gate');
-      if(gateEl) gateEl.classList.remove('active');
-      const homeEl = document.getElementById('home');
-      if(homeEl) homeEl.classList.add('active');
+      console.warn("Gate check error:", e);
     }
   }
 
   function renderGateChannels(channels) {
     const list = document.getElementById('gateChannelsList');
     if(!list) return;
-    list.innerHTML = channels.map(c => `
-      <div class="join-banner">
-        <span class="dot"></span>
-        <b>${c.display_name}</b>
-        <a href="${c.link}" target="_blank">A'zo bo'lish</a>
-      </div>
-    `).join('');
-  }  // Load Products
+    list.innerHTML = channels.map(c => {
+      const title = c.title || c.display_name || 'Kanal';
+      return `
+        <div class="join-banner">
+          <span class="dot" style="${c.passed ? 'background:var(--green-1);box-shadow:0 0 8px var(--green-1);' : ''}"></span>
+          <b title="${title}">${title}</b>
+          <button type="button" class="gate-btn ${c.passed ? 'joined' : ''}" onclick="openChannelLink('${c.link}')">${c.passed ? '✓ A\'zo' : 'A\'zo bo\'lish'}</button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Load Products & Fragment Live Pricing
   let productsCatalog = { stars: [], premium: [], gifts: [] };
+  let starsBaseRate = 176.46;
+  let starsUnitSellPrice = 212;
 
   async function loadProducts() {
     try {
@@ -618,41 +1631,162 @@
       productsCatalog.premium = data.premium_packages || [];
       productsCatalog.gifts = data.gifts || [];
 
-      // Stars
-      const sGrid = document.getElementById('starsGrid');
-      sGrid.innerHTML = productsCatalog.stars.map((p, idx) => `
-        <div class="prod-card" onclick="openCatalogItem('stars', ${idx})">
-          <div class="prod-name">${p.name}</div>
-          <div class="prod-sub">${p.formatted_price}</div>
-        </div>
-      `).join('') + `
-        <div class="prod-card" onclick="promptCustomStars()">
-          <div class="prod-name">Boshqa miqdor</div>
-          <div class="prod-sub">O'zingiz kiriting</div>
-        </div>
-      `;
+      if(data.stars_unit_cost_uzs) {
+        starsBaseRate = data.stars_unit_cost_uzs;
+        const rateEl = document.getElementById('lblFragmentStarRate');
+        if(rateEl) rateEl.innerText = `1 ⭐ ≈ ${starsBaseRate.toLocaleString('ru-RU')} so'm`;
+      }
+      if(data.stars_unit_sell_uzs) {
+        starsUnitSellPrice = data.stars_unit_sell_uzs;
+      }
 
-      // Premium
-      const pGrid = document.getElementById('premGrid');
-      pGrid.innerHTML = productsCatalog.premium.map((p, idx) => `
-        <div class="prod-card" onclick="openCatalogItem('premium', ${idx})">
-          <div class="prod-icon ic-prem">${p.icon}</div>
-          <div class="prod-name">${p.name}</div>
-          <div class="prod-sub">${Number(p.price_uzs).toLocaleString('ru-RU')} so'm</div>
-        </div>
-      `).join('');
+      // 1. Render Popular Picks on Home
+      const popGrid = document.getElementById('popularPicksGrid');
+      if(popGrid) {
+        const topPicks = [
+          { name: '50 ⭐ Stars', sub: 'Tezkor to\'ldirish', price: productsCatalog.stars[0]?.price_uzs || 10600, cat: 'stars', idx: 0, icon: '⭐' },
+          { name: '100 ⭐ Stars', sub: 'Eng ommabop', price: productsCatalog.stars[1]?.price_uzs || 21200, cat: 'stars', idx: 1, icon: '⭐' },
+          { name: '💎 Premium 3 oy', sub: 'Obuna', price: productsCatalog.premium[0]?.price_uzs || 143000, cat: 'premium', idx: 0, icon: '💎' },
+          { name: '🧸 Teddy Bear', sub: 'Apple 3D sovg\'a', price: productsCatalog.gifts[0]?.price_uzs || 64000, cat: 'gifts', idx: 0, icon: '🧸' }
+        ];
 
-      // Gifts
-      const gGrid = document.getElementById('giftsGrid');
-      gGrid.innerHTML = productsCatalog.gifts.map((g, idx) => `
-        <div class="prod-card" onclick="openCatalogItem('gifts', ${idx})">
-          <div class="prod-icon ic-gift">${g.icon}</div>
-          <div class="prod-name">${g.name}</div>
-          <div class="prod-sub">${Number(g.price_uzs).toLocaleString('ru-RU')} so'm</div>
-        </div>
-      `).join('');
+        popGrid.innerHTML = topPicks.map(p => `
+          <div class="prod-card" onclick="openCatalogItem('${p.cat}', ${p.idx})">
+            <div class="prod-icon ic-${p.cat}">${p.icon}</div>
+            <div class="prod-name">${p.name}</div>
+            <div class="prod-sub">${Number(p.price).toLocaleString('ru-RU')} so'm</div>
+          </div>
+        `).join('');
+      }
 
+      // 2. Render Stars Subgrid in #screen-stars
+      const sSubGrid = document.getElementById('starsSubGrid');
+      if(sSubGrid) {
+        sSubGrid.innerHTML = productsCatalog.stars.map((p, idx) => `
+          <div class="prod-card" onclick="openCatalogItem('stars', ${idx})">
+            <div class="prod-name">${p.name}</div>
+            <div class="prod-sub">${p.formatted_price}</div>
+          </div>
+        `).join('');
+      }
+
+      // 3. Render Premium Subgrid in #screen-premium
+      const pSubGrid = document.getElementById('premSubGrid');
+      if(pSubGrid) {
+        pSubGrid.innerHTML = productsCatalog.premium.map((p, idx) => `
+          <div class="prod-card" onclick="openCatalogItem('premium', ${idx})" style="padding:15px;">
+            <div class="prod-icon ic-prem" style="width:38px;height:38px;font-size:18px;">${p.icon}</div>
+            <div class="prod-name" style="font-size:13.5px;margin-top:6px;">${p.name}</div>
+            <div class="prod-sub" style="font-size:12.5px;font-weight:700;color:var(--green-1);margin-top:4px;">
+              ${Number(p.price_uzs).toLocaleString('ru-RU')} so'm
+            </div>
+          </div>
+        `).join('');
+      }
+
+      // 4. Render Gifts Subgrid in #screen-gifts
+      const gSubGrid = document.getElementById('giftsSubGrid');
+      if(gSubGrid) {
+        const halos = {
+          bear: 'rgba(245, 158, 11, 0.45)',
+          heart: 'rgba(236, 72, 153, 0.5)',
+          rocket: 'rgba(124, 58, 237, 0.5)',
+          star: 'rgba(234, 179, 8, 0.5)',
+          ring: 'rgba(59, 130, 246, 0.5)',
+          trophy: 'rgba(245, 158, 11, 0.5)',
+          yacht: 'rgba(14, 165, 233, 0.5)',
+          crown: 'rgba(239, 68, 68, 0.5)',
+          medal: 'rgba(168, 85, 247, 0.5)',
+          hat: 'rgba(99, 102, 241, 0.5)',
+          eagle: 'rgba(20, 184, 166, 0.5)',
+          lion: 'rgba(217, 119, 6, 0.5)'
+        };
+        const badges = {
+          bear: 'LIMITED',
+          heart: 'POPULAR',
+          rocket: 'EXCLUSIVE',
+          star: 'HOT',
+          ring: 'DIAMOND',
+          trophy: 'CHAMPION',
+          yacht: 'LUXURY',
+          crown: 'ROYAL',
+          medal: 'HONOR',
+          hat: 'MAGIC',
+          eagle: 'LEGEND',
+          lion: 'KING'
+        };
+
+        gSubGrid.innerHTML = productsCatalog.gifts.map((g, idx) => {
+          const halo = halos[g.id] || 'rgba(0, 230, 118, 0.35)';
+          const badge = badges[g.id] || 'APPLE 3D';
+          return `
+            <div class="apple-sticker-card" style="--halo-color: ${halo};" onclick="openCatalogItem('gifts', ${idx})">
+              <span class="apple-sticker-badge">${badge}</span>
+              <div class="apple-sticker-stage">
+                <span class="apple-sticker-emoji">${g.icon}</span>
+              </div>
+              <div class="apple-sticker-title">${g.name}</div>
+              <div class="apple-sticker-desc">Telegram & iOS Sovg'asi</div>
+              <button class="apple-sticker-price">${Number(g.price_uzs).toLocaleString('ru-RU')} so'm</button>
+            </div>
+          `;
+        }).join('');
+      }
+
+      updateCalcStarsPrice();
+
+      // Card / P2P payment info
+      const cInfo = data.card_info || (Array.isArray(data.payment_methods) ? data.payment_methods.find(m => m.type === 'card' || m.id === 'card') : null);
+      if(cInfo) {
+        if(cInfo.card_number) {
+          const numEl = document.getElementById('bcCardNumber');
+          if(numEl) numEl.innerText = cInfo.card_number;
+          const cleanNum = cInfo.card_number.replace(/\s+/g, '');
+          let brand = 'UZCARD';
+          if(cleanNum.startsWith('9860')) brand = 'HUMO';
+          else if(cleanNum.startsWith('4')) brand = 'VISA';
+          else if(cleanNum.startsWith('5')) brand = 'MASTERCARD';
+          const badgeEl = document.getElementById('bcBrandBadge');
+          if(badgeEl) badgeEl.innerText = brand;
+        }
+        if(cInfo.card_holder) {
+          const hEl = document.getElementById('bcCardHolder');
+          if(hEl) hEl.innerText = cInfo.card_holder;
+        }
+        if(cInfo.bank_name) {
+          const bEl = document.getElementById('bcBankName');
+          if(bEl) bEl.innerText = cInfo.bank_name;
+        }
+      }
+      renderAppleEmojis(document.body);
     } catch(e){ console.error("loadProducts error:", e); }
+  }
+
+  function updateCalcStarsPrice() {
+    const inp = document.getElementById('calcStarsInput');
+    const out = document.getElementById('calcStarsTotalPrice');
+    if(!inp || !out) return;
+    const qty = parseInt(inp.value) || 0;
+    const total = Math.round(qty * starsUnitSellPrice);
+    out.innerText = `${total.toLocaleString('ru-RU')} so'm`;
+  }
+
+  const calcInput = document.getElementById('calcStarsInput');
+  if(calcInput) {
+    calcInput.addEventListener('input', updateCalcStarsPrice);
+  }
+
+  const btnBuyCalcStars = document.getElementById('btnBuyCalcStars');
+  if(btnBuyCalcStars) {
+    btnBuyCalcStars.addEventListener('click', () => {
+      const qty = parseInt(document.getElementById('calcStarsInput').value) || 0;
+      if(qty < 15) {
+        alert("Minimal miqdor: 15 Stars");
+        return;
+      }
+      const total = Math.round(qty * starsUnitSellPrice);
+      openBuyModal('stars', `${qty} ⭐ Stars`, total, qty);
+    });
   }
 
   function openCatalogItem(category, idx) {
@@ -668,22 +1802,6 @@
     }
   }
 
-  async function promptCustomStars() {
-    const amtStr = prompt("Necha Stars sotib olmoqchisiz? (15 dan 50 000 gacha):", "90");
-    if(!amtStr) return;
-    const amt = parseInt(amtStr);
-    if(isNaN(amt) || amt < 15) {
-      alert("Minimal miqdor: 15 Stars");
-      return;
-    }
-    const res = await fetch(`/api/products?stars_amount=${amt}`);
-    if(res.ok) {
-      const data = await res.json();
-      const calc = data.custom_stars_calc;
-      openBuyModal("stars", `${amt} ⭐ Stars`, calc.total_price_uzs, amt);
-    }
-  }
-
   function openBuyModal(type, title, price, amount) {
     currentProductToBuy = { type, title, price, amount, originalPrice: price };
     document.getElementById('modalProductTitle').innerText = title;
@@ -692,6 +1810,7 @@
     const msgEl = document.getElementById('modalPromoMsg');
     msgEl.style.display = 'none';
     msgEl.innerText = '';
+    setRecipientMode('self');
     document.getElementById('purchaseModal').style.display = 'flex';
   }
 
@@ -760,7 +1879,39 @@
 
   document.getElementById('confirmBuyBtn').addEventListener('click', async ()=>{
     if(!currentProductToBuy) return;
-    const recipient = document.getElementById('recipientInput').value.trim();
+    
+    let recipient = null;
+    if(recipientMode === 'friend') {
+      recipient = document.getElementById('recipientInput').value.trim();
+      if(!recipient) {
+        alert("Iltimos, do'stingizning Telegram username (@username) yoki ID raqamini kiriting!");
+        return;
+      }
+    } else {
+      recipient = currentUser?.username ? ('@' + currentUser.username) : (currentUser ? String(currentUser.id) : null);
+    }
+
+    // Explicit confirmation before purchase (Req 15)
+    const formattedPrice = Number(currentProductToBuy.price).toLocaleString('ru-RU') + " UZS";
+    const confirmPrompt = `Xaridni tasdiqlaysizmi?\n\nMahsulot: ${currentProductToBuy.title}\nQabul qiluvchi: ${recipient}\nTo'lov summasi: ${formattedPrice}\n\nDavom ettirilsinmi?`;
+    if(!confirm(confirmPrompt)) return;
+
+    // Optional save recipient (Req 15)
+    const chkSave = document.getElementById('chkSaveRecipient');
+    if(chkSave && chkSave.checked && recipientMode === 'friend' && currentUser) {
+      try {
+        await fetch('/api/v1/recipients', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            user_id: currentUser.id,
+            recipient_username: recipient.replace('@', '')
+          })
+        });
+      } catch(e) {
+        console.warn("Save recipient failed silently:", e);
+      }
+    }
 
     try {
       const res = await fetch('/api/orders/create', {
@@ -818,6 +1969,10 @@
       document.querySelectorAll('.method').forEach(x=>x.classList.remove('active'));
       m.classList.add('active');
       selectedTopupMethod = m.dataset.method;
+      const cardBox = document.getElementById('p2pCardContainer');
+      if(cardBox) {
+        cardBox.style.display = (selectedTopupMethod === 'card') ? 'block' : 'none';
+      }
     });
   });
 
@@ -927,27 +2082,141 @@
             <div class="order-icon">${icon}</div>
             <div class="order-info">
               <div class="order-title">${o.item_title}</div>
-              <div class="order-date">${o.created_at} · ${o.order_code}</div>
+              <div class="order-date">${o.created_at} · <b style="color:var(--green-1);font-family:monospace;">${o.order_code}</b></div>
             </div>
             <div class="order-right">
               <div class="order-amt">${o.formatted_price}</div>
               <div class="status ${stClass}">${stText}</div>
             </div>
+            <div class="order-actions">
+              <button class="order-btn-sm" type="button" onclick="openReceiptModal('${o.order_code}')">🧾 Chek</button>
+              <button class="order-btn-sm buy-again" type="button" onclick="buyAgain('${o.order_code}')">🔁 Qayta olish</button>
+            </div>
           </div>
         `;
       }).join('');
+      renderAppleEmojis(cont);
     } catch(e){ console.error(e); }
+  }
+
+  // ================= RECEIPT & BUY AGAIN (Req 14 & Req 16) ================= //
+  let activeReceiptData = null;
+
+  async function openReceiptModal(orderCode) {
+    const modal = document.getElementById('receiptModal');
+    const content = document.getElementById('receiptContent');
+    const numEl = document.getElementById('rcpNumber');
+    if(!modal) return;
+    modal.style.display = 'flex';
+    if(numEl) numEl.innerText = orderCode;
+    if(content) content.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim);">Yuklanmoqda...</div>';
+
+    try {
+      const res = await fetch(`/api/v1/orders/${encodeURIComponent(orderCode)}/receipt`, { headers: authHeaders() });
+      if(!res.ok) throw new Error("Receipt fetch error: " + res.status);
+      const data = await res.json();
+      const r = data.receipt;
+      activeReceiptData = r;
+
+      const paidDate = r.paid_at ? new Date(r.paid_at).toLocaleString('uz-UZ') : (r.date ? new Date(r.date).toLocaleString('uz-UZ') : 'Noma\'lum');
+      const currency = r.financials?.currency || 'UZS';
+      const totalFormatted = (r.financials?.total_price_uzs || 0).toLocaleString('ru-RU') + ' ' + currency;
+      const unitPriceFormatted = (r.financials?.unit_price_uzs || 0).toLocaleString('ru-RU') + ' ' + currency;
+
+      content.innerHTML = `
+        <div style="background:var(--surface-2);border-radius:12px;padding:12px 14px;margin-bottom:12px;border:1px solid var(--line);">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="color:var(--text-dim);">To'lov sanasi:</span>
+            <b>${paidDate}</b>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="color:var(--text-dim);">Mahsulot:</span>
+            <b style="color:var(--green-1);">${r.product?.item_title || 'Raqamli mahsulot'}</b>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="color:var(--text-dim);">Miqdori:</span>
+            <b>${r.product?.quantity || 1} dona</b>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="color:var(--text-dim);">Qabul qiluvchi:</span>
+            <b>@${r.delivery?.recipient_username || 'O\'zim'}</b>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="color:var(--text-dim);">Dona narxi:</span>
+            <b>${unitPriceFormatted}</b>
+          </div>
+          <div style="display:flex;justify-content:space-between;border-top:1px dashed var(--line);padding-top:8px;margin-top:4px;">
+            <span style="font-weight:700;">Jami summa:</span>
+            <b style="font-size:15px;color:var(--green-1);font-family:'Sora',sans-serif;">${totalFormatted}</b>
+          </div>
+        </div>
+
+        <div style="font-size:11.5px;color:var(--text-dim);background:var(--surface-2);padding:10px 12px;border-radius:10px;border:1px solid var(--line);">
+          <div>To'lov usuli: <b>${(r.payment?.provider || r.payment?.method || 'balans').toUpperCase()}</b></div>
+          <div>Holati: <b style="color:var(--green-1);">${(r.payment?.status || 'completed').toUpperCase()}</b></div>
+          ${r.delivery?.tx_hash ? `<div style="margin-top:4px;word-break:break-all;">Fragment TX: <code style="font-size:10px;color:var(--mint);">${r.delivery.tx_hash}</code></div>` : ''}
+        </div>
+      `;
+      renderAppleEmojis(content);
+    } catch(e) {
+      console.error(e);
+      if(content) content.innerHTML = '<div style="color:var(--danger);text-align:center;padding:20px;">Chekni yuklab bo\'lmadi.</div>';
+    }
+  }
+
+  function closeReceiptModal() {
+    const modal = document.getElementById('receiptModal');
+    if(modal) modal.style.display = 'none';
+  }
+
+  function copyReceiptText() {
+    if(!activeReceiptData) return;
+    const r = activeReceiptData;
+    const text = `🧾 GiftHub Rasmiy Cheki\nChek: #${r.receipt_number}\nMahsulot: ${r.product?.item_title}\nQabul qiluvchi: @${r.delivery?.recipient_username || 'O\'zim'}\nSumma: ${(r.financials?.total_price_uzs || 0).toLocaleString('ru-RU')} ${r.financials?.currency || 'UZS'}\nHolati: ${r.payment?.status}\nSana: ${r.paid_at || r.date}`;
+    navigator.clipboard.writeText(text).then(() => {
+      showToast("Chek ma'lumotlari nusxalandi!");
+    }).catch(() => {
+      fallbackCopyCard(text);
+    });
+  }
+
+  async function buyAgain(orderCode) {
+    try {
+      showToast("Narx hisoblanmoqda...");
+      const res = await fetch(`/api/v1/orders/${encodeURIComponent(orderCode)}/buy-again-details`, { headers: authHeaders() });
+      if(!res.ok) throw new Error("Buy again details error: " + res.status);
+      const data = await res.json();
+
+      openBuyModal(data.product_type, data.item_title, data.current_total_price_uzs, data.amount);
+
+      if(data.recipient_username) {
+        setRecipientMode('friend');
+        const input = document.getElementById('recipientInput');
+        if(input) input.value = '@' + data.recipient_username.replace('@', '');
+      }
+
+      showToast(`🔁 ${data.item_title} uchun joriy narx yuklandi!`);
+    } catch(e) {
+      console.error("buyAgain error:", e);
+      alert("Qayta xarid ma'lumotlarini yuklashda xatolik yuz berdi!");
+    }
   }
 
   // Navigation
   function switchTab(tabId) {
+    if(isGateBlocked) return;
     document.querySelectorAll('.nav-item').forEach(b => {
       b.classList.toggle('active', b.dataset.tab === tabId);
     });
     document.querySelectorAll('.screen').forEach(s => {
       s.classList.remove('active');
     });
-    document.getElementById(tabId).classList.add('active');
+    const target = document.getElementById(tabId);
+    if(target) {
+      target.classList.add('active');
+      target.scrollTop = 0;
+    }
+    window.scrollTo({ top: 0, behavior: 'instant' });
     if(tabId === 'history') loadHistory();
   }
 
@@ -955,7 +2224,27 @@
     btn.addEventListener('click', ()=> switchTab(btn.dataset.tab));
   });
 
-  document.getElementById('checkGateBtn').addEventListener('click', checkGate);
+  const checkGateBtnEl = document.getElementById('checkGateBtn');
+  if(checkGateBtnEl) {
+    checkGateBtnEl.addEventListener('click', async () => {
+      const origText = checkGateBtnEl.innerText;
+      checkGateBtnEl.innerText = "Tekshirilmoqda...";
+      checkGateBtnEl.disabled = true;
+      try {
+        await checkGate();
+        if(isGateBlocked) {
+          showToast("❌ Barcha kanallarga a'zo bo'lmadingiz!");
+        } else {
+          showToast("✅ A'zolik muvaffaqiyatli tasdiqlandi!");
+        }
+      } catch(err) {
+        showToast("Tekshirishda xatolik yuz berdi");
+      } finally {
+        checkGateBtnEl.innerText = origText;
+        checkGateBtnEl.disabled = false;
+      }
+    });
+  }
 
   function copyRefLink() {
     const text = document.getElementById('refLinkText').innerText;
@@ -968,12 +2257,125 @@
     if(el) el.scrollIntoView({ behavior: 'smooth' });
   }
 
+  // Theme toggle
+  function initUserTheme() {
+    const saved = localStorage.getItem('gifthub_user_theme') || 'dark';
+    setUserTheme(saved);
+  }
+
+  function toggleUserTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    const next = (current === 'dark') ? 'light' : 'dark';
+    setUserTheme(next);
+  }
+
+  function setUserTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    document.body.setAttribute('data-theme', t);
+    localStorage.setItem('gifthub_user_theme', t);
+    const ic = document.getElementById('uThemeIcon');
+    if(ic) ic.innerText = (t === 'light') ? '☀️' : '🌙';
+  }
+
+  function copyCardNumber() {
+    const numEl = document.getElementById('bcCardNumber');
+    const text = numEl ? numEl.innerText.replace(/\s+/g, '') : '';
+    if(navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast("✓ Karta raqami nusxalandi!");
+      }).catch(() => {
+        prompt("Karta raqami:", text);
+      });
+    } else {
+      prompt("Karta raqami:", text);
+    }
+  }
+
+  // ================= APPLE EMOJI RENDERING ENGINE ================= //
+  const APPLE_FE0F_SET = new Set([
+    "00a9","00ae","203c","2049","2122","2139","2194","2195","2196","2197","2198","2199","21a9","21aa","231a","231b",
+    "2328","23cf","23ed","23ee","23ef","23f1","23f2","23f8","23f9","23fa","24c2","25aa","25ab","25b6","25c0","25fb",
+    "25fc","25fd","25fe","2600","2601","2602","2603","2604","260e","2611","2614","2615","2618","2620","2622","2623",
+    "2626","262a","262e","262f","2638","2639","263a","2640","2642","2648","2649","264a","264b","264c","264d","264e",
+    "264f","2650","2651","2652","2653","265f","2660","2663","2665","2666","2668","267b","267e","2692","2693","2694",
+    "2695","2696","2697","2699","269b","269c","26a0","26a1","26a7","26b0","26b1","26c4","26c5","26c8","26ce","26cf",
+    "26d1","26d3","26e9","26ea","26f0","26f1","26f2","26f3","26f4","26f5","26f7","26f8","26f9","26fa","26fd","2702",
+    "2708","2709","270c","270d","270f","2712","2714","2716","271d","2721","2733","2734","2744","2747","2757","2763",
+    "2764","27a1","2934","2935","2b05","2b06","2b07","2b1b","2b1c","2b55","3030","303d","3297","3299",
+    "1f004","1f0cf","1f170","1f171","1f17e","1f17f","1f202","1f237","1f321","1f324","1f325","1f326","1f327","1f328",
+    "1f329","1f32a","1f32b","1f32c","1f336","1f37d","1f396","1f397","1f399","1f39a","1f39b","1f39e","1f39f","1f3cb",
+    "1f3cc","1f3cd","1f3ce","1f3d4","1f3d5","1f3d6","1f3d7","1f3d8","1f3d9","1f3da","1f3db","1f3dc","1f3dd","1f3de",
+    "1f3df","1f3e4","1f3ed","1f3f3","1f3f5","1f3f7","1f43f","1f441","1f46f","1f4cd","1f573","1f574","1f575","1f576",
+    "1f577","1f578","1f579","1f587","1f58a","1f58b","1f58c","1f58d","1f590","1f5a5","1f5a8","1f5b1","1f5b2","1f5bc",
+    "1f5c2","1f5c3","1f5c4","1f5d1","1f5d2","1f5d3","1f5dc","1f5dd","1f5de","1f5e1","1f5e3","1f5e8","1f5ef","1f5f3",
+    "1f5fa","1f6cb","1f6cd","1f6ce","1f6cf","1f6d0","1f6e0","1f6e1","1f6e2","1f6e3","1f6e4","1f6e5","1f6e9","1f6f0",
+    "1f6f3"
+  ]);
+
+  function getAppleEmojiUrl(icon) {
+    const code = String(icon).toLowerCase();
+    const file = APPLE_FE0F_SET.has(code) ? `${code}-fe0f.png` : `${code}.png`;
+    return `https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.0.1/img/apple/64/${file}`;
+  }
+
+  let isParsingEmojis = false;
+  function renderAppleEmojis(node) {
+    if(!window.twemoji || isParsingEmojis) return;
+    isParsingEmojis = true;
+    try {
+      window.twemoji.parse(node || document.body, {
+        className: 'apple-emoji emoji',
+        callback: (icon) => getAppleEmojiUrl(icon),
+        attributes: () => ({
+          onerror: "if(!this.dataset.retry){this.dataset.retry='1';this.src=this.src.includes('-fe0f')?this.src.replace('-fe0f',''):this.src.replace('.png','-fe0f.png');}"
+        })
+      });
+    } catch(e) { console.debug("twemoji parse:", e); }
+    finally {
+      requestAnimationFrame(() => {
+        setTimeout(() => { isParsingEmojis = false; }, 80);
+      });
+    }
+  }
+
+  let emojiDebounceTimer = null;
+  const emojiObserver = new MutationObserver((mutations) => {
+    if(isParsingEmojis) return;
+    let shouldUpdate = false;
+    for(const m of mutations) {
+      if(m.type === 'childList') {
+        for(const n of m.addedNodes) {
+          if(n.nodeType === 1) {
+            const tag = n.tagName;
+            if(tag === 'IMG' && (n.classList.contains('apple-emoji') || n.classList.contains('emoji'))) continue;
+            if(['INPUT', 'TEXTAREA', 'SELECT', 'OPTION', 'SCRIPT', 'STYLE'].includes(tag)) continue;
+            if(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u.test(n.textContent || '')) {
+              shouldUpdate = true;
+              break;
+            }
+          }
+        }
+      }
+      if(shouldUpdate) break;
+    }
+    if(!shouldUpdate) return;
+    if(emojiDebounceTimer) clearTimeout(emojiDebounceTimer);
+    emojiDebounceTimer = setTimeout(() => {
+      renderAppleEmojis(document.body);
+    }, 250);
+  });
+  emojiObserver.observe(document.body, { childList: true, subtree: true });
+
   // Init
   (async function init() {
+    initUserTheme();
+    renderAppleEmojis(document.body);
+    try { await fetchBotInfo(); } catch(e){}
     try { await loadUser(); } catch(e) { console.warn("User load error:", e); }
     try { await checkGate(); } catch(e) { console.warn("Gate check error:", e); }
     try { await loadProducts(); } catch(e) { console.warn("Products load error:", e); }
     try { await loadHistory(); } catch(e) { console.warn("History load error:", e); }
+    renderAppleEmojis(document.body);
   })();
 </script>
 </body>

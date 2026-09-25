@@ -1,39 +1,41 @@
-from environs import Env
 import os
 
-env = Env()
-env.read_env()
+from app.core.config import settings
 
-BOT_TOKEN = env.str("BOT_TOKEN", default="8998979405:AAFRLe-OXIDgsG0byEz0GKumfKYh8xdH7GA")
-ADMINS = env.list("ADMINS", default=["7195359577"])
-IP = env.str("IP", default="127.0.0.1")
-PORT = env.int("PORT", default=8000)
+BASE_DIR = settings.BASE_DIR
+ENV_PATH = os.path.join(BASE_DIR, ".env")
 
-WEB_APP_URL = env.str("WEB_APP_URL", default="http://localhost:8000/app")
-ADMIN_APP_URL = env.str("ADMIN_APP_URL", default="http://localhost:8000/admin")
-WEB_HOST = env.str("WEB_HOST", default="0.0.0.0")
-WEB_PORT = env.int("WEB_PORT", default=8000)
+BOT_TOKEN = settings.BOT_TOKEN
+ADMINS = [str(x) for x in settings.ADMINS]
+IP = settings.IP
+PORT = settings.PORT
+TELEGRAM_API_SERVER = settings.TELEGRAM_API_SERVER
+TELEGRAM_PROXY = settings.TELEGRAM_PROXY
 
-# PostgreSQL Database sozlamalari
-DB_USER = env.str("DB_USER", default="postgres")
-DB_PASS = env.str("DB_PASS", default="1234")
-DB_HOST = env.str("DB_HOST", default="localhost")
-DB_PORT = env.int("DB_PORT", default=5432)
-DB_NAME = env.str("DB_NAME", default="stellar_db")
+WEB_APP_URL = settings.WEB_APP_URL
+ADMIN_APP_URL = settings.ADMIN_APP_URL
+WEB_HOST = settings.WEB_HOST
+WEB_PORT = settings.WEB_PORT
 
-default_pg_url = f"postgresql+asyncpg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-DB_URL = env.str("DB_URL", default=default_pg_url)
+DB_URL = settings.DB_URL
+REDIS_URL = settings.REDIS_URL
 
-# Click Merchant sozlamalari
-CLICK_SERVICE_ID = env.str("CLICK_SERVICE_ID", default="12345")
-CLICK_MERCHANT_ID = env.str("CLICK_MERCHANT_ID", default="12345")
-CLICK_SECRET_KEY = env.str("CLICK_SECRET_KEY", default="click_secret_key")
+SUPPORT_URL = settings.SUPPORT_URL
+NEWS_CHANNEL_URL = settings.NEWS_CHANNEL_URL
 
-# Payme Merchant sozlamalari
-PAYME_MERCHANT_ID = env.str("PAYME_MERCHANT_ID", default="600000000000000000000000")
-PAYME_SECRET_KEY = env.str("PAYME_SECRET_KEY", default="payme_secret_key")
+CLICK_SERVICE_ID = settings.CLICK_SERVICE_ID
+CLICK_MERCHANT_ID = settings.CLICK_MERCHANT_ID
+CLICK_SECRET_KEY = settings.CLICK_SECRET_KEY
 
-# AutoPayCard sozlamalari
-AUTOPAYCARD_API_KEY = env.str("AUTOPAYCARD_API_KEY", default="")
+PAYME_MERCHANT_ID = settings.PAYME_MERCHANT_ID
+PAYME_SECRET_KEY = settings.PAYME_SECRET_KEY
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+AUTOPAYCARD_API_KEY = settings.AUTOPAYCARD_API_KEY
+
+
+def get_web_app_url() -> str:
+    return settings.WEB_APP_URL
+
+
+def get_admin_app_url() -> str:
+    return settings.ADMIN_APP_URL

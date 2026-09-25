@@ -11,10 +11,7 @@ async def notify_admins(bot: Bot) -> None:
     """
     for admin_id in ADMINS:
         try:
-            await bot.send_message(
-                                    chat_id=admin_id,
-                                    text=f"{hbold('Assalomu Alaykum')}"
-                                )
+            await bot.send_message(chat_id=admin_id, text=f"{hbold('Assalomu Alaykum')}")
         except Exception as e:
             # Xatolik bo'lsa, uni loglash
             print(f"Xato: {e}")

@@ -1,69 +1,15 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
-from data import config
+from aiogram.types import InlineKeyboardMarkup
 
-def get_main_menu_keyboard(is_admin: bool = False) -> InlineKeyboardMarkup:
-    buttons = []
+from app.keyboards.shop_keyboards import get_shop_main_menu
 
-    # Telegram WebAppInfo faqat HTTPS havolalarini qabul qiladi.
-    # Agar havola https bo'lsa - Mini App sifatida Telegram ichida ochiladi,
-    # Agar http (localhost) bo'lsa - xatolik bermasligi uchun oddiy havola sifatida beriladi.
-    if config.WEB_APP_URL.startswith("https://"):
-        buttons.append([
-            InlineKeyboardButton(
-                text="⭐ Stellar Web App",
-                web_app=WebAppInfo(url=config.WEB_APP_URL)
-            )
-        ])
-    else:
-        buttons.append([
-            InlineKeyboardButton(
-                text="⭐ Stellar Web App (Brauzerda)",
-                url=config.WEB_APP_URL
-            )
-        ])
 
-    if is_admin:
-        if config.ADMIN_APP_URL.startswith("https://"):
-            buttons.append([
-                InlineKeyboardButton(
-                    text="⚙ Admin Panel",
-                    web_app=WebAppInfo(url=config.ADMIN_APP_URL)
-                )
-            ])
-        else:
-            buttons.append([
-                InlineKeyboardButton(
-                    text="⚙ Admin Panel (Brauzerda)",
-                    url=config.ADMIN_APP_URL
-                )
-            ])
+def get_main_menu_keyboard(is_admin: bool = False, services_count: int = 0) -> InlineKeyboardMarkup:
+    """To'liq native Telegram Inline menyu tugmalari"""
+    return get_shop_main_menu(is_admin=is_admin, services_count=services_count)
 
-    buttons.append([
-        InlineKeyboardButton(
-            text="📣 Yangiliklar",
-            url="https://t.me/stellar_news"
-        ),
-        InlineKeyboardButton(
-            text="🛟 Yordam",
-            url="https://t.me/stellar_support"
-        )
-    ])
 
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+def get_admin_keyboard() -> InlineKeyboardMarkup:
+    """Faqat /admin komandasi orqali yuboriladigan inline boshqaruv klaviaturasi"""
+    from app.keyboards.admin_keyboards import get_admin_main_keyboard
 
-def get_gate_keyboard(channels: list) -> InlineKeyboardMarkup:
-    buttons = []
-    for ch in channels:
-        buttons.append([
-            InlineKeyboardButton(
-                text=f"➕ {ch.get('title', ch.get('username_or_link'))}",
-                url=ch.get("link", "https://t.me")
-            )
-        ])
-    buttons.append([
-        InlineKeyboardButton(
-            text="✅ A'zolikni tekshirish",
-            callback_data="check_subscription"
-        )
-    ])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return get_admin_main_keyboard()

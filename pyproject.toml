@@ -1,0 +1,33 @@
+[project]
+name = "gifthub"
+version = "2.0.0"
+description = "GiftHub — Production Telegram Digital Commerce Platform"
+authors = [{ name = "GiftHub Team" }]
+requires-python = ">=3.11"
+readme = "README.md"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",     # line length
+    "B008",     # FastAPI Depends in argument defaults
+    "ASYNC230", # blocking file reads for template HTMLs
+    "RUF013",   # implicit optional
+    "F401",     # unused imports (re-exports across package interfaces)
+    "F841",     # unused local variables
+    "E712",     # SQLAlchemy equality comparisons to True/False
+    "E402",     # module level import not at top of file
+    "W293",     # blank line contains whitespace
+    "W292",     # no newline at end of file
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+pythonpath = ["."]
+addopts = "-v --strict-markers"

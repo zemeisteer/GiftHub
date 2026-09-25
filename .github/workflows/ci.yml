@@ -1,0 +1,75 @@
+name: GiftHub CI
+
+on:
+  push:
+    branches: [ main, master, dev ]
+  pull_request:
+    branches: [ main, master, dev ]
+
+jobs:
+  test:
+    name: Lint, Test & Validate
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: gifthub_test
+          POSTGRES_USER: gifthub
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff pytest pytest-asyncio
+
+      - name: Run Ruff Lint and Format Checks
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Run Alembic Migration and Schema Verification
+        env:
+          DATABASE_URL: postgresql+asyncpg://gifthub:password@localhost:5432/gifthub_test
+        run: |
+          alembic upgrade head
+          alembic current
+          alembic heads
+
+      - name: Run Complete Automated Test Suite (PostgreSQL & SQLite)
+        env:
+          DATABASE_URL: postgresql+asyncpg://gifthub:password@localhost:5432/gifthub_test
+          TEST_DATABASE_URL: postgresql+asyncpg://gifthub:password@localhost:5432/gifthub_test
+          REDIS_URL: redis://localhost:6379/0
+          ENVIRONMENT: test
+        run: |
+          pytest -v

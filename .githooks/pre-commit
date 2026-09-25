@@ -1,0 +1,37 @@
+#!/bin/sh
+# Git Pre-commit Hook - Maxfiy ma'lumotlar va tokenlar sizib chiqishini oldini olish
+
+echo "🔍 Maxfiy tokenlar va xavfsizlik tekshirilmoqda..."
+
+# 1. .env fayllari staged qilinganligini tekshirish
+STAGED_ENV=$(git diff --cached --name-only | grep -E "^\.env" | grep -v "^\.env\.example$")
+if [ -n "$STAGED_ENV" ]; then
+    echo "❌ XATOLIK: .env faylini gitga commit qilish taqiqlangan!"
+    echo "Topilgan fayl: $STAGED_ENV"
+    echo "Iltimos, ushbu faylni 'git reset HEAD <fayl>' orqali staged holatidan chiqaring."
+    exit 1
+fi
+
+# 2. Telegram Bot Token patterni: [0-9]{8,11}:[a-zA-Z0-9_-]{35}
+# Staged o'zgarishlar orasidan tekshiramiz (.githooks papkasidan tashqari)
+TOKEN_DIFF=$(git diff --cached -U0 -- ":!.githooks" | grep -E "^\+[^\+]" | grep -E "[0-9]{8,11}:[a-zA-Z0-9_-]{35}")
+
+if [ -n "$TOKEN_DIFF" ]; then
+    echo "❌ XATOLIK: Siz commit qilmoqchi bo'lgan fayllarda Telegram Bot Token aniqlandi!"
+    echo "--------------------------------------------------------"
+    echo "$TOKEN_DIFF"
+    echo "--------------------------------------------------------"
+    echo "Xavfsizlik sababli commit bekor qilindi."
+    echo "Tokenlarni kod ichiga emas, faqat .env fayliga yozing!"
+    exit 1
+fi
+
+# 3. Private Key yoki boshqa maxfiy kalitlar tekshiruvi (.githooks papkasidan tashqari)
+PRIVATE_KEY_DIFF=$(git diff --cached -U0 -- ":!.githooks" | grep -E "^\+[^\+]" | grep -E "(BEGIN RSA PRIVATE KEY|BEGIN PRIVATE KEY|BEGIN OPENSSH PRIVATE KEY)")
+if [ -n "$PRIVATE_KEY_DIFF" ]; then
+    echo "❌ XATOLIK: Private Key fayli commit qilinishi aniqlandi!"
+    exit 1
+fi
+
+echo "✅ Xavfsizlik tekshiruvidan muvaffaqiyatli o'tdi."
+exit 0
