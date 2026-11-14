@@ -69,7 +69,9 @@ dp = Dispatcher(storage=storage)
 
 web_server: uvicorn.Server | None = None
 
-WEB_SHUTDOWN_TIMEOUT = 15  # uvicorn'ga lifespan shutdown uchun beriladigan vaqt (soniya)
+# Web server (lifespan shutdown) va worker (joriy outbox/to'lov siklini tugatish) uchun
+# beriladigan umumiy vaqt (soniya). docker-compose'dagi stop_grace_period bundan katta bo'lishi kerak.
+GRACEFUL_SHUTDOWN_TIMEOUT = 25
 
 
 def request_web_server_exit():
@@ -209,12 +211,12 @@ async def main(mode: str = "combined", shutdown_event: asyncio.Event = None):
             signal.signal(sig, lambda s, f: loop.call_soon_threadsafe(_sig_handler))
 
     tasks: list[asyncio.Task] = []
-    web_task: asyncio.Task | None = None
+    # Cancel qilinmasdan, o'zi to'xtashi kutiladigan vazifalar (web va worker)
+    graceful_tasks: list[asyncio.Task] = []
     try:
         if mode == "api":
             logging.info("Starting standalone API server mode...")
-            web_task = asyncio.create_task(start_web_server(), name="web")
-            tasks.append(web_task)
+            graceful_tasks.append(asyncio.create_task(start_web_server(), name="web"))
         elif mode == "bot":
             logging.info("Starting standalone Bot mode...")
             if settings.TELEGRAM_MODE == "webhook":
@@ -225,16 +227,17 @@ async def main(mode: str = "combined", shutdown_event: asyncio.Event = None):
             tasks.append(asyncio.create_task(start_bot(shutdown_event=shutdown_event), name="bot"))
         elif mode == "worker":
             logging.info("Starting standalone Worker mode...")
-            tasks.append(asyncio.create_task(run_worker_loop(bot=bot), name="worker"))
+            graceful_tasks.append(asyncio.create_task(run_worker_loop(bot=bot), name="worker"))
         else:  # combined (Default for development)
             logging.info("Starting combined runtime mode (API + Bot + Worker)...")
-            web_task = asyncio.create_task(start_web_server(), name="web")
-            tasks.append(web_task)
+            graceful_tasks.append(asyncio.create_task(start_web_server(), name="web"))
             tasks.append(asyncio.create_task(start_bot(shutdown_event=shutdown_event), name="bot"))
-            tasks.append(asyncio.create_task(run_worker_loop(bot=bot), name="worker"))
+            graceful_tasks.append(asyncio.create_task(run_worker_loop(bot=bot), name="worker"))
 
         shutdown_waiter = asyncio.create_task(shutdown_event.wait(), name="shutdown-waiter")
-        done, pending = await asyncio.wait(tasks + [shutdown_waiter], return_when=asyncio.FIRST_COMPLETED)
+        done, pending = await asyncio.wait(
+            tasks + graceful_tasks + [shutdown_waiter], return_when=asyncio.FIRST_COMPLETED
+        )
 
         # Qaysi komponent kutilmaganda to'xtaganini loglash (aks holda xato yutilib ketadi)
         for t in done:
@@ -247,16 +250,24 @@ async def main(mode: str = "combined", shutdown_event: asyncio.Event = None):
                 logging.warning(f"⚠️ '{t.get_name()}' komponenti tugadi, shutdown boshlanmoqda.")
         shutdown_event.set()
 
-        # Uvicorn task'ini cancel qilish lifespan shutdown'ni o'tkazib yuboradi — avval graceful to'xtatamiz
+        # Web server va worker'ni cancel qilmasdan to'xtashini so'raymiz: uvicorn lifespan shutdown'ni
+        # bajaradi, worker esa joriy siklini (outbox, to'lov, fulfillment) oxirigacha yetkazib chiqadi.
         request_web_server_exit()
-        if web_task is not None and web_task in pending:
-            try:
-                await asyncio.wait_for(asyncio.shield(web_task), timeout=WEB_SHUTDOWN_TIMEOUT)
-            except Exception:
-                logging.warning("Web server belgilangan vaqtda to'xtamadi, majburan bekor qilinmoqda.")
-            pending.discard(web_task)
-            if not web_task.done():
-                pending.add(web_task)
+        stop_worker()
+        still_running = [t for t in graceful_tasks if t in pending]
+        if still_running:
+            names = ", ".join(t.get_name() for t in still_running)
+            logging.info(f"⏳ Graceful to'xtash kutilmoqda ({names}, maks {GRACEFUL_SHUTDOWN_TIMEOUT}s)...")
+            finished, _ = await asyncio.wait(still_running, timeout=GRACEFUL_SHUTDOWN_TIMEOUT)
+            for t in still_running:
+                if t in finished:
+                    pending.discard(t)
+                    if not t.cancelled() and t.exception() is not None:
+                        logging.error(f"'{t.get_name()}' to'xtash paytida xato berdi", exc_info=t.exception())
+                else:
+                    logging.warning(
+                        f"'{t.get_name()}' {GRACEFUL_SHUTDOWN_TIMEOUT}s ichida to'xtamadi, majburan bekor qilinmoqda."
+                    )
 
         for t in pending:
             t.cancel()

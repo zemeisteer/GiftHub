@@ -37,6 +37,8 @@ services:
     build: .
     container_name: gifthub-api
     restart: unless-stopped
+    # main.py GRACEFUL_SHUTDOWN_TIMEOUT (25s) dan katta bo'lishi kerak, aks holda SIGKILL keladi
+    stop_grace_period: 40s
     ports:
       - "8000:8000"
     env_file:
@@ -68,6 +70,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # Bot rejimida HTTP server yo'q: Dockerfile'dagi /health tekshiruvi doim yiqilardi.
+    # Jarayon to'xtasa, restart: unless-stopped uni qayta ishga tushiradi.
+    healthcheck:
+      disable: true
+    stop_grace_period: 20s
     command: python main.py --mode=bot
 
   worker:
@@ -84,6 +91,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # Worker HTTP server ochmaydi — uning Redis'dagi heartbeat'i tekshiriladi
+    healthcheck:
+      test: ["CMD", "python", "scripts/healthcheck.py", "worker"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    # Worker joriy siklini (outbox/to'lov) tugatib chiqishi uchun vaqt
+    stop_grace_period: 40s
     command: python main.py --mode=worker
 
 volumes:
