@@ -3,7 +3,6 @@ import asyncio
 import logging
 import signal
 import socket
-import sys
 
 import uvicorn
 from aiogram import Bot, Dispatcher
@@ -12,7 +11,6 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import TelegramAPIServer
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramUnauthorizedError
-from aiogram.fsm.storage.memory import MemoryStorage
 from aiohttp.resolver import DefaultResolver
 
 from app import handlers
@@ -69,14 +67,25 @@ bot = Bot(token=config.BOT_TOKEN, session=bot_session, default=DefaultBotPropert
 storage = get_fsm_storage()
 dp = Dispatcher(storage=storage)
 
+web_server: uvicorn.Server | None = None
+
+WEB_SHUTDOWN_TIMEOUT = 15  # uvicorn'ga lifespan shutdown uchun beriladigan vaqt (soniya)
+
+
+def request_web_server_exit():
+    """Uvicorn serverini graceful to'xtatishni so'raydi (task'ni cancel qilmasdan)."""
+    if web_server is not None:
+        web_server.should_exit = True
+
 
 async def start_web_server():
+    global web_server
     server_config = uvicorn.Config(app=fastapi_app, host=config.WEB_HOST, port=config.WEB_PORT, log_level="info")
-    server = uvicorn.Server(server_config)
-    await server.serve()
+    web_server = uvicorn.Server(server_config)
+    await web_server.serve()
 
 
-async def start_bot():
+async def start_bot(shutdown_event: asyncio.Event = None):
     try:
         try:
             bot_info = await bot.get_me()
@@ -107,22 +116,41 @@ async def start_bot():
                 drop_pending_updates=settings.DROP_PENDING_UPDATES,
             )
             logging.info(f"✅ Telegram Webhook rejimida ulandi: {webhook_url}")
+            # Webhook rejimida yangilanishlarni API server qabul qiladi. Bu task darhol tugasa,
+            # main() dagi FIRST_COMPLETED butun ilovani (API serverni ham) to'xtatib qo'yardi.
+            if shutdown_event:
+                await shutdown_event.wait()
         else:
             await bot.delete_webhook(drop_pending_updates=settings.DROP_PENDING_UPDATES)
             logging.info(f"✅ Telegram Polling boshlandi (drop_pending_updates={settings.DROP_PENDING_UPDATES})")
-            await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+            # Signallarni main() boshqaradi; bot sessiyasini cleanup_resources() yopadi
+            # (worker ham shu sessiyadan foydalanadi).
+            await dp.start_polling(
+                bot,
+                allowed_updates=dp.resolve_used_update_types(),
+                handle_signals=False,
+                close_bot_session=False,
+            )
 
+    except asyncio.CancelledError:
+        raise
     except TelegramUnauthorizedError:
         logging.warning(
             "⚠️ BOT_TOKEN yaroqsiz yoki test tokeni kiritilgan. Bot to'xtatildi, lekin API serveri ishlashda davom etadi!"
         )
+        logging.info("👉 Iltimos, Telegram @BotFather dan yangi token olib, .env faylidagi BOT_TOKEN ga kiriting.")
+        if shutdown_event:
+            await shutdown_event.wait()
     except Exception as e:
-        logging.error(f"Bot ishga tushish xatosi: {e}")
+        logging.exception(f"Bot ishga tushish xatosi: {e}")
+        if shutdown_event:
+            await shutdown_event.wait()
 
 
 async def cleanup_resources():
     """Performs graceful resource disposal inside the running event loop (Req 4)."""
     logging.info("🛑 Graceful shutdown boshlandi: resurslar to'xtatilmoqda...")
+    request_web_server_exit()
     stop_worker()
     if bot and bot.session:
         try:
@@ -168,35 +196,68 @@ async def main(mode: str = "combined", shutdown_event: asyncio.Event = None):
 
     def _sig_handler():
         logging.info("To'xtatish signali qabul qilindi, shutdown boshlandi...")
+        request_web_server_exit()
         shutdown_event.set()
 
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         try:
             loop.add_signal_handler(sig, _sig_handler)
-        except (NotImplementedError, AttributeError):
-            # Windows platform compatibility
-            signal.signal(sig, lambda s, f: shutdown_event.set())
+        except (NotImplementedError, AttributeError, ValueError):
+            # Windows: add_signal_handler yo'q. Oddiy signal handler'dan asyncio.Event'ni
+            # to'g'ridan-to'g'ri o'rnatish loop'ni uyg'otmaydi — call_soon_threadsafe kerak.
+            signal.signal(sig, lambda s, f: loop.call_soon_threadsafe(_sig_handler))
 
-    tasks = []
+    tasks: list[asyncio.Task] = []
+    web_task: asyncio.Task | None = None
     try:
         if mode == "api":
             logging.info("Starting standalone API server mode...")
-            tasks.append(asyncio.create_task(start_web_server()))
+            web_task = asyncio.create_task(start_web_server(), name="web")
+            tasks.append(web_task)
         elif mode == "bot":
-            logging.info("Starting standalone Bot polling mode...")
-            tasks.append(asyncio.create_task(start_bot()))
+            logging.info("Starting standalone Bot mode...")
+            if settings.TELEGRAM_MODE == "webhook":
+                logging.warning(
+                    "⚠️ TELEGRAM_MODE=webhook, lekin 'bot' rejimida API server ishga tushmaydi — "
+                    "webhook yangilanishlarini alohida 'api' jarayoni qabul qilishi kerak."
+                )
+            tasks.append(asyncio.create_task(start_bot(shutdown_event=shutdown_event), name="bot"))
         elif mode == "worker":
             logging.info("Starting standalone Worker mode...")
-            tasks.append(asyncio.create_task(run_worker_loop(bot=bot)))
+            tasks.append(asyncio.create_task(run_worker_loop(bot=bot), name="worker"))
         else:  # combined (Default for development)
             logging.info("Starting combined runtime mode (API + Bot + Worker)...")
-            tasks.append(asyncio.create_task(start_web_server()))
-            tasks.append(asyncio.create_task(start_bot()))
-            tasks.append(asyncio.create_task(run_worker_loop(bot=bot)))
+            web_task = asyncio.create_task(start_web_server(), name="web")
+            tasks.append(web_task)
+            tasks.append(asyncio.create_task(start_bot(shutdown_event=shutdown_event), name="bot"))
+            tasks.append(asyncio.create_task(run_worker_loop(bot=bot), name="worker"))
 
-        shutdown_waiter = asyncio.create_task(shutdown_event.wait())
+        shutdown_waiter = asyncio.create_task(shutdown_event.wait(), name="shutdown-waiter")
         done, pending = await asyncio.wait(tasks + [shutdown_waiter], return_when=asyncio.FIRST_COMPLETED)
+
+        # Qaysi komponent kutilmaganda to'xtaganini loglash (aks holda xato yutilib ketadi)
+        for t in done:
+            if t is shutdown_waiter or t.cancelled():
+                continue
+            exc = t.exception()
+            if exc is not None:
+                logging.error(f"❌ '{t.get_name()}' komponenti xato bilan to'xtadi", exc_info=exc)
+            else:
+                logging.warning(f"⚠️ '{t.get_name()}' komponenti tugadi, shutdown boshlanmoqda.")
+        shutdown_event.set()
+
+        # Uvicorn task'ini cancel qilish lifespan shutdown'ni o'tkazib yuboradi — avval graceful to'xtatamiz
+        request_web_server_exit()
+        if web_task is not None and web_task in pending:
+            try:
+                await asyncio.wait_for(asyncio.shield(web_task), timeout=WEB_SHUTDOWN_TIMEOUT)
+            except Exception:
+                logging.warning("Web server belgilangan vaqtda to'xtamadi, majburan bekor qilinmoqda.")
+            pending.discard(web_task)
+            if not web_task.done():
+                pending.add(web_task)
+
         for t in pending:
             t.cancel()
         if pending:
