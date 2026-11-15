@@ -77,6 +77,21 @@ async def test_regular_user_with_init_data_rejected(client, db_session, method, 
 async def test_public_health_route_stays_public(client):
     r = await client.get("/api/v1/health/system")
     assert r.status_code == 200
+    body = r.json()
+    assert body["status"] in ("healthy", "degraded", "critical")
+    assert "timestamp" in body
+    for key in (
+        "payment_providers",
+        "fulfillment_providers",
+        "queue_depth",
+        "failed_jobs",
+        "worker",
+        "workers",
+        "database",
+        "redis",
+        "bot",
+    ):
+        assert key not in body, key
 
 
 @pytest.mark.parametrize(
@@ -93,8 +108,10 @@ async def test_super_admin_allowed(client, db_session, path):
     assert r.status_code == 200, r.text
 
 
-async def test_read_only_role_cannot_write(client, db_session):
-    # price_admin has no settings.* permission at all
+async def test_limited_role_denied_outside_its_permissions(client, db_session):
+    # price_admin has ORDERS_READ but no settings.* and no ORDERS_UPDATE.
+    # No role holds SETTINGS_READ without SETTINGS_UPDATE (only super_admin has either),
+    # so the read-without-write case is covered by ORDERS_READ vs ORDERS_UPDATE below.
     await _make_user(db_session, 555003, "price_admin")
     h = {"X-Auth-User-Id": "555003"}
     r = await client.post("/api/v1/admin/feature-flags/maintenance", json={"is_enabled": True}, headers=h)

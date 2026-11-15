@@ -440,8 +440,7 @@ async def create_catalog_item(
 # ================= SYSTEM HEALTH (Req 8) ================= #
 
 
-@router.get("/health/system")
-async def get_system_health(session=Depends(get_db)):
+async def _build_system_health(session):
     """
     Consolidated System Health dashboard payload (Req 8):
     Bot, PostgreSQL, Redis, Workers, Payment Providers, Fulfillment, Queue Depth, Failed Jobs.
@@ -587,11 +586,18 @@ async def get_system_health(session=Depends(get_db)):
     }
 
 
+@router.get("/health/system")
+async def get_system_health(session=Depends(get_db)):
+    """Public liveness: overall status only. Diagnostics live behind /admin/health/system."""
+    full = await _build_system_health(session)
+    return {"status": full["overall_status"], "timestamp": full["timestamp"]}
+
+
 @router.get("/admin/health/system")
 async def get_admin_system_health(
     session=Depends(get_db), admin: User = Depends(require_permission(Permission.SETTINGS_READ))
 ):
-    return await get_system_health(session)
+    return await _build_system_health(session)
 
 
 # ================= PROBLEM ORDERS DASHBOARD (Req 9) ================= #
