@@ -1,1 +1,53 @@
-:root {}
+/* Design tokens. Colors come from Telegram themeParams (--tg-*) with fallbacks. */
+:root {
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --gap-1: 8px;
+  --gap-2: 12px;
+  --gap-3: 16px;
+
+  --accent: #16a34a;
+  --accent-text: #ffffff;
+
+  --bg: var(--tg-bg, #ffffff);
+  --text: var(--tg-text, #111827);
+  --hint: var(--tg-hint, #6b7280);
+  --secondary-bg: var(--tg-secondary-bg, #f3f4f6);
+  --border: rgba(127, 127, 127, 0.25);
+  --danger: #dc2626;
+
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --dur: 180ms;
+}
+
+:root[data-theme="dark"] {
+  --accent: #22c55e;
+  --accent-text: #052e16;
+  --bg: var(--tg-bg, #17212b);
+  --text: var(--tg-text, #f5f5f5);
+  --hint: var(--tg-hint, #9ca3af);
+  --secondary-bg: var(--tg-secondary-bg, #232e3c);
+  --danger: #f87171;
+}
+
+.icon {
+  width: 1.5em;
+  height: 1.5em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+  vertical-align: middle;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

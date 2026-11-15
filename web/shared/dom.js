@@ -71,6 +71,20 @@ function applyAttr(el, key, value) {
   }
 }
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// SVG icon from the shared sprite. Not routed through h(): that builds HTML elements.
+export function icon(name) {
+  if (typeof name !== 'string' || !/^[a-z0-9-]+$/.test(name)) throw new Error('icon(): invalid name');
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', 'icon');
+  svg.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS(SVG_NS, 'use');
+  use.setAttribute('href', `/static/shared/icons.svg#${name}`);
+  svg.appendChild(use);
+  return svg;
+}
+
 export function h(tag, attrs, ...children) {
   if (BLOCKED_TAGS.has(String(tag).toLowerCase())) throw new Error(`h(): <${tag}> is not allowed`);
   const el = document.createElement(tag);

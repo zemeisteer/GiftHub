@@ -85,3 +85,12 @@ test('safeUrl rejects whitespace/control chars', () => {
     assert.equal(safeUrl(u), null, JSON.stringify(u));
   }
 });
+test('icon builds svg use with validated name', async () => {
+  const { icon } = await import('./dom.js');
+  const svg = icon('home');
+  assert.equal(svg.namespaceURI, 'http://www.w3.org/2000/svg');
+  assert.equal(svg.getAttribute('class'), 'icon');
+  assert.equal(svg.getAttribute('aria-hidden'), 'true');
+  assert.equal(svg.firstChild.getAttribute('href'), '/static/shared/icons.svg#home');
+  for (const bad of ['', 'Home', 'a b', 'x"y', '../x', 'a#b', 5]) assert.throws(() => icon(bad));
+});
