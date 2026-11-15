@@ -184,3 +184,7 @@ logs/
 
 # PyPI configuration file
 .pypirc
+
+# Local agent worktrees and plan workspaces
+.claude/worktrees/
+.superpowers/
