@@ -3,7 +3,7 @@
 import { h, clear, icon, formatSom, safeUrl } from '../../shared/dom.js';
 import { api } from '../../shared/api.js';
 import { tg } from '../../shared/tg.js';
-import { appState, getProducts, setBalance } from '../store.js';
+import { appState, getProducts, setBalance, refreshUser } from '../store.js';
 import { renderEmpty } from './state.js';
 import { createAction } from './action.js';
 
@@ -98,7 +98,8 @@ export async function topupScreen() {
     for (const b of methodButtons) b.setAttribute('aria-pressed', b.dataset.m === method ? 'true' : 'false');
     if (method === 'card') cardBox.removeAttribute('hidden');
     else cardBox.setAttribute('hidden', '');
-    if (!active()) return;
+    // While a request is in flight the button keeps its label and spinner; submit()'s finally re-runs this.
+    if (!active() || topupInFlight) return;
     if (method === 'card') {
       action.hide();
       return;
@@ -148,6 +149,7 @@ export async function topupScreen() {
     }
     if (res && res.new_balance !== undefined) {
       setBalance(res.new_balance);
+      balanceEl.textContent = formatSom(appState.balance);
       tg.haptic('success');
       showNotice(String(res.message || "Hamyon to'ldirildi"));
       return;
@@ -156,15 +158,33 @@ export async function topupScreen() {
   }
 
   function submit() {
-    if (!topupInFlight) topupInFlight = doSubmit().finally(() => { topupInFlight = null; });
+    if (!topupInFlight) {
+      topupInFlight = doSubmit().finally(() => {
+        topupInFlight = null;
+        refresh();
+      });
+    }
     return topupInFlight;
   }
+
+  const balanceEl = h('span', { class: 'balance-value' }, formatSom(appState.balance));
+
+  // Back from Click/Payme: re-read the balance. The listener removes itself once the screen is left.
+  const onVisible = () => {
+    if (!active()) {
+      document.removeEventListener('visibilitychange', onVisible);
+      return;
+    }
+    if (document.visibilityState !== 'visible') return;
+    refreshUser().then(() => { if (active()) balanceEl.textContent = formatSom(appState.balance); });
+  };
+  document.addEventListener('visibilitychange', onVisible);
 
   const root = h('div', { class: 'topup-page' },
     h('section', { class: 'balance-card' },
       h('div', { class: 'balance-info' },
         h('span', { class: 'balance-label' }, 'Joriy balans'),
-        h('span', { class: 'balance-value' }, formatSom(appState.balance)))),
+        balanceEl)),
     h('section', { class: 'section' },
       h('h2', { class: 'section-title' }, 'Summani tanlang'),
       h('div', { class: 'chips chips-wrap', role: 'group', 'aria-label': 'Summalar' }, presetButtons, customBtn),

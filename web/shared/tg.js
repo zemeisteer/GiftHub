@@ -47,15 +47,25 @@ export const tg = {
   },
 
   // Shows a main button; while onClick's promise is pending it shows progress and ignores re-clicks.
-  mainButton(text, onClick) {
+  // { disabled: true } shows it greyed out and ignores clicks.
+  mainButton(text, onClick, { disabled = false } = {}) {
     const wa = getWebApp();
     if (!wa) return;
     const mb = wa.MainButton;
+    const replacing = Boolean(currentMainHandler);
     clearMainHandler();
     const gen = ++mainGen;
+    // A new generation never inherits a stale spinner from a replaced handler.
+    if (replacing) {
+      try { mb.hideProgress(); } catch { /* ignore */ }
+    }
+    try {
+      if (disabled) mb.disable?.();
+      else mb.enable?.();
+    } catch { /* ignore */ }
     let busy = false;
     const handler = async () => {
-      if (busy) return;
+      if (busy || disabled) return;
       busy = true;
       try { mb.showProgress(); } catch { /* ignore */ }
       try {

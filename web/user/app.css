@@ -192,7 +192,7 @@ button { cursor: pointer; }
 .field-ok { color: var(--accent); }
 .check { display: flex; align-items: center; gap: var(--gap-1); min-height: 44px; font-size: 14px; }
 .check input { width: 20px; height: 20px; accent-color: var(--accent); }
-.recipient-other { margin-top: var(--gap-2); }
+.recipient-other, .custom-amount { margin-top: var(--gap-2); }
 .recipient-other .chips { margin-top: var(--gap-1); }
 
 /* Product page */

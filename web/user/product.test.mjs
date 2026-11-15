@@ -50,11 +50,14 @@ function installTelegram({ mainButton = true } = {}) {
   haptics = [];
   opened = [];
   mb = {
-    text: '', visible: false, handlers: [],
+    text: '', visible: false, handlers: [], progress: false, disabled: false,
     setText(t) { this.text = t; },
     show() { this.visible = true; },
     hide() { this.visible = false; },
-    showProgress() {}, hideProgress() {},
+    showProgress() { this.progress = true; },
+    hideProgress() { this.progress = false; },
+    enable() { this.disabled = false; },
+    disable() { this.disabled = true; },
     onClick(fn) { this.handlers.push(fn); },
     offClick(fn) { this.handlers = this.handlers.filter((f) => f !== fn); },
   };
@@ -193,7 +196,7 @@ test('two rendered product screens cannot double-submit (module-level guard)', a
   let release;
   const gate = new Promise((r) => { release = r; });
   stubFetch({ '/api/orders/create': async () => { await gate; return jsonRes(200, ORDER_OK); } });
-  appState.user = ME;
+  appState.user = { ...ME };
   location.hash = '#/product/stars-100';
   const a = await productScreen({ id: 'stars-100' });
   const b = await productScreen({ id: 'stars-100' });
@@ -260,7 +263,10 @@ test('recipient @username validated before pay', async () => {
 
 test('saved recipients load for the user and fill the field', async () => {
   stubFetch({
-    '/api/v1/recipients': { success: true, recipients: [{ id: 1, recipient_username: 'dost_bek' }, { id: 2, recipient_username: '<bad>' }] },
+    '/api/v1/recipients': { success: true, recipients: [
+      { id: 1, recipient_username: 'dost_bek' }, { id: 2, recipient_username: '<bad>' },
+      { id: 3, recipient_username: '123456789' }, { id: 4, recipient_username: '1abcdef' },
+    ] },
     '/api/orders/create': ORDER_OK,
   });
   await openProduct('stars-100');
@@ -269,6 +275,8 @@ test('saved recipients load for the user and fill the field', async () => {
   const req = fetchLog.find((e) => e.url.startsWith('/api/v1/recipients'));
   assert.equal(req.url, '/api/v1/recipients?user_id=7');
   assert.equal(findBtn('@<bad>'), undefined);
+  assert.equal(findBtn('@1abcdef'), undefined);
+  assert.ok(findBtn('123456789'), 'numeric Telegram ID chip, without @');
   click('@dost_bek');
   assert.equal(outlet().querySelector('input[name="recipient"]').value, '@dost_bek');
   await pay();
@@ -340,6 +348,141 @@ test('a late promo response after leaving does not re-show the main button', asy
   release();
   await tick();
   assert.equal(mb.visible, false);
+});
+
+test('promo answer arriving during a failing pay never leaves the MainButton spinning', async () => {
+  let releasePromo;
+  const promoGate = new Promise((r) => { releasePromo = r; });
+  stubFetch({
+    '/api/promo/apply': async () => { await promoGate; return jsonRes(200, { success: true, code: 'A', new_total: 9000, message: 'ok' }); },
+    '/api/orders/create': () => jsonRes(400, { detail: 'Xatolik' }),
+  });
+  await openProduct('stars-100');
+  setInput('promo', 'a');
+  click("Qo'llash");
+  const p = pay(); // waits for the promo, MainButton shows progress
+  await tick();
+  assert.equal(mb.progress, true);
+  releasePromo();
+  await p;
+  await tick();
+  assert.equal(mb.progress, false);
+  assert.equal(mainButtonText(), "To'lash · 9 000 so'm");
+  assert.equal(lastBody('/api/orders/create').promo_code, 'A');
+  assert.ok(find('Xatolik'));
+});
+
+test('unknown order outcome (network drop) blocks re-pay and points to orders', async () => {
+  let creates = 0;
+  stubFetch({ '/api/orders/create': () => { creates++; throw new TypeError('fetch failed'); } });
+  await openProduct('stars-100');
+  const meBefore = calls('/api/user/me');
+  await pay();
+  await tick();
+  assert.ok(find("Buyurtma holati noma'lum. Buyurtmalarni tekshiring."));
+  assert.equal(findBtn('Qayta urinish'), undefined);
+  assert.equal(mb.progress, false);
+  assert.equal(mb.disabled, true);
+  assert.equal(calls('/api/user/me'), meBefore + 1, 'balance re-read');
+  await pay();
+  assert.equal(creates, 1, 'no second order from this screen');
+  const before = calls('/api/products');
+  await getProducts();
+  assert.equal(calls('/api/products'), before + 1, 'products cache invalidated');
+  click("Buyurtmalarni ko'rish");
+  assert.equal(location.hash, '#/orders');
+});
+
+test('unknown outcome without MainButton keeps the in-page button disabled', async () => {
+  installTelegram({ mainButton: false });
+  stubFetch({ '/api/orders/create': () => { throw new TypeError('fetch failed'); } });
+  await openProduct('stars-100');
+  const btn = findBtn("To'lash · 20 700 so'm");
+  btn.dispatchEvent(new Event('click'));
+  await tick(30);
+  assert.equal(btn.disabled, true);
+  btn.dispatchEvent(new Event('click'));
+  await tick();
+  assert.equal(calls('/api/orders/create'), 1);
+});
+
+test('numeric Telegram ID recipient is sent as-is; usernames must start with a letter', async () => {
+  stubFetch({ '/api/orders/create': ORDER_OK });
+  await openProduct('stars-100');
+  for (const bad of ['_abcde', '1abcdef', '1234', '@ab']) {
+    setRecipient(bad);
+    await pay();
+  }
+  assert.equal(calls('/api/orders/create'), 0);
+  setRecipient('123456789');
+  await pay();
+  assert.equal(lastBody('/api/orders/create').recipient_username, '123456789');
+});
+
+test('balance_bonus promo shows a neutral wallet hint and is never attached', async () => {
+  stubFetch({
+    '/api/promo/apply': { success: true, reward_type: 'balance_bonus', code: 'BONUS', bonus_amount: 5000, message: 'Hamyoningizga +5 000 so\'m bonus qo\'shildi!' },
+    '/api/orders/create': ORDER_OK,
+  });
+  await openProduct('stars-100');
+  setInput('promo', 'bonus');
+  click("Qo'llash");
+  await tick();
+  assert.ok(find("Bu kod hamyon uchun — Profil'da qo'llang"));
+  assert.ok(!find('bonus qo\'shildi'));
+  await pay();
+  assert.equal('promo_code' in lastBody('/api/orders/create'), false);
+});
+
+function customStarsRoute(gates = {}) {
+  return async (entry) => {
+    const m = /stars_amount=(\d+)/.exec(entry.url);
+    if (!m) return jsonRes(200, PRODUCTS);
+    const n = Number(m[1]);
+    if (gates[n]) await gates[n];
+    return jsonRes(200, { ...PRODUCTS, custom_stars_calc: { amount: n, total_price_uzs: n * 200, discount_percent: 0 } });
+  };
+}
+
+test('custom Stars quantity: server-priced after debounce, pay disabled until priced, body amount', async () => {
+  stubFetch({ '/api/products': customStarsRoute(), '/api/orders/create': ORDER_OK });
+  await openProduct('stars-100');
+  click('Boshqa miqdor');
+  setInput('stars_amount', '10');
+  await tick(350);
+  assert.equal(fetchLog.filter((e) => e.url.includes('stars_amount')).length, 0, 'below minimum: no request');
+  assert.equal(mb.disabled, true);
+  setInput('stars_amount', '77');
+  setInput('stars_amount', '777');
+  assert.equal(mb.disabled, true);
+  assert.equal(mainButtonText(), "To'lash");
+  await pay();
+  assert.equal(calls('/api/orders/create'), 0, 'unpriced: no order');
+  await tick(350);
+  const priced = fetchLog.filter((e) => e.url.includes('stars_amount'));
+  assert.deepEqual(priced.map((e) => e.url), ['/api/products?stars_amount=777'], 'debounced to the last value');
+  assert.equal(mb.disabled, false);
+  assert.equal(mainButtonText(), "To'lash · 155 400 so'm");
+  assert.match(text(), /777 Stars/);
+  await pay();
+  assert.deepEqual(lastBody('/api/orders/create'), { product_type: 'stars', item_title: '777 Stars', amount: 777, recipient_username: '@ali' });
+});
+
+test('custom Stars quantity: a stale price answer is ignored', async () => {
+  let releaseOld;
+  const oldGate = new Promise((r) => { releaseOld = r; });
+  stubFetch({ '/api/products': customStarsRoute({ 500: oldGate }) });
+  await openProduct('stars-100');
+  click('Boshqa miqdor');
+  setInput('stars_amount', '500');
+  await tick(350); // request for 500 is now pending
+  setInput('stars_amount', '600');
+  await tick(350);
+  assert.equal(mainButtonText(), "To'lash · 120 000 so'm");
+  releaseOld();
+  await tick();
+  assert.equal(mainButtonText(), "To'lash · 120 000 so'm");
+  assert.match(text(), /600 Stars/);
 });
 
 // ---- Top-up ----
@@ -420,6 +563,28 @@ test('top-up: no supported methods shows an empty state', async () => {
   await openTopup();
   assert.ok(find("To'lov usullari mavjud emas"));
   assert.equal(mb.visible, false);
+});
+
+test('top-up: a failed request never leaves the MainButton spinning', async () => {
+  stubFetch({ '/api/wallet/topup': () => jsonRes(400, { detail: "Noma'lum to'lov usuli" }) });
+  await openTopup();
+  click('Click');
+  await pay();
+  await tick();
+  assert.equal(mb.progress, false);
+  assert.ok(find("Noma'lum to'lov usuli"));
+  assert.equal(mainButtonText(), "To'ldirish · 50 000 so'm");
+});
+
+test('top-up: returning to the app re-reads the balance', async () => {
+  await openTopup();
+  assert.match(text(), /50 000 so'm/);
+  routes['/api/user/me'] = { ...ME, balance: 90000 };
+  Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+  document.dispatchEvent(new Event('visibilitychange'));
+  await tick();
+  assert.match(outlet().querySelector('.balance-value').textContent, /90 000 so'm/);
+  assert.equal(appState.balance, 90000);
 });
 
 test('new screens never import the versioned entry app.js', () => {

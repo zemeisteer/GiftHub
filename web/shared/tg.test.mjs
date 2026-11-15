@@ -108,6 +108,29 @@ test('mainButton: stale handler settling does not hide progress of a newer butto
   assert.equal(count('hideProgress'), hidesBefore);
 });
 
+test('mainButton: replacing a pending handler clears the spinner for the new generation', async () => {
+  tg.mainButton('Old', () => new Promise(() => {}));
+  handlers[0]();
+  await tick();
+  assert.equal(count('showProgress'), 1);
+  tg.mainButton('New', () => {});
+  assert.equal(count('hideProgress'), 1);
+});
+
+test('mainButton: disabled option disables the button and ignores clicks', async () => {
+  let n = 0;
+  globalThis.Telegram.WebApp.MainButton.disable = () => calls.push(['disable']);
+  globalThis.Telegram.WebApp.MainButton.enable = () => calls.push(['enable']);
+  tg.mainButton('Pay', () => { n++; }, { disabled: true });
+  assert.equal(count('disable'), 1);
+  await handlers[0]();
+  assert.equal(n, 0);
+  tg.mainButton('Pay', () => { n++; });
+  assert.equal(count('enable'), 1);
+  await handlers[0]();
+  assert.equal(n, 1);
+});
+
 test('openLink / openTelegramLink validate urls', () => {
   tg.openLink('javascript:alert(1)');
   tg.openLink('http://a.b');

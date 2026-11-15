@@ -55,9 +55,16 @@ export function productList(data) {
   return out;
 }
 
-// Slug -> product, or null.
-export function findProduct(data, slug) {
-  return productList(data).find((p) => p.id === slug) || null;
+// Re-reads /api/user/me (balance may have changed server-side). Failures keep the cached values.
+export async function refreshUser() {
+  try {
+    const me = await api('/api/user/me');
+    if (me && typeof me === 'object') {
+      appState.user = me;
+      setBalance(me.balance);
+    }
+  } catch { /* keep current state */ }
+  return appState.user;
 }
 
 export function getProducts({ force = false } = {}) {
