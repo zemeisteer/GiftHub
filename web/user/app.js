@@ -3,9 +3,9 @@ import { h, clear, icon } from '../shared/dom.js';
 import { api } from '../shared/api.js';
 import { tg } from '../shared/tg.js';
 import { createRouter } from '../shared/router.js';
-import { renderLoading, renderError, renderEmpty } from './screens/state.js';
+import { renderLoading, renderError } from './screens/state.js';
 import { homeScreen } from './screens/home.js';
-import { appState, getProducts } from './store.js';
+import { appState, getProducts, gateBlocked } from './store.js';
 
 export { appState, getProducts, cachedProducts } from './store.js';
 
@@ -34,11 +34,15 @@ function setNav(active) {
   const nav = byId('nav');
   if (!nav) return;
   clear(nav);
+  nav.removeAttribute('hidden');
   nav.appendChild(bottomNav(active));
 }
 
-function comingSoon() {
-  return renderEmpty('Tez orada', "Bu bo'lim tez orada ishga tushadi");
+function hideNav() {
+  const nav = byId('nav');
+  if (!nav) return;
+  clear(nav);
+  nav.setAttribute('hidden', '');
 }
 
 // Tab screens show the nav; sub-screens also get Telegram's back button.
@@ -49,21 +53,24 @@ const tab = (key, handler) => async (params) => {
   tg.backButton(null);
   return handler(params);
 };
-const sub = (handler) => async (params) => {
+const sub = (handler, key = 'home', back = '#/') => async (params) => {
   tg.hideMainButton();
-  setNav('home');
-  tg.backButton(() => { location.hash = '#/'; });
+  setNav(key);
+  tg.backButton(() => { location.hash = back; });
   return handler(params);
 };
 
-// Non-home screens are dynamic import() modules once they exist (Tasks 6-7).
+const orders = () => import('./screens/orders.js');
+
+// Non-home screens are dynamic import() modules.
 const routes = {
   '#/': tab('home', () => homeScreen()),
   '#/product/:id': sub(async (params) => (await import('./screens/product.js')).productScreen(params)),
   '#/topup': sub(async () => (await import('./screens/topup.js')).topupScreen()),
-  '#/orders': tab('orders', comingSoon),
-  '#/referral': tab('referral', comingSoon),
-  '#/profile': tab('profile', comingSoon),
+  '#/orders': tab('orders', async () => (await orders()).ordersScreen()),
+  '#/orders/:code': sub(async (params) => (await orders()).receiptScreen(params), 'orders', '#/orders'),
+  '#/referral': tab('referral', async () => (await import('./screens/referral.js')).referralScreen()),
+  '#/profile': tab('profile', async () => (await import('./screens/profile.js')).profileScreen()),
 };
 
 function renderOpenInBot() {
@@ -73,15 +80,40 @@ function renderOpenInBot() {
     h('p', { class: 'state-text' }, "GiftHub faqat Telegram ichida ishlaydi."));
 }
 
+// The subscription gate is checked before the app renders; user and products load in parallel.
+// A failed gate check shows a retry, never the app.
 async function loadAndStart(outlet) {
   clear(outlet);
   outlet.appendChild(renderLoading());
-  let me;
-  try {
-    [me] = await Promise.all([api('/api/user/me'), getProducts({ force: true })]);
-  } catch (err) {
+  const failed = (err) => {
     clear(outlet);
     outlet.appendChild(renderError(err && err.message, () => loadAndStart(outlet)));
+  };
+  const data = Promise.all([api('/api/user/me'), getProducts({ force: true })]);
+  data.catch(() => {}); // awaited below, or dropped while the gate is shown
+  let blocked = false;
+  try {
+    const gate = await api('/api/gate/check');
+    if (gateBlocked(gate)) {
+      blocked = true;
+      const { gateScreen } = await import('./screens/gate.js');
+      const node = await gateScreen(gate.channels, () => loadAndStart(outlet));
+      hideNav();
+      tg.backButton(null);
+      clear(outlet);
+      outlet.appendChild(node);
+    }
+  } catch (err) {
+    hideNav();
+    failed(err);
+    return;
+  }
+  if (blocked) return;
+  let me;
+  try {
+    [me] = await data;
+  } catch (err) {
+    failed(err);
     return;
   }
   appState.user = me || null;

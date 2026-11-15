@@ -5,14 +5,14 @@
 import { h, clear, icon, formatSom } from '../../shared/dom.js';
 import { api } from '../../shared/api.js';
 import { tg } from '../../shared/tg.js';
-import { appState, getProducts, productList, invalidateProducts, setBalance, refreshUser } from '../store.js';
+import { appState, getProducts, productList, invalidateProducts, setBalance, refreshUser, takePrefill } from '../store.js';
 import { renderEmpty } from './state.js';
 import { createAction } from './action.js';
 
 // Telegram usernames start with a letter; 5–32 chars. Telegram user IDs are sent as plain digits.
 export const USERNAME_RX = /^@?[A-Za-z][A-Za-z0-9_]{4,31}$/;
 export const TG_ID_RX = /^\d{5,15}$/;
-// Legacy calculator bounds (web/user/index.html calcStarsInput: min 15, max 50000).
+// Legacy calculator bounds (legacy app calcStarsInput: min 15, max 50000).
 export const STARS_MIN = 15;
 export const STARS_MAX = 50000;
 const CUSTOM_DEBOUNCE_MS = 300;
@@ -51,7 +51,10 @@ export async function productScreen({ id } = {}) {
 
   const data = await getProducts();
   const items = productList(data);
-  let selected = items.find((p) => p.id === id) || null;
+  // 'stars-custom' (from "Yana sotib olish") opens the Stars page on the custom quantity.
+  const wantCustom = id === 'stars-custom';
+  let selected = (wantCustom ? items.find((p) => p.cat === 'stars') : items.find((p) => p.id === id)) || null;
+  const pre = takePrefill(id);
   if (!selected) return renderEmpty('Mahsulot topilmadi', "Bu mahsulot mavjud emas yoki o'chirilgan");
   const variants = selected.cat === 'gifts' ? [] : items.filter((p) => p.cat === selected.cat);
   const allowCustom = selected.cat === 'stars';
@@ -490,5 +493,15 @@ export async function productScreen({ id } = {}) {
   markVariants();
   setMode('self');
   updateTotal();
+  // Buy again: the old order's recipient and Stars quantity; the price is fetched as usual.
+  const preRecipient = pre && parseRecipient(pre.recipient);
+  if (preRecipient && preRecipient !== selfRecipient()) {
+    setMode('other');
+    recipientInput.value = preRecipient;
+  }
+  if (wantCustom) {
+    if (pre && Number.isInteger(pre.starsAmount)) customInput.value = String(pre.starsAmount);
+    selectCustom();
+  }
   return root;
 }

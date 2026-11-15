@@ -12,16 +12,16 @@ async def client():
         yield c
 
 
-async def test_legacy_app_page_has_no_csp_but_other_headers(client):
-    assert "/app" in LEGACY_CSP_EXEMPT and "/admin" in LEGACY_CSP_EXEMPT
-    r = await client.get("/app")
+async def test_legacy_admin_page_has_no_csp_but_other_headers(client):
+    assert LEGACY_CSP_EXEMPT == {"/admin"}
+    r = await client.get("/admin")
     assert "content-security-policy" not in r.headers
     assert r.headers["x-content-type-options"] == "nosniff"
     assert r.headers["referrer-policy"] == "strict-origin-when-cross-origin"
 
 
 async def test_non_legacy_paths_have_exact_csp(client):
-    for path in ("/health", "/static/shared/tokens.css"):
+    for path in ("/app", "/health", "/static/shared/tokens.css"):
         r = await client.get(path)
         assert r.headers["content-security-policy"] == CSP_POLICY
         assert r.headers["x-content-type-options"] == "nosniff"

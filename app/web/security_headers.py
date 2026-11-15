@@ -10,8 +10,8 @@ CSP_POLICY = (
     "frame-ancestors https://web.telegram.org https://*.telegram.org"
 )
 
-# Legacy pages still use inline scripts/styles; they get no CSP until replaced.
-LEGACY_CSP_EXEMPT = {"/app", "/admin"}
+# Legacy pages still use inline scripts/styles; they get no CSP until replaced (admin: Task 12).
+LEGACY_CSP_EXEMPT = {"/admin"}
 
 
 def add_security_headers(app: FastAPI) -> None:

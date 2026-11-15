@@ -6,7 +6,7 @@ import { parseHTML } from 'linkedom';
 let boot, appState, getProducts, bottomNav, tg, renderLoading, renderError, renderEmpty;
 let dom, fetchLog;
 
-const html = readFileSync(new URL('./new.html', import.meta.url), 'utf8');
+const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
 
 const ME = { id: 7, first_name: 'Ali', username: 'ali', balance: 12500 };
 const PRODUCTS = {
@@ -25,6 +25,8 @@ const PRODUCTS = {
     { id: 'heart', name: 'Neon Heart', price_uzs: 85000, icon: '💖', type: '3d' },
   ],
 };
+
+const GATE_OK = { all_passed: true, channels: [] };
 
 function jsonRes(status, body) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -63,7 +65,7 @@ beforeEach(() => {
   tg.inTelegram = true;
   tg.initData = 'query_id=1';
   location.hash = '';
-  stubFetch({ '/api/user/me': ME, '/api/products': PRODUCTS });
+  stubFetch({ '/api/gate/check': GATE_OK, '/api/user/me': ME, '/api/products': PRODUCTS });
 });
 afterEach(() => { tg.resetOverrides(); });
 
@@ -146,7 +148,7 @@ test('network failure shows retry, and retry recovers', async () => {
   await bootHome();
   assert.ok(find('Qayta urinish'));
   assert.match(text(), /Internet aloqasi yo'q/);
-  stubFetch({ '/api/user/me': ME, '/api/products': PRODUCTS });
+  stubFetch({ '/api/gate/check': GATE_OK, '/api/user/me': ME, '/api/products': PRODUCTS });
   click('Qayta urinish');
   await tick();
   assert.match(text(), /10 350 so'm/);
@@ -160,10 +162,11 @@ test('product card and top-up navigate by hash', async () => {
   assert.equal(location.hash, '#/topup');
 });
 
-test('placeholder routes render coming-soon state and nav marks active tab', async () => {
+test('tab routes render their screens and nav marks the active tab', async () => {
+  stubFetch({ '/api/gate/check': GATE_OK, '/api/user/me': ME, '/api/products': PRODUCTS, '/api/orders/history': [] });
   location.hash = '#/orders';
   await bootHome();
-  assert.match(outlet().textContent, /Tez orada/);
+  assert.match(outlet().textContent, /Buyurtmalar yo'q/);
   const current = document.querySelector('#nav [aria-current="page"]');
   assert.match(current.textContent, /Buyurtmalar/);
 });
@@ -185,7 +188,7 @@ test('bottomNav has four tabs with 44px-capable buttons', () => {
 });
 
 test('no module imports the versioned entry app.js (would create a second instance)', () => {
-  for (const f of ['./store.js', './screens/home.js', './screens/state.js']) {
+  for (const f of ['./store.js', './screens/home.js', './screens/state.js', './screens/product.js', './screens/topup.js']) {
     const src = readFileSync(new URL(f, import.meta.url), 'utf8');
     assert.doesNotMatch(src, /from\s+['"][^'"]*app\.js['"]|import\(\s*['"][^'"]*app\.js/, f);
   }

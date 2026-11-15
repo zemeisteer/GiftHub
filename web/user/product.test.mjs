@@ -6,7 +6,7 @@ import { parseHTML } from 'linkedom';
 let boot, appState, getProducts, tg, productScreen, topupScreen;
 let dom, fetchLog, routes, listeners, mb, bb, haptics, opened;
 
-const html = readFileSync(new URL('./new.html', import.meta.url), 'utf8');
+const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
 
 const ME = { id: 7, first_name: 'Ali', username: 'ali', balance: 50000 };
 const PRODUCTS = {
@@ -35,7 +35,7 @@ function jsonRes(status, body) {
 
 function stubFetch(extra = {}) {
   fetchLog = [];
-  routes = { '/api/user/me': ME, '/api/products': PRODUCTS, '/api/v1/recipients': { success: true, recipients: [] }, ...extra };
+  routes = { '/api/gate/check': { all_passed: true, channels: [] }, '/api/user/me': ME, '/api/products': PRODUCTS, '/api/v1/recipients': { success: true, recipients: [] }, ...extra };
   globalThis.fetch = async (url, init = {}) => {
     const entry = { url, method: init.method || 'GET', body: init.body ? JSON.parse(init.body) : undefined };
     fetchLog.push(entry);

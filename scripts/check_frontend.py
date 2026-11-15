@@ -8,8 +8,8 @@ from pathlib import Path
 CHECK_DIRS = ("web/shared", "web/user", "web/admin")
 EXTENSIONS = {".js", ".mjs", ".html", ".css"}
 SKIP_DIRS = {"node_modules"}
-# Legacy files, removed from this list when replaced (Task 7 and Task 12).
-LEGACY_EXCLUDES = ("web/user/index.html", "web/admin/index.html")
+# Legacy files, removed from this list when replaced (Task 12).
+LEGACY_EXCLUDES = ("web/admin/index.html",)
 
 JS_RULES = [
     (re.compile(r"\binnerHTML\b"), "innerHTML is forbidden"),

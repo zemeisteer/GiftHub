@@ -124,15 +124,6 @@ def build_app(environment: str) -> FastAPI:
         return HTMLResponse("<h2>GiftHub Web App fayli topilmadi.</h2>", status_code=404)
 
 
-    # Temporary: the rewritten user app, under the strict CSP. Replaces /app in Task 7.
-    @app.get("/app/new", response_class=HTMLResponse)
-    async def serve_user_app_new():
-        path = os.path.join(settings.BASE_DIR, "web", "user", "new.html")
-        if os.path.exists(path):
-            return HTMLResponse(render_index(path), headers={"Cache-Control": "no-cache"})
-        return HTMLResponse("<h2>GiftHub Web App fayli topilmadi.</h2>", status_code=404)
-
-
     @app.get("/admin", response_class=HTMLResponse)
     async def serve_admin_app():
         path = os.path.join(settings.BASE_DIR, "web", "admin", "index.html")

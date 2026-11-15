@@ -55,6 +55,31 @@ export function productList(data) {
   return out;
 }
 
+// Product name for an order's item_title: gift orders store the gift id (R6).
+export function orderTitle(productType, itemTitle) {
+  const raw = String(itemTitle ?? '');
+  if (productType === 'gift') {
+    const g = productList(cachedProducts() || appState.products).find((p) => p.cat === 'gifts' && p.itemTitle === raw);
+    if (g) return g.name;
+  }
+  return raw;
+}
+
+// /api/gate/check result: blocked only when the server says so and lists channels (legacy rule).
+export const gateBlocked = (res) => Boolean(res) && res.all_passed === false
+  && Array.isArray(res.channels) && res.channels.length > 0;
+
+// One-shot form prefill handed from "Yana sotib olish" to the product screen.
+let prefill = null;
+export function setPrefill(slug, data) {
+  prefill = { slug, at: Date.now(), ...data };
+}
+export function takePrefill(slug) {
+  const p = prefill;
+  prefill = null;
+  return p && p.slug === slug && Date.now() - p.at < 60_000 ? p : null;
+}
+
 // Re-reads /api/user/me (balance may have changed server-side). Failures keep the cached values.
 export async function refreshUser() {
   try {
