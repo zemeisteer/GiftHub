@@ -90,12 +90,19 @@ async function loadAndStart(outlet) {
 }
 
 export async function boot() {
-  tg.ready();
-  tg.applyTheme(document.documentElement);
-  const outlet = byId('outlet');
+  const outlet = byId('outlet') || document.body;
   const nav = byId('nav');
-  clear(outlet);
-  if (nav) clear(nav);
+  try {
+    tg.ready();
+    tg.applyTheme(document.documentElement);
+    clear(outlet);
+    if (nav) clear(nav);
+  } catch (err) {
+    // Never leave a blank screen: show the error with a retry.
+    clear(outlet);
+    outlet.appendChild(renderError(err && err.message, () => { boot(); }));
+    return;
+  }
   if (!tg.inTelegram) {
     outlet.appendChild(renderOpenInBot());
     return;

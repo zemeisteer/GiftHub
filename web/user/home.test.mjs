@@ -97,6 +97,19 @@ test('outside Telegram shows open-in-bot message', async () => {
   assert.equal(document.getElementById('nav').childNodes.length, 0);
 });
 
+test('a failure before loading renders an error instead of a blank screen', async () => {
+  const orig = tg.applyTheme;
+  tg.applyTheme = () => { throw new Error('theme boom'); };
+  try {
+    await boot();
+  } finally {
+    tg.applyTheme = orig;
+  }
+  assert.match(outlet().textContent, /theme boom/);
+  assert.ok(find('Qayta urinish'));
+  assert.equal(fetchLog.length, 0);
+});
+
 test('home shows balance and product prices from server', async () => {
   await bootHome();
   assert.match(text(), /12 500 so'm/);

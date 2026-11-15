@@ -178,8 +178,14 @@ def build_app(environment: str) -> FastAPI:
     @app.middleware("http")
     async def static_cache_middleware(request: Request, call_next):
         response: Response = await call_next(request)
-        if request.url.path.startswith("/static/") and response.status_code == 200:
-            response.headers["Cache-Control"] = "public, max-age=86400"
+        path = request.url.path
+        if path.startswith("/static/") and response.status_code in (200, 304):
+            # Code is revalidated every load (ETag -> cheap 304): modules imported by the
+            # versioned entry carry no ?v=, so a long max-age would mix old and new code.
+            if path.endswith((".js", ".mjs", ".css")):
+                response.headers["Cache-Control"] = "no-cache"
+            else:
+                response.headers["Cache-Control"] = "public, max-age=86400"
         return response
 
     # 8. Security headers (added last, so it is outermost and covers every response)

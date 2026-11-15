@@ -28,9 +28,23 @@ async def test_non_legacy_paths_have_exact_csp(client):
         assert r.headers["referrer-policy"] == "strict-origin-when-cross-origin"
 
 
-async def test_static_served_with_cache(client):
-    r = await client.get("/static/shared/tokens.css")
+async def test_static_code_is_revalidated(client):
+    for path in ("/static/shared/tokens.css", "/static/user/app.js", "/static/user/screens/home.js"):
+        r = await client.get(path)
+        assert r.status_code == 200, path
+        assert r.headers["cache-control"] == "no-cache", path
+
+
+async def test_static_other_files_cached_for_a_day(client):
+    r = await client.get("/static/shared/icons.svg")
     assert r.status_code == 200 and "max-age=86400" in r.headers["cache-control"]
+
+
+async def test_static_js_conditional_get_returns_304(client):
+    r = await client.get("/static/shared/dom.js")
+    etag = r.headers["etag"]
+    r2 = await client.get("/static/shared/dom.js", headers={"If-None-Match": etag})
+    assert r2.status_code == 304
 
 
 async def test_cors_rejects_foreign_origin(client):
