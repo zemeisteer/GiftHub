@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.exceptions import GiftHubException
 from app.core.logging import get_logger
-from app.core.security import Permission
+from app.core.security import Permission, has_permission
 from app.models import (
     BroadcastDraft,
     ChannelRequirement,
@@ -50,6 +50,24 @@ router = APIRouter()
 class BalanceAdjustRequest(BaseModel):
     amount: float
     reason: str
+
+
+def _permission_names() -> dict[str, str]:
+    """Permission attribute name (e.g. ANALYTICS_READ) -> value (e.g. analytics.read)."""
+    return {k: v for k, v in vars(Permission).items() if k.isupper() and isinstance(v, str)}
+
+
+@router.get("/api/admin/me")
+async def get_admin_profile(admin: User = Depends(get_current_admin)):
+    """Current admin's profile and permission names; the admin UI uses it only to hide menu items."""
+    perms = sorted(name for name, value in _permission_names().items() if has_permission(admin.role, admin.id, value))
+    return {
+        "id": admin.id,
+        "first_name": admin.first_name,
+        "username": admin.username,
+        "role": admin.role,
+        "permissions": perms,
+    }
 
 
 @router.post("/api/admin/users/{user_id}/adjust-balance")
