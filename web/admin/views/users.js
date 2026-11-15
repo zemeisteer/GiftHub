@@ -3,7 +3,7 @@
 import { h, clear, formatSom } from '../../shared/dom.js';
 import { api } from '../../shared/api.js';
 import { registerView } from '../registry.js';
-import { debounce, pager, pageHead, emptyNote, inlineError, badge } from './ui.js';
+import { debounce, pager, pageHead, emptyNote, inlineError, badge, formatDate } from './ui.js';
 
 const PAGE = 20;
 
@@ -19,7 +19,7 @@ function table(rows) {
       h('td', { 'data-label': 'Buyurtmalar' }, `${Number(u.orders_count) || 0} ta`),
       h('td', { 'data-label': 'Sarflagan' }, formatSom(u.total_spent)),
       h('td', { 'data-label': 'Referallar' }, `${Number(u.referrals_count) || 0} ta`),
-      h('td', { 'data-label': "Qo'shilgan" }, u.created_at)))));
+      h('td', { 'data-label': "Qo'shilgan" }, formatDate(u.created_at))))));
 }
 
 async function render() {

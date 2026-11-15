@@ -2,7 +2,7 @@
 import { h, icon } from '../../shared/dom.js';
 import { showToast } from '../../user/screens/state.js';
 import { adminState } from '../registry.js';
-import { confirmDialog } from '../confirm.js';
+import { confirmDialog, confirmWithReason } from '../confirm.js';
 
 export { showToast };
 
@@ -22,15 +22,24 @@ export function debounce(fn, ms = 350) {
 
 const inflight = new Set();
 
-// One mutating action at a time per key. The key stays locked from the click (so a second tap
-// cannot open a second dialog) until the request settles. `call` throws to report a failure.
+// One mutating action at a time per key (use one key per order so retry/manual/cancel on the same
+// order cannot overlap). The key stays locked from the click until the request settles. A confirm
+// with `input` asks for a reason and passes it to call(reason). call() throws to report a
+// failure. If another dialog is already open the click is ignored (confirm resolves cancelled).
 export async function runAction({ button, key, confirm, call, success }) {
   if (inflight.has(key)) return false;
   inflight.add(key);
   try {
-    if (confirm && !(await confirmDialog(confirm))) return false;
+    let reason;
+    if (confirm && confirm.input) {
+      const r = await confirmWithReason(confirm);
+      if (!r.confirmed) return false;
+      reason = r.value;
+    } else if (confirm && !(await confirmDialog(confirm))) {
+      return false;
+    }
     if (button) button.setAttribute('disabled', '');
-    const res = await call();
+    const res = await call(reason);
     const msg = typeof success === 'function' ? success(res) : success;
     if (msg) showToast(msg);
     return true;
@@ -115,14 +124,21 @@ export function orderStatus(status) {
 }
 
 const pad = (n) => String(n).padStart(2, '0');
-export function formatDate(iso) {
-  const d = new Date(String(iso || ''));
-  if (Number.isNaN(d.getTime())) return '';
+// ISO timestamps become dd.mm hh:mm. Anything else (the orders/users lists already return display
+// strings such as "15 Nov, 10:00") is passed through unchanged: Date() would misparse those.
+export function formatDate(value) {
+  const raw = String(value ?? '');
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(raw)) return raw;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
   return `${pad(d.getDate())}.${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+export const REVOKE_MS = 30000;
+
 // Blob download. The blob: URL is created here from our own fetched data and never from
-// user input, which is why it bypasses h()/safeUrl; it is revoked right after the click.
+// user input, which is why it bypasses h()/safeUrl. It is revoked after ~30 s so a slow
+// WebView download still has the URL when it starts.
 export function saveBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -132,5 +148,5 @@ export function saveBlob(blob, filename) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_MS);
 }

@@ -75,6 +75,11 @@ function cardForm(card, onSaved, onCancel) {
     const ok = await runAction({
       button: submit,
       key: 'card:save',
+      confirm: {
+        title: card ? "Karta o'zgarishlari saqlansinmi?" : "Yangi karta qo'shilsinmi?",
+        text: `${body.bank_name} ${body.card_number}: mijozlar to'lovni shu kartaga o'tkazadi.`,
+        confirmLabel: "Ha, saqlash",
+      },
       call: () => api(card ? `/api/admin/cards/${encodeURIComponent(card.id)}` : '/api/admin/cards', {
         method: card ? 'PUT' : 'POST', body,
       }),
@@ -88,14 +93,16 @@ function cardForm(card, onSaved, onCancel) {
 function cardItem(c, editable, reload, edit) {
   const sw = toggle(`${c.bank_name} kartasi faol`, c.is_active, !editable, async (el) => {
     const next = !isOn(el);
-    setOn(el, next);
     const ok = await runAction({
       button: el,
       key: `card-active:${c.id}`,
+      confirm: next
+        ? { title: 'Karta faol qilinsinmi?', text: `${c.bank_name} ${c.card_number} to'lovlar uchun ko'rsatiladi.`, confirmLabel: 'Faol qilish' }
+        : { title: 'Karta nofaol qilinsinmi?', text: `${c.bank_name} ${c.card_number} to'lovlar uchun ko'rsatilmaydi.`, confirmLabel: 'Nofaol qilish', danger: true },
       call: () => api(`/api/admin/cards/${encodeURIComponent(c.id)}`, { method: 'PUT', body: { is_active: next } }),
-      success: next ? 'Karta yoqildi' : "Karta o'chirildi",
+      success: next ? 'Karta faol qilindi' : 'Karta nofaol qilindi',
     });
-    if (ok) reload(); else setOn(el, !next);
+    if (ok) { setOn(el, next); reload(); }
   });
   return h('li', { class: 'card bank-card' },
     h('div', { class: 'bank-top' }, h('b', null, c.bank_name), badge(String(c.card_type || 'UZCARD').toUpperCase(), 'ok')),
@@ -152,15 +159,17 @@ async function render() {
       if (saving) return;
       saving = true;
       const next = !isOn(el);
-      setOn(el, next);
       const ok = await runAction({
         button: el,
         key: `method:${field}`,
+        confirm: next
+          ? { title: `${label} yoqilsinmi?`, text: "Mijozlar bu usul bilan to'lay oladi.", confirmLabel: 'Yoqish' }
+          : { title: `${label} o'chirilsinmi?`, text: "Mijozlar bu usul bilan to'lay olmaydi.", confirmLabel: "Ha, o'chirish", danger: true },
         call: () => api('/api/admin/payments', { method: 'POST', body: settingsBody({ [field]: next }) }),
         success: "To'lov sozlamalari saqlandi",
       });
       saving = false;
-      if (ok) settings[field] = next; else setOn(el, !next);
+      if (ok) { settings[field] = next; setOn(el, next); }
     });
     return h('li', { class: 'method-row' }, h('span', { class: 'method-name' }, label), sw);
   });

@@ -4,8 +4,10 @@ import { h, clear, formatSom, safeUrl, icon } from '../../shared/dom.js';
 import { api, apiBlob } from '../../shared/api.js';
 import { registerView } from '../registry.js';
 import {
-  can, debounce, runAction, chips, pager, pageHead, emptyNote, inlineError, badge, orderStatus, saveBlob, showToast,
+  can, debounce, runAction, chips, pager, pageHead, emptyNote, inlineError, badge, orderStatus, saveBlob, showToast, formatDate,
 } from './ui.js';
+import { renderProblems, orderLockKey } from './problems.js';
+import { openTimeline } from './timeline.js';
 
 const PAGE = 20;
 // Values are the legacy ones; the server maps done -> completed and cancel -> cancelled.
@@ -28,19 +30,20 @@ function fulfillmentCell(o) {
   return parts;
 }
 
-function actionButton(label, o, key, spec, reload, cls = 'btn btn-secondary btn-sm') {
+function actionButton(label, o, _name, spec, reload, cls = 'btn btn-secondary btn-sm') {
   const b = h('button', { type: 'button', class: cls }, label);
-  b.addEventListener('click', () => runAction({ button: b, key: `${key}:${o.id}`, ...spec }).then((ok) => { if (ok) reload(); }));
+  b.addEventListener('click', () => runAction({ button: b, key: orderLockKey(o.id), ...spec }).then((ok) => { if (ok) reload(); }));
   return b;
 }
 
 function actionsCell(o, reload) {
-  if (!can('ORDERS_UPDATE')) return [];
+  const history = h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: () => openTimeline(o.order_code) }, 'Tarix');
+  if (!can('ORDERS_UPDATE')) return [history];
   const status = String(o.status || '').toLowerCase();
   const closed = CLOSED.has(status);
   const fulfilled = o.fulfillment_status === 'fulfilled';
   const code = o.order_code;
-  const out = [];
+  const out = [history];
   if (!fulfilled && !closed) {
     out.push(actionButton('Fragment', o, 'fragment', {
       confirm: { title: 'Fragment orqali yetkazilsinmi?', text: `${code} buyurtmasi Fragment orqali darhol yetkaziladi.`, confirmLabel: 'Yetkazish' },
@@ -85,7 +88,7 @@ function actionsCell(o, reload) {
 }
 
 function table(rows, reload) {
-  const showActions = can('ORDERS_UPDATE');
+  const showActions = true; // "Tarix" is available to every reader; the other actions need ORDERS_UPDATE
   const heads = ['Kod', 'Mijoz', 'Qabul qiluvchi', 'Mahsulot', 'Summa', 'Sana', 'Holat', 'Yetkazish'];
   if (showActions) heads.push('Amallar');
   return h('table', { class: 'table orders-table' },
@@ -99,14 +102,15 @@ function table(rows, reload) {
         h('td', { 'data-label': 'Qabul qiluvchi' }, recipient),
         h('td', { 'data-label': 'Mahsulot' }, `${o.item_title || ''}${o.amount ? ` × ${o.amount}` : ''}`),
         h('td', { 'data-label': 'Summa' }, h('b', null, formatSom(o.total_price))),
-        h('td', { 'data-label': 'Sana' }, o.created_at),
+        h('td', { 'data-label': 'Sana' }, formatDate(o.created_at)),
         h('td', { 'data-label': 'Holat' }, badge(label, tone)),
         h('td', { 'data-label': 'Yetkazish' }, fulfillmentCell(o)),
         showActions ? h('td', { 'data-label': 'Amallar', class: 'actions' }, h('div', { class: 'row-actions' }, actionsCell(o, reload))) : null);
     })));
 }
 
-async function render() {
+async function render(params = {}) {
+  if (params.sub === 'problems') return renderProblems();
   const state = { search: '', status: 'all', type: 'all', offset: 0 };
   let seq = 0;
   const body = h('div', { class: 'list-body', 'aria-live': 'polite' });
@@ -168,7 +172,7 @@ async function render() {
   search.addEventListener('input', debounce(() => refilter({ search: search.value.trim() })));
 
   const root = h('div', { class: 'view orders' },
-    pageHead('Buyurtmalar', exportBtn),
+    pageHead('Buyurtmalar', h('a', { class: 'btn btn-secondary', href: '#/orders/problems' }, 'Muammoli buyurtmalar'), exportBtn),
     h('div', { class: 'filters' },
       search,
       chips(STATUS, 'all', (v) => refilter({ status: v })),

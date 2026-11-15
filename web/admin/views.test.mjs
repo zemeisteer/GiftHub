@@ -61,7 +61,12 @@ beforeEach(() => {
   document.body.textContent = '';
   stubFetch({});
 });
-afterEach(() => { tg.resetOverrides(); });
+afterEach(async () => {
+  // A test may leave a dialog open; cancel it so its action lock is released for the next test.
+  const open = q('.confirm-overlay .btn-secondary');
+  if (open) { fire(open); await tick(2); }
+  tg.resetOverrides();
+});
 
 const tick = (ms = 10) => new Promise((r) => setTimeout(r, ms));
 const q = (sel) => document.querySelector(sel);
@@ -78,6 +83,7 @@ async function mount(id) {
   const outlet = document.createElement('main');
   outlet.appendChild(node);
   document.body.appendChild(outlet);
+  await tick(15); // lets the non-awaited attention section settle
   return outlet;
 }
 async function confirmYes(label = 'Tasdiqlash') {
@@ -141,7 +147,7 @@ test('barChart labels are text, not markup', () => {
 test('dash renders KPIs, attention, chart, top products, profit table in spec order', async () => {
   stubFetch(dashRoutes());
   const o = await mount('dash');
-  const order = ['.period', '.kpis', '.attention-list', '.chart-card', '.top-products', '.profit-table']
+  const order = ['.kpis', '.attention-list', '.chart-card', '.top-products', '.profit-table']
     .map((sel) => o.innerHTML.indexOf(sel.slice(1)));
   assert.ok(order.every((i) => i >= 0), JSON.stringify(order));
   assert.deepEqual([...order].sort((a, b) => a - b), order);
@@ -165,6 +171,33 @@ test('dash period switch swaps the chart series without refetching', async () =>
   assert.equal(bars(q('.chart-card svg')).length, 7);
   assert.equal(fetchLog.length, before);
   assert.equal(btn('7 kun').getAttribute('aria-pressed'), 'true');
+});
+
+test('period selector lives in the chart card and does not touch the KPIs', async () => {
+  stubFetch(dashRoutes());
+  await mount('dash');
+  assert.ok(q('.chart-card .period'));
+  assert.equal(q('.kpis .period'), null);
+  assert.match(q('.chart-card').textContent, /Grafik davri/);
+  const kpisBefore = q('.kpis').textContent;
+  click('Bugun');
+  click('30 kun');
+  assert.equal(q('.kpis').textContent, kpisBefore);
+  assert.equal(calls(/stats/).length, 1);
+});
+
+test('dash paints KPIs and chart before the attention request finishes', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  stubFetch(dashRoutes({ '/api/v1/admin/orders/problematic': async () => { await gate; return PROBLEMS; } }));
+  const node = await getView('dash')({ id: 'dash' });
+  document.body.appendChild(node);
+  assert.equal(qa('.kpi').length, 4);
+  assert.ok(q('.chart-card svg'));
+  assert.match(q('.attention-card').textContent, /Yuklanmoqda/);
+  release();
+  await tick(15);
+  assert.equal(qa('.attention').length, 3);
 });
 
 test('needs-attention lists problematic orders and sets the badge', async () => {
@@ -267,7 +300,7 @@ test('retry buttons are hidden without ORDERS_UPDATE', async () => {
   stubFetch(dashRoutes());
   await mount('dash');
   assert.equal(qa('.attention').length, 3);
-  assert.equal(qa('.attention button').length, 0);
+  assert.deepEqual(qa('.attention button').map((b) => b.textContent.trim()), ['Tarix', 'Tarix', 'Tarix']);
 });
 
 // ---- users ----
@@ -375,13 +408,24 @@ test('orders export fetches with the auth header and downloads a blob', async ()
   const origObj = URL.createObjectURL;
   const origRev = URL.revokeObjectURL;
   const revoked = [];
+  const timers = [];
+  const origSet = globalThis.setTimeout;
+  globalThis.setTimeout = (fn, ms, ...a) => {
+    if (ms >= 30000) { timers.push([fn, ms]); return 0; }
+    return origSet(fn, ms, ...a);
+  };
   URL.createObjectURL = () => 'blob:test-1';
   URL.revokeObjectURL = (u) => revoked.push(u);
   try {
     click('Eksport');
     await tick(30);
+    assert.deepEqual(revoked, [], 'not revoked immediately');
+    for (const [fn] of timers) fn();
+    assert.deepEqual(revoked, ['blob:test-1']);
+    assert.ok(timers.some(([, ms]) => ms >= 30000), 'revoke is delayed ~30 s');
   } finally {
     document.createElement = origCreate;
+    globalThis.setTimeout = origSet;
     URL.createObjectURL = origObj;
     URL.revokeObjectURL = origRev;
   }
@@ -392,7 +436,6 @@ test('orders export fetches with the auth header and downloads a blob', async ()
   assert.ok(a, 'anchor clicked');
   assert.equal(a.getAttribute('href'), 'blob:test-1');
   assert.equal(a.getAttribute('download'), 'gifthub_orders.csv');
-  assert.deepEqual(revoked, ['blob:test-1']);
 });
 
 test('cancel order: danger confirm, then POST status cancel, no double submit', async () => {
@@ -433,7 +476,7 @@ test('order actions are hidden without ORDERS_UPDATE', async () => {
   adminState.admin = { id: 2, permissions: ['ORDERS_READ'] };
   stubFetch({ '/api/admin/orders': ORDERS });
   await mount('orders');
-  assert.equal(qa('.orders td button').length, 0);
+  assert.deepEqual(qa('.orders td button').map((b) => b.textContent.trim()), ['Tarix', 'Tarix']);
 });
 
 // ---- payments ----
@@ -462,7 +505,8 @@ test('toggling a method saves the full settings so other fields are not reset', 
   const sw = q('[role="switch"][aria-label="Payme"]');
   assert.equal(sw.getAttribute('aria-checked'), 'false');
   fire(sw);
-  await tick();
+  assert.equal(q('[role="dialog"] .btn-danger'), null, 'enabling is a plain confirm');
+  await confirmYes('Yoqish');
   const post = calls(/^POST/)[0];
   assert.equal(post.body.payme_active, true);
   assert.equal(post.body.click_active, true);
@@ -477,7 +521,8 @@ test('failed toggle rolls the switch back', async () => {
   await mount('payments');
   const sw = q('[role="switch"][aria-label="Click"]');
   fire(sw);
-  await tick();
+  await confirmYes("Ha, o'chirish");
+  assert.equal(calls(/^POST/).length, 1);
   assert.equal(sw.getAttribute('aria-checked'), 'true');
 });
 
@@ -507,6 +552,8 @@ test('adding a card validates, then posts the legacy body', async () => {
   set('card_number', '8600 1234 5678 9012');
   fire(form, 'submit');
   await tick();
+  assert.equal(calls(/^POST/).length, 0, 'save asks for confirmation first');
+  await confirmYes('Ha, saqlash');
   const post = calls(/^POST/)[0];
   assert.equal(post.url, '/api/admin/cards');
   assert.deepEqual(post.body, {
@@ -521,6 +568,226 @@ test('payment write controls are hidden without SETTINGS_UPDATE', async () => {
   assert.equal(qa('[role="switch"]').every((s) => s.hasAttribute('disabled')), true);
   assert.equal(btn("Karta qo'shish"), undefined);
   assert.ok(o);
+});
+
+
+// ---- fix round 1 ----
+test('attention rows show payment method, order status and fulfillment status', async () => {
+  const o = { ...PROBLEMS.orders[0], payment_method: 'card', status: 'processing', fulfillment_status: 'failed' };
+  stubFetch(dashRoutes({ '/api/v1/admin/orders/problematic': { ...PROBLEMS, orders: [o] } }));
+  await mount('dash');
+  const t = q('.attention').textContent;
+  assert.match(t, /To'lov: card/);
+  assert.match(t, /Jarayonda/);
+  assert.match(t, /Yetkazish: failed/);
+});
+
+test('retry asks for a reason, blocks an empty one and sends the typed text', async () => {
+  stubFetch(dashRoutes({ 'POST /api/v1/admin/orders/1/retry-fulfillment': { success: true } }));
+  await mount('dash');
+  fire(qa('.attention')[0].querySelector('button'));
+  const input = q('[role="dialog"] input[name="reason"]');
+  assert.ok(input);
+  input.value = '   ';
+  click('Yuborish');
+  assert.ok(q('[role="dialog"]'), 'dialog stays open');
+  assert.match(q('.confirm-error').textContent, /Sabab/);
+  assert.equal(calls(/^POST/).length, 0);
+  input.value = 'Fragment qayta urinish';
+  await confirmYes('Yuborish');
+  assert.equal(calls(/^POST/)[0].body.reason, 'Fragment qayta urinish');
+});
+
+test('manual fulfil blocks a reason shorter than the backend minimum', async () => {
+  stubFetch(dashRoutes({ 'POST /api/v1/admin/orders/1/manual-fulfill': { success: true } }));
+  await mount('dash');
+  fire(btn("Qo'lda bajarildi"));
+  const input = q('[role="dialog"] input[name="reason"]');
+  input.value = 'abc';
+  click('Bajarildi deb belgilash');
+  assert.match(q('.confirm-error').textContent, /kamida 5/);
+  assert.equal(calls(/^POST/).length, 0);
+  input.value = "Qo'lda yuborildi";
+  await confirmYes('Bajarildi deb belgilash');
+  assert.equal(calls(/^POST/)[0].body.reason, "Qo'lda yuborildi");
+});
+
+test('confirmDialog keeps its boolean contract and confirmWithReason returns the value', async () => {
+  const { confirmDialog, confirmWithReason } = await import('./confirm.js');
+  const a = confirmDialog({ title: 'A' });
+  click('Tasdiqlash');
+  assert.equal(await a, true);
+  const b = confirmWithReason({ title: 'B', input: { label: 'Sabab', required: true, defaultValue: 'x1' } });
+  click('Tasdiqlash');
+  assert.deepEqual(await b, { confirmed: true, value: 'x1' });
+  const c = confirmWithReason({ title: 'C', input: { label: 'Sabab' } });
+  click('Bekor qilish');
+  assert.equal((await c).confirmed, false);
+});
+
+test('a second confirm dialog cannot open while one is open (resolves false)', async () => {
+  const { confirmDialog } = await import('./confirm.js');
+  const first = confirmDialog({ title: 'first' });
+  assert.equal(await confirmDialog({ title: 'second' }), false);
+  assert.equal(qa('[role="dialog"]').length, 1);
+  assert.match(q('[role="dialog"]').textContent, /first/);
+  click('Bekor qilish');
+  assert.equal(await first, false);
+});
+
+test('one lock per order: manual cannot start while retry on the same order is pending', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  stubFetch(dashRoutes({
+    'POST /api/v1/admin/orders/1/retry-fulfillment': async () => { await gate; return { success: true }; },
+    'POST /api/v1/admin/orders/1/manual-fulfill': { success: true },
+  }));
+  await mount('dash');
+  const row = qa('.attention')[0];
+  const [retry, manual] = row.querySelectorAll('button');
+  fire(retry);
+  await confirmYes('Yuborish');
+  fire(manual);
+  assert.ok(!q('[role="dialog"]'), 'no dialog for the same order');
+  release();
+  await tick();
+  assert.equal(calls(/manual-fulfill/).length, 0);
+});
+
+test('dialogs are serialised across different orders too', async () => {
+  stubFetch(dashRoutes());
+  await mount('dash');
+  fire(qa('.attention')[0].querySelector('button'));
+  fire(qa('.attention')[1].querySelector('button'));
+  assert.equal(qa('[role="dialog"]').length, 1);
+});
+
+test('"Barchasini" link opens the full problem list with category tabs and counts', async () => {
+  const many = Array.from({ length: 12 }, (_, i) => ({ ...PROBLEMS.orders[0], id: 100 + i, order_code: `GH-1${i}` }));
+  const counts = { total_problematic: 12, paid_not_fulfilled: 5, stuck_processing: 3, payment_mismatch: 1, failed_fulfillment: 2, pending_refund: 1 };
+  stubFetch(dashRoutes({
+    '/api/v1/admin/orders/problematic': (init, url) => (/category=stuck_processing/.test(url)
+      ? { counts, orders: many.slice(0, 2) } : { counts, orders: many }),
+  }));
+  await mount('dash');
+  assert.equal(qa('.attention').length, 5);
+  const more = q('a.link-more');
+  assert.equal(more.getAttribute('href'), '#/orders/problems');
+  document.body.textContent = '';
+  const panel = await getView('orders')({ id: 'orders', sub: 'problems' });
+  document.body.appendChild(panel);
+  assert.equal(qa('.attention').length, 10);
+  for (const label of ['Hammasi (12)', "To'langan, yetkazilmagan (5)", 'Qotib qolgan (3)', "To'lov mos emas (1)", 'Yetkazish xatosi (2)', 'Qaytarish kutilmoqda (1)']) {
+    assert.ok(btn(label), label);
+  }
+  click('Keyingi');
+  assert.equal(qa('.attention').length, 2);
+  click('Qotib qolgan (3)');
+  await tick();
+  assert.match(lastUrl(), /problematic\?category=stuck_processing/);
+  assert.equal(qa('.attention').length, 2);
+  assert.equal(getBadge('orders'), 12);
+});
+
+test('orders view links to the problem list', async () => {
+  stubFetch({ '/api/admin/orders': ORDERS });
+  await mount('orders');
+  assert.ok(qa('a').some((a) => a.getAttribute('href') === '#/orders/problems'));
+});
+
+const TIMELINE = {
+  success: true, order_code: 'GH-000001',
+  timeline: [
+    { id: 1, from_status: null, to_status: 'created', actor: 'SYSTEM', note: null, created_at: '2026-11-15T10:00:00Z' },
+    { id: 2, from_status: 'created', to_status: 'paid', actor: '<img src=x onerror=alert(1)>', note: '<b>izoh</b>', created_at: '2026-11-15T10:05:00Z' },
+  ],
+};
+
+test('timeline modal opens from an attention row and renders entries as text', async () => {
+  stubFetch(dashRoutes({ '/api/v1/orders/GH-000001/timeline': TIMELINE }));
+  await mount('dash');
+  fire(qa('.attention')[0].querySelectorAll('button')[2]);
+  await tick();
+  const dlg = q('[role="dialog"]');
+  assert.match(dlg.textContent, /Buyurtma kodi: GH-000001/);
+  assert.equal(qa('.timeline-item').length, 2);
+  assert.match(dlg.textContent, /Boshlang'ich holat: created/);
+  assert.match(dlg.textContent, /created → paid/);
+  assert.equal(dlg.querySelector('img'), null);
+  assert.equal(dlg.querySelector('.timeline-item b + b'), null);
+  assert.match(dlg.textContent, /<img src=x onerror=alert\(1\)>/);
+  assert.match(dlg.textContent, /<b>izoh<\/b>/);
+  assert.equal(fetchLog.at(-1).headers['X-Telegram-Init-Data'], 'query_id=1');
+  click('Yopish');
+  assert.equal(q('[role="dialog"]'), null);
+});
+
+test('timeline opens from the orders view and shows empty and error states', async () => {
+  stubFetch({ '/api/admin/orders': ORDERS, '/api/v1/orders/GH-000005/timeline': { timeline: [] } });
+  await mount('orders');
+  fire(qa('.orders td button').find((b) => b.textContent.trim() === 'Tarix'));
+  await tick();
+  assert.match(q('[role="dialog"]').textContent, /Tarix topilmadi/);
+  click('Yopish');
+  stubFetch({ '/api/admin/orders': ORDERS, '/api/v1/orders/GH-000005/timeline': () => jsonRes(404, { detail: 'Buyurtma topilmadi.' }) });
+  fire(qa('.orders td button').find((b) => b.textContent.trim() === 'Tarix'));
+  await tick();
+  assert.match(q('[role="dialog"]').textContent, /Buyurtma topilmadi/);
+});
+
+test('same-order lock is shared between the orders table actions', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  stubFetch({
+    '/api/admin/orders': ORDERS,
+    'POST /api/admin/orders/5/mark-fulfilled': async () => { await gate; return { success: true }; },
+    'POST /api/admin/orders/5/status': { success: true },
+  });
+  await mount('orders');
+  fire(qa('.orders button').find((b) => b.textContent.trim() === 'Yetkazildi'));
+  await confirmYes('Belgilash');
+  fire(qa('.orders button').find((b) => b.textContent.trim() === 'Qaytarish'));
+  assert.ok(!q('[role="dialog"]'));
+  release();
+  await tick();
+  assert.equal(calls(/\/status/).length, 0);
+});
+
+test('formatDate formats ISO and passes server display strings through', async () => {
+  const { formatDate } = await import('./views/ui.js');
+  assert.match(formatDate('2026-11-15T10:05:00Z'), /^\d\d\.\d\d \d\d:\d\d$/);
+  assert.equal(formatDate('15 Nov, 10:00'), '15 Nov, 10:00');
+  assert.equal(formatDate(null), '');
+});
+
+test('deactivating a card is a danger confirm with the "nofaol" toast; activating is plain', async () => {
+  const two = [CARDS[0], { ...CARDS[0], id: 4, bank_name: 'Boshqa', is_active: false }];
+  stubFetch(payRoutes({
+    '/api/admin/cards': two,
+    'PUT /api/admin/cards/3': { success: true },
+    'PUT /api/admin/cards/4': { success: true },
+  }));
+  await mount('payments');
+  fire(q('[role="switch"][aria-label="Bank kartasi faol"]'));
+  assert.ok(q('[role="dialog"] .btn-danger'));
+  await confirmYes('Nofaol qilish');
+  assert.deepEqual(calls(/^PUT/)[0].body, { is_active: false });
+  assert.equal(q('#toast').textContent, 'Karta nofaol qilindi');
+  fire(q('[role="switch"][aria-label="Boshqa kartasi faol"]'));
+  assert.equal(q('[role="dialog"] .btn-danger'), null);
+  await confirmYes('Faol qilish');
+  assert.deepEqual(calls(/^PUT/)[1].body, { is_active: true });
+});
+
+test('cancelling a payment method confirmation sends nothing and keeps the switch', async () => {
+  stubFetch(payRoutes());
+  await mount('payments');
+  const sw = q('[role="switch"][aria-label="Click"]');
+  fire(sw);
+  click('Bekor qilish');
+  await tick();
+  assert.equal(calls(/^POST/).length, 0);
+  assert.equal(sw.getAttribute('aria-checked'), 'true');
 });
 
 // ---- guards ----
