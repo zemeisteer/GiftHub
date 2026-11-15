@@ -23,6 +23,7 @@ from app.models.pricing import PricingSetting
 from app.models.provider import ProviderHealth, ProviderStatus
 from app.models.recipient import SavedRecipient
 from app.models.reconciliation import ReconciliationDiscrepancy, ReconciliationReport
+from app.models.user import User
 from app.services.catalog.service import catalog_service
 from app.services.dlq.service import dlq_service
 from app.services.feature_flags.service import feature_flag_service
@@ -32,6 +33,7 @@ from app.services.pricing.service import pricing_service
 from app.services.providers.circuit_breaker import circuit_breaker
 from app.services.reconciliation.service import reconciliation_service
 from app.services.wallet.service import wallet_service
+from app.web.auth import require_permission
 
 logger = get_logger("GiftHubV1API")
 
@@ -176,14 +178,18 @@ async def create_checkout_order(
 
 
 @router.get("/admin/reconciliation/dashboard")
-async def get_reconciliation_dashboard(session=Depends(get_db)):
+async def get_reconciliation_dashboard(
+    session=Depends(get_db), admin: User = Depends(require_permission(Permission.PAYMENTS_READ))
+):
     """Financial reconciliation overview: payments received, ledger, orders, and discrepancies."""
     stats = await reconciliation_service.get_dashboard_stats(session)
     return {"success": True, "data": stats}
 
 
 @router.post("/admin/reconciliation/audit")
-async def trigger_reconciliation_audit(session=Depends(get_db)):
+async def trigger_reconciliation_audit(
+    session=Depends(get_db), admin: User = Depends(require_permission(Permission.ORDERS_REFUND))
+):
     """Triggers an on-demand reconciliation scan across payments, orders, and ledger."""
     report = await reconciliation_service.run_reconciliation_audit(session)
     return {
@@ -197,7 +203,12 @@ async def trigger_reconciliation_audit(session=Depends(get_db)):
 
 
 @router.get("/admin/reconciliation/discrepancies")
-async def list_discrepancies(is_resolved: Optional[bool] = Query(None), limit: int = 50, session=Depends(get_db)):
+async def list_discrepancies(
+    is_resolved: Optional[bool] = Query(None),
+    limit: int = 50,
+    session=Depends(get_db),
+    admin: User = Depends(require_permission(Permission.PAYMENTS_READ)),
+):
     from sqlalchemy import select
 
     stmt = select(ReconciliationDiscrepancy).order_by(ReconciliationDiscrepancy.created_at.desc())
@@ -226,7 +237,12 @@ async def list_discrepancies(is_resolved: Optional[bool] = Query(None), limit: i
 
 
 @router.post("/admin/reconciliation/discrepancies/{discrepancy_id}/resolve")
-async def resolve_discrepancy(discrepancy_id: int, action: ReasonedAdminAction, session=Depends(get_db)):
+async def resolve_discrepancy(
+    discrepancy_id: int,
+    action: ReasonedAdminAction,
+    session=Depends(get_db),
+    admin: User = Depends(require_permission(Permission.ORDERS_REFUND)),
+):
     disc = await session.get(ReconciliationDiscrepancy, discrepancy_id)
     if not disc:
         raise HTTPException(status_code=404, detail="Discrepancy record topilmadi.")
@@ -242,7 +258,10 @@ async def resolve_discrepancy(discrepancy_id: int, action: ReasonedAdminAction, 
 
 @router.get("/admin/dlq")
 async def list_dlq_jobs(
-    job_status: Optional[str] = Query(None, alias="status"), limit: int = 50, session=Depends(get_db)
+    job_status: Optional[str] = Query(None, alias="status"),
+    limit: int = 50,
+    session=Depends(get_db),
+    admin: User = Depends(require_permission(Permission.ORDERS_READ)),
 ):
     jobs = await dlq_service.list_failed_jobs(session, status=job_status, limit=limit)
     return {
@@ -264,7 +283,9 @@ async def list_dlq_jobs(
 
 
 @router.post("/admin/dlq/{job_id}/retry")
-async def retry_dlq_job(job_id: int, session=Depends(get_db)):
+async def retry_dlq_job(
+    job_id: int, session=Depends(get_db), admin: User = Depends(require_permission(Permission.ORDERS_UPDATE))
+):
     job = await dlq_service.mark_retrying(session, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="DLQ job topilmadi.")
@@ -272,8 +293,13 @@ async def retry_dlq_job(job_id: int, session=Depends(get_db)):
 
 
 @router.post("/admin/dlq/{job_id}/resolve")
-async def resolve_dlq_job(job_id: int, action: ReasonedAdminAction, session=Depends(get_db)):
-    job = await dlq_service.resolve_job(session, job_id, admin_id=0, notes=action.reason)
+async def resolve_dlq_job(
+    job_id: int,
+    action: ReasonedAdminAction,
+    session=Depends(get_db),
+    admin: User = Depends(require_permission(Permission.ORDERS_UPDATE)),
+):
+    job = await dlq_service.resolve_job(session, job_id, admin_id=admin.id, notes=action.reason)
     if not job:
         raise HTTPException(status_code=404, detail="DLQ job topilmadi.")
     return {"success": True, "message": f"Job #{job_id} muvaffaqiyatli hal qilindi."}
@@ -283,7 +309,7 @@ async def resolve_dlq_job(job_id: int, action: ReasonedAdminAction, session=Depe
 
 
 @router.get("/admin/providers")
-async def list_providers(session=Depends(get_db)):
+async def list_providers(session=Depends(get_db), admin: User = Depends(require_permission(Permission.SETTINGS_READ))):
     from sqlalchemy import select
 
     res = await session.execute(select(ProviderHealth))
@@ -306,7 +332,12 @@ async def list_providers(session=Depends(get_db)):
 
 
 @router.post("/admin/providers/{provider_name}/status")
-async def update_provider_status(provider_name: str, action: ProviderStatusUpdate, session=Depends(get_db)):
+async def update_provider_status(
+    provider_name: str,
+    action: ProviderStatusUpdate,
+    session=Depends(get_db),
+    admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE)),
+):
     """Enforces reason & confirmation for provider disabling."""
     ph = await session.get(ProviderHealth, provider_name)
     now = datetime.now(timezone.utc)
@@ -319,7 +350,7 @@ async def update_provider_status(provider_name: str, action: ProviderStatusUpdat
     ph.updated_at = now
 
     audit = AdminAuditLog(
-        admin_id=0,
+        admin_id=admin.id,
         action="update_provider_status",
         entity_type="provider",
         entity_id=provider_name,
@@ -336,7 +367,9 @@ async def update_provider_status(provider_name: str, action: ProviderStatusUpdat
 
 
 @router.get("/admin/feature-flags")
-async def get_feature_flags(session=Depends(get_db)):
+async def get_feature_flags(
+    session=Depends(get_db), admin: User = Depends(require_permission(Permission.SETTINGS_READ))
+):
     flags = await feature_flag_service.list_all_flags(session)
     return {
         "success": True,
@@ -345,7 +378,12 @@ async def get_feature_flags(session=Depends(get_db)):
 
 
 @router.post("/admin/feature-flags/{name}")
-async def set_feature_flag(name: str, req: FeatureFlagUpdate, session=Depends(get_db)):
+async def set_feature_flag(
+    name: str,
+    req: FeatureFlagUpdate,
+    session=Depends(get_db),
+    admin: User = Depends(require_permission(Permission.SETTINGS_UPDATE)),
+):
     flag = await feature_flag_service.set_flag(session, name, req.is_enabled, req.description)
     return {"success": True, "flag": {"name": flag.name, "is_enabled": flag.is_enabled}}
 
@@ -354,7 +392,9 @@ async def set_feature_flag(name: str, req: FeatureFlagUpdate, session=Depends(ge
 
 
 @router.get("/admin/catalog")
-async def get_admin_catalog(session=Depends(get_db)):
+async def get_admin_catalog(
+    session=Depends(get_db), admin: User = Depends(require_permission(Permission.PRICING_READ))
+):
     products = await catalog_service.list_products(session, active_only=False)
     return {
         "success": True,
@@ -377,7 +417,11 @@ async def get_admin_catalog(session=Depends(get_db)):
 
 
 @router.post("/admin/catalog")
-async def create_catalog_item(item: CatalogProductCreate, session=Depends(get_db)):
+async def create_catalog_item(
+    item: CatalogProductCreate,
+    session=Depends(get_db),
+    admin: User = Depends(require_permission(Permission.PRICING_UPDATE)),
+):
     prod = await catalog_service.create_product(
         session=session,
         category=item.category,
@@ -396,7 +440,6 @@ async def create_catalog_item(item: CatalogProductCreate, session=Depends(get_db
 # ================= SYSTEM HEALTH (Req 8) ================= #
 
 
-@router.get("/admin/health/system")
 @router.get("/health/system")
 async def get_system_health(session=Depends(get_db)):
     """
@@ -544,11 +587,23 @@ async def get_system_health(session=Depends(get_db)):
     }
 
 
+@router.get("/admin/health/system")
+async def get_admin_system_health(
+    session=Depends(get_db), admin: User = Depends(require_permission(Permission.SETTINGS_READ))
+):
+    return await get_system_health(session)
+
+
 # ================= PROBLEM ORDERS DASHBOARD (Req 9) ================= #
 
 
 @router.get("/admin/orders/problematic")
-async def get_problem_orders(category: Optional[str] = Query(None), limit: int = 50, session=Depends(get_db)):
+async def get_problem_orders(
+    category: Optional[str] = Query(None),
+    limit: int = 50,
+    session=Depends(get_db),
+    admin: User = Depends(require_permission(Permission.ORDERS_READ)),
+):
     """
     Problem Orders dashboard categorizing orders:
     paid-but-not-fulfilled, stuck-processing, payment mismatch, failed fulfillment, pending refund.
@@ -701,7 +756,12 @@ async def get_problem_orders(category: Optional[str] = Query(None), limit: int =
 
 
 @router.post("/admin/orders/{order_id}/retry-fulfillment")
-async def retry_order_fulfillment(order_id: int, action: ReasonedAdminAction, session=Depends(get_db)):
+async def retry_order_fulfillment(
+    order_id: int,
+    action: ReasonedAdminAction,
+    session=Depends(get_db),
+    admin: User = Depends(require_permission(Permission.ORDERS_UPDATE)),
+):
     """Triggers an immediate automated fulfillment retry for a problem order."""
     order = await session.get(Order, order_id)
     if not order:
@@ -716,7 +776,12 @@ async def retry_order_fulfillment(order_id: int, action: ReasonedAdminAction, se
 
 
 @router.post("/admin/orders/{order_id}/manual-fulfill")
-async def manual_fulfill_order(order_id: int, action: ReasonedAdminAction, session=Depends(get_db)):
+async def manual_fulfill_order(
+    order_id: int,
+    action: ReasonedAdminAction,
+    session=Depends(get_db),
+    admin: User = Depends(require_permission(Permission.ORDERS_UPDATE)),
+):
     """Admin manually marks a problematic order as fulfilled with required reason."""
     order = await order_service.transition_order_status(
         session=session, order_id=order_id, new_status_raw="completed", reason=f"Qo'lda bajarildi: {action.reason}"
@@ -731,7 +796,11 @@ async def manual_fulfill_order(order_id: int, action: ReasonedAdminAction, sessi
 
 
 @router.post("/admin/pricing/preview")
-async def preview_price_changes(req: PricePreviewRequest, session=Depends(get_db)):
+async def preview_price_changes(
+    req: PricePreviewRequest,
+    session=Depends(get_db),
+    admin: User = Depends(require_permission(Permission.PRICING_READ)),
+):
     """
     Simulates pricing changes across all product types (Stars, Premium, Gifts)
     before applying changes to production (Req 17).

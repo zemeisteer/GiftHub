@@ -11,7 +11,13 @@ from app.models.order import Order, OrderStatusHistory
 from app.models.recipient import SavedRecipient
 from app.models.user import User
 from app.services.orders.service import order_service
+from app.web.auth import get_current_admin
 from app.web.server import app
+
+
+class _SuperAdmin:
+    id = 999001
+    role = "super_admin"
 
 
 @pytest.mark.asyncio
@@ -99,6 +105,7 @@ async def test_saved_recipients_api(db_session: AsyncSession, sample_user: User)
     finally:
         app.dependency_overrides.pop(v1_get_db, None)
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_admin, None)
 
 
 @pytest.mark.asyncio
@@ -147,6 +154,7 @@ async def test_order_receipt_and_buy_again_api(db_session: AsyncSession, sample_
     finally:
         app.dependency_overrides.pop(v1_get_db, None)
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_admin, None)
 
 
 @pytest.mark.asyncio
@@ -154,6 +162,7 @@ async def test_admin_system_health_and_problematic_orders_api(db_session: AsyncS
     """Verifies Req 8 & Req 9."""
     app.dependency_overrides[v1_get_db] = lambda: db_session
     app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_current_admin] = lambda: _SuperAdmin()
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -183,6 +192,7 @@ async def test_admin_system_health_and_problematic_orders_api(db_session: AsyncS
     finally:
         app.dependency_overrides.pop(v1_get_db, None)
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_admin, None)
 
 
 @pytest.mark.asyncio
@@ -190,6 +200,7 @@ async def test_admin_price_preview_simulation(db_session: AsyncSession):
     """Verifies Req 17."""
     app.dependency_overrides[v1_get_db] = lambda: db_session
     app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_current_admin] = lambda: _SuperAdmin()
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -210,3 +221,4 @@ async def test_admin_price_preview_simulation(db_session: AsyncSession):
     finally:
         app.dependency_overrides.pop(v1_get_db, None)
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_admin, None)
