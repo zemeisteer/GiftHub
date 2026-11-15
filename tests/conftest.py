@@ -1,3 +1,7 @@
+import os
+
+os.environ.setdefault("ENVIRONMENT", "test")
+
 import hashlib
 import hmac
 import time

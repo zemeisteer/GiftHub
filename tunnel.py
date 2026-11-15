@@ -26,6 +26,7 @@ try:
 
     PORT = settings.WEB_PORT
 except Exception:
+    settings = None
     PORT = 8000
 
 
@@ -135,7 +136,15 @@ def run_cloudflare_tunnel():
     return True
 
 
+def ensure_not_development() -> None:
+    """Refuse to expose a development-mode server to the internet."""
+    if settings is None or settings.ENVIRONMENT == "development":
+        print("[X] ENVIRONMENT=development: dev-kirish ochiq. Tunnelni faqat ENVIRONMENT=production bilan oching.")
+        raise SystemExit(1)
+
+
 def main():
+    ensure_not_development()
     while True:
         should_continue = run_cloudflare_tunnel()
         if not should_continue:

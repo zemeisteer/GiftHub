@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     # General
     PROJECT_NAME: str = "GiftHub"
-    ENVIRONMENT: str = "development"  # development, production, test
+    ENVIRONMENT: str = "production"  # production (default), development, test
     LOG_LEVEL: str = "INFO"
     BASE_DIR: str = BASE_DIR
 
