@@ -5,6 +5,8 @@ export function safeUrl(u) {
   // Browsers strip tab/newline inside URLs, so any control char or space is rejected.
   if (/[\x00-\x20\x7f]/.test(u)) return null;
   if (u.startsWith('https://')) return u;
+  // Same-document fragment (hash routes).
+  if (/^#[A-Za-z0-9/_\-.:~?=&%]*$/.test(u)) return u;
   if (u.startsWith('/') && !u.startsWith('//') && !u.startsWith('/\\')) return u;
   return null;
 }

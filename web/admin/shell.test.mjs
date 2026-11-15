@@ -278,6 +278,37 @@ test('Esc cancels the confirm dialog', async () => {
   assert.equal(await p, false);
 });
 
+test('Esc works with focus on body (handler is document-level) and is removed afterwards', async () => {
+  const p = confirmDialog({ title: 'X' });
+  key(document.body, 'Escape');
+  assert.equal(await p, false);
+  const q = confirmDialog({ title: 'Y' });
+  click('Bekor qilish');
+  assert.equal(await q, false);
+  assert.equal(document.querySelector('[role="dialog"]'), null);
+  assert.equal(key(document.body, 'Escape')(), false);
+});
+
+test('dialog title ids are unique and box is focusable', async () => {
+  const a = confirmDialog({ title: 'A' });
+  const idA = document.querySelector('[role="dialog"]').getAttribute('aria-labelledby');
+  click('Bekor qilish');
+  await a;
+  const b = confirmDialog({ title: 'B' });
+  const box = document.querySelector('[role="dialog"]');
+  assert.notEqual(box.getAttribute('aria-labelledby'), idA);
+  assert.equal(box.getAttribute('tabindex'), '-1');
+  click('Bekor qilish');
+  await b;
+});
+
+test('mobile topbar is fixed and the outlet leaves room for it', () => {
+  const css = readFileSync(new URL('./admin.css', import.meta.url), 'utf8');
+  assert.match(css, /\.topbar\s*\{[^}]*position:\s*fixed;[^}]*top:\s*0/);
+  assert.doesNotMatch(css, /position:\s*sticky/);
+  assert.match(css, /\.outlet\s*\{[^}]*padding:\s*calc\(var\(--topbar-h\)/);
+});
+
 test('Tab is trapped inside the confirm dialog', async () => {
   const p = confirmDialog({ title: 'X' });
   const dlg = document.querySelector('[role="dialog"]');

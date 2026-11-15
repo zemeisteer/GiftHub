@@ -80,14 +80,12 @@ export function renderNav(admin, active) {
       items.map((i) => {
         const badge = h('span', { class: 'nav-badge', 'data-badge': i.id });
         paintBadge(badge, getBadge(i.id));
-        // dom.js h() only allows https:// and absolute-path URLs, so the in-page hash is set directly.
-        const link = h('a', {
+        return h('a', {
+          href: `#/${i.id}`,
           class: i.id === active ? 'nav-item active' : 'nav-item',
           'aria-current': i.id === active ? 'page' : null,
           onclick: () => setOpen(false),
         }, icon(i.icon), h('span', { class: 'nav-label' }, i.label), badge);
-        link.setAttribute('href', `#/${i.id}`);
-        return link;
       }));
   });
 

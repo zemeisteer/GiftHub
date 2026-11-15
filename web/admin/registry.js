@@ -3,11 +3,6 @@
 
 export const adminState = { admin: null };
 
-export function can(perm) {
-  const perms = adminState.admin && adminState.admin.permissions;
-  return Array.isArray(perms) && perms.includes(perm);
-}
-
 const views = new Map();
 
 // A view is `(params) => Promise<Node>`; params = { id, sub? }.

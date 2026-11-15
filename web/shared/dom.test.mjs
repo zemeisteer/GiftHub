@@ -34,6 +34,14 @@ test('safeUrl', () => {
     assert.equal(safeUrl(u), null, String(u));
   }
 });
+test('safeUrl accepts same-document fragments only when clean', () => {
+  assert.equal(safeUrl('#/orders'), '#/orders');
+  assert.equal(safeUrl('#/orders/GH-1?x=1'), '#/orders/GH-1?x=1');
+  for (const u of ['#\njavascript:alert(1)', '# x', '#<b>', '#\tfoo', 'javascript:alert(1)', '//host', 'http://a.b']) {
+    assert.equal(safeUrl(u), null, JSON.stringify(u));
+  }
+  assert.equal(h('a', { href: '#/orders' }).getAttribute('href'), '#/orders');
+});
 test('h attrs: class, style, dataset, booleans, nulls', () => {
   const el = h('div', { class: 'a b', style: { color: 'red' }, dataset: { id: '5' }, hidden: true, disabled: false, title: null, 'aria-label': 'x' });
   assert.equal(el.className, 'a b');
