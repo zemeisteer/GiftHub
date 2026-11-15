@@ -1,5 +1,11 @@
 {
+  "scripts": {
+    "test": "node --test \"web/**/*.test.mjs\""
+  },
   "dependencies": {
     "localtunnel": "^2.0.2"
+  },
+  "devDependencies": {
+    "linkedom": "^0.18.5"
   }
 }
