@@ -41,6 +41,7 @@ export function createRouter(routes, outlet, options = {}) {
     }
     rendered = hash;
     const mine = ++token;
+    clear(outlet);
     let node;
     try {
       node = await found.handler(found.params);
@@ -50,7 +51,6 @@ export function createRouter(routes, outlet, options = {}) {
       node = options.onError(err);
     }
     if (mine !== token) return undefined;
-    clear(outlet);
     if (node) outlet.appendChild(node);
     return undefined;
   }

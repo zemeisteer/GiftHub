@@ -32,20 +32,21 @@ export async function api(path, opts = {}) {
   init.signal = ctrl.signal;
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   let res;
+  let data = null;
   try {
     res = await fetch(path, init);
+    // The timer stays armed until the body is read.
+    if (res.status !== 204) {
+      const text = await res.text();
+      if (text) {
+        try { data = JSON.parse(text); } catch { data = null; }
+      }
+    }
   } catch (e) {
     if (e && e.name === 'AbortError') throw new ApiError(0, 'Server javob bermadi');
     throw new ApiError(0, "Internet aloqasi yo'q");
   } finally {
     clearTimeout(timer);
-  }
-  let data = null;
-  if (res.status !== 204) {
-    const text = await res.text().catch(() => '');
-    if (text) {
-      try { data = JSON.parse(text); } catch { data = null; }
-    }
   }
   if (!res.ok) throw new ApiError(res.status, detailMessage(data, res.status));
   return data;

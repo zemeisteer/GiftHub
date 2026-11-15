@@ -81,6 +81,25 @@ test('stale render is ignored', async () => {
   assert.equal(outlet.textContent, 'home');
 });
 
+test('outlet is cleared while the next handler is pending', async () => {
+  outlet = document.createElement('div');
+  let release;
+  const slow = new Promise((res) => { release = res; });
+  const r = createRouter({
+    '#/': async () => node('home'),
+    '#/slow': async () => { await slow; return node('slow'); },
+  }, outlet);
+  r.go('#/');
+  await tick();
+  assert.equal(outlet.textContent, 'home');
+  r.go('#/slow');
+  await tick();
+  assert.equal(outlet.childNodes.length, 0);
+  release();
+  await tick();
+  assert.equal(outlet.textContent, 'slow');
+});
+
 test('handler errors go to onError', async () => {
   outlet = document.createElement('div');
   const r = createRouter({ '#/': async () => { throw new Error('boom'); } }, outlet, { onError: (e) => node('err:' + e.message) });

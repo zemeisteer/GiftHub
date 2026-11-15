@@ -50,6 +50,17 @@ test('api times out with friendly message', async () => {
   await assert.rejects(api('/x', { timeoutMs: 10 }), (e) => e instanceof ApiError && e.status === 0 && e.message === 'Server javob bermadi');
 });
 
+test('api timeout also covers the response body', async () => {
+  globalThis.fetch = async (u, init) => ({
+    ok: true,
+    status: 200,
+    text: () => new Promise((_, reject) => {
+      init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+    }),
+  });
+  await assert.rejects(api('/x', { timeoutMs: 10 }), (e) => e instanceof ApiError && e.status === 0 && e.message === 'Server javob bermadi');
+});
+
 test('api maps network failure', async () => {
   globalThis.fetch = async () => { throw new TypeError('failed'); };
   await assert.rejects(api('/x'), { status: 0, message: "Internet aloqasi yo'q" });
