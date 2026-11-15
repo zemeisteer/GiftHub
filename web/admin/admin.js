@@ -13,7 +13,12 @@ const NO_ACCESS = "Bu bo'lim uchun ruxsatingiz yo'q";
 
 // id -> module path for views that live in their own file (Tasks 9-11 add entries).
 // A view module calls registerView(id, fn) from './registry.js' when imported.
-const VIEW_MODULES = {};
+const VIEW_MODULES = {
+  dash: './views/dash.js',
+  orders: './views/orders.js',
+  users: './views/users.js',
+  payments: './views/payments.js',
+};
 
 const byId = (id) => document.getElementById(id);
 

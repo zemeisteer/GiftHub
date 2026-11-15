@@ -19,6 +19,32 @@ function detailMessage(data, status) {
   return `Xatolik (${status})`;
 }
 
+// Authenticated file download (CSV export): a plain link cannot send the init-data header.
+export async function apiBlob(path, opts = {}) {
+  if (!isSameOriginPath(path)) throw new Error('apiBlob(): only same-origin paths are allowed');
+  const { timeoutMs = 30000 } = opts;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  let res;
+  let blob = null;
+  let data = null;
+  try {
+    res = await fetch(path, { headers: { 'X-Telegram-Init-Data': tg.initData || '' }, signal: ctrl.signal });
+    if (res.ok) {
+      blob = await res.blob();
+    } else {
+      try { data = JSON.parse(await res.text()); } catch { data = null; }
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new ApiError(0, 'Server javob bermadi');
+    throw new ApiError(0, "Internet aloqasi yo'q");
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) throw new ApiError(res.status, detailMessage(data, res.status));
+  return blob;
+}
+
 export async function api(path, opts = {}) {
   if (!isSameOriginPath(path)) throw new Error('api(): only same-origin paths are allowed');
   const { method = 'GET', body, timeoutMs = 15000 } = opts;
