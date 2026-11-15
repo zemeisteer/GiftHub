@@ -1,7 +1,7 @@
 // Home screen (B · store style): balance, search, category chips, product grid.
 import { h, clear, icon, formatSom } from '../../shared/dom.js';
 import { tg } from '../../shared/tg.js';
-import { appState, cachedProducts, getProducts } from '../store.js';
+import { appState, cachedProducts, getProducts, productList } from '../store.js';
 import { renderError, renderEmpty, skeletonCards } from './state.js';
 
 const CATEGORIES = [
@@ -11,27 +11,8 @@ const CATEGORIES = [
   ['gifts', "Sovg'alar"],
 ];
 
-const price = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
-
-// Flattens the /api/products response into one list of cards.
-export function productList(data) {
-  const out = [];
-  const d = data || {};
-  for (const p of Array.isArray(d.stars_packages) ? d.stars_packages : []) {
-    if (price(p.price_uzs) === null || !Number.isFinite(Number(p.amount))) continue;
-    out.push({ id: `stars-${Number(p.amount)}`, cat: 'stars', name: `${Number(p.amount)} Stars`, price: price(p.price_uzs), discount: Number(p.discount_pct) || 0 });
-  }
-  for (const p of Array.isArray(d.premium_packages) ? d.premium_packages : []) {
-    if (price(p.price_uzs) === null || !Number.isFinite(Number(p.months))) continue;
-    out.push({ id: `premium-${Number(p.months)}`, cat: 'premium', name: String(p.name || `Premium — ${p.months} oy`), price: price(p.price_uzs), discount: 0 });
-  }
-  for (const g of Array.isArray(d.gifts) ? d.gifts : []) {
-    if (price(g.price_uzs) === null || g.id === undefined || g.id === null) continue;
-    const emoji = typeof g.icon === 'string' && g.icon.length <= 8 ? g.icon : null;
-    out.push({ id: `gift-${String(g.id)}`, cat: 'gifts', name: String(g.name || "Sovg'a"), price: price(g.price_uzs), discount: 0, emoji });
-  }
-  return out;
-}
+// The slug <-> product mapping lives in store.js so product.js resolves the same ids.
+export { productList };
 
 const CAT_ICON = { stars: 'star', premium: 'diamond', gifts: 'gift' };
 

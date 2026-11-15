@@ -42,12 +42,15 @@ function comingSoon() {
 }
 
 // Tab screens show the nav; sub-screens also get Telegram's back button.
+// Every route change first drops the previous screen's MainButton.
 const tab = (key, handler) => async (params) => {
+  tg.hideMainButton();
   setNav(key);
   tg.backButton(null);
   return handler(params);
 };
 const sub = (handler) => async (params) => {
+  tg.hideMainButton();
   setNav('home');
   tg.backButton(() => { location.hash = '#/'; });
   return handler(params);
@@ -56,8 +59,8 @@ const sub = (handler) => async (params) => {
 // Non-home screens are dynamic import() modules once they exist (Tasks 6-7).
 const routes = {
   '#/': tab('home', () => homeScreen()),
-  '#/product/:id': sub(comingSoon),
-  '#/topup': sub(comingSoon),
+  '#/product/:id': sub(async (params) => (await import('./screens/product.js')).productScreen(params)),
+  '#/topup': sub(async () => (await import('./screens/topup.js')).topupScreen()),
   '#/orders': tab('orders', comingSoon),
   '#/referral': tab('referral', comingSoon),
   '#/profile': tab('profile', comingSoon),
