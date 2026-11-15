@@ -17,10 +17,16 @@ JS_RULES = [
     (re.compile(r"\binsertAdjacentHTML\b"), "insertAdjacentHTML is forbidden"),
     (re.compile(r"\bdocument\s*\.\s*write(ln)?\b"), "document.write is forbidden"),
     (re.compile(r"\beval\s*\("), "eval() is forbidden"),
-    (re.compile(r"\bnew\s+Function\b"), "new Function is forbidden"),
+    (re.compile(r"\bFunction\s*\(|\bnew\s+Function\b"), "Function constructor is forbidden"),
+    (re.compile(r"""setAttribute\(\s*['"`](on|srcdoc)""", re.I), "setAttribute of on*/srcdoc is forbidden"),
+    (re.compile(r"\bsetHTMLUnsafe\b"), "setHTMLUnsafe is forbidden"),
+    (re.compile(r"\bcreateContextualFragment\b"), "createContextualFragment is forbidden"),
+    (re.compile(r"\bparseFromString\b"), "DOMParser/parseFromString is forbidden"),
+    (re.compile(r"""\bset(Timeout|Interval)\(\s*['"`]"""), "string argument to setTimeout/setInterval is forbidden"),
+    (re.compile(r"javascript\s*:", re.I), "javascript: URL is forbidden"),
 ]
 HTML_RULES = [
-    (re.compile(r"<[^>]*\son[a-z]+\s*=", re.I), "inline event handler attribute is forbidden"),
+    (re.compile(r"<[a-zA-Z][^>]*?\son[a-z]+\s*=", re.I), "inline event handler attribute is forbidden"),
     (re.compile(r"<script\b(?![^>]*\bsrc\s*=)[^>]*>", re.I), "inline <script> is forbidden"),
     (re.compile(r"<style\b", re.I), "<style> block is forbidden"),
 ]
@@ -46,15 +52,17 @@ def find_violations(root: Path) -> list[str]:
     root = Path(root)
     out: list[str] = []
     for p in _iter_files(root):
-        rules = list(JS_RULES) if p.suffix in {".js", ".mjs", ".html"} else []
+        rules = [] if p.suffix == ".css" else list(JS_RULES)
         if p.suffix == ".html":
             rules += HTML_RULES
-        rel = p.relative_to(root).as_posix() if p != root else p.name
+        rel = p.relative_to(root).as_posix()
         text = p.read_text(encoding="utf-8", errors="replace")
-        for lineno, line in enumerate(text.splitlines(), 1):
-            for rx, reason in rules:
-                if rx.search(line):
-                    out.append(f"{rel}:{lineno}: {reason}")
+        found = []
+        for rx, reason in rules:
+            for m in rx.finditer(text):
+                found.append((text.count("\n", 0, m.start()) + 1, reason))
+        for lineno, reason in sorted(found):
+            out.append(f"{rel}:{lineno}: {reason}")
     return out
 
 

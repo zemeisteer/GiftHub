@@ -2,9 +2,10 @@
 
 export function safeUrl(u) {
   if (typeof u !== 'string') return null;
-  const s = u.trim();
-  if (s.startsWith('https://')) return s;
-  if (s.startsWith('/') && !s.startsWith('//') && !s.startsWith('/\\')) return s;
+  // Browsers strip tab/newline inside URLs, so any control char or space is rejected.
+  if (/[\x00-\x20\x7f]/.test(u)) return null;
+  if (u.startsWith('https://')) return u;
+  if (u.startsWith('/') && !u.startsWith('//') && !u.startsWith('/\\')) return u;
   return null;
 }
 
@@ -38,22 +39,29 @@ function appendChild(el, child) {
   el.appendChild(document.createTextNode(String(child)));
 }
 
+const URL_ATTRS = new Set(['href', 'src', 'formaction', 'action', 'poster', 'data', 'xlink:href', 'ping', 'cite', 'background']);
+const BLOCKED_ATTRS = new Set(['srcdoc']);
+const BLOCKED_TAGS = new Set(['script', 'iframe', 'object', 'embed', 'style', 'frame', 'base']);
+
 function applyAttr(el, key, value) {
   if (value === null || value === undefined || value === false) return;
-  if (/^on[A-Z]/.test(key)) {
-    if (typeof value === 'function') el.addEventListener(key.slice(2).toLowerCase(), value);
+  const lower = key.toLowerCase();
+  if (lower.startsWith('on')) {
+    if (typeof value === 'function') el.addEventListener(lower.slice(2), value);
     return;
   }
+  if (BLOCKED_ATTRS.has(lower)) return;
+  if (lower === 'style' && typeof value !== 'object') return;
   if (key === 'class') {
     el.className = String(value);
-  } else if (key === 'style' && typeof value === 'object') {
+  } else if (lower === 'style') {
     for (const [prop, val] of Object.entries(value)) {
       if (prop.startsWith('--')) el.style.setProperty(prop, String(val));
       else el.style[prop] = val;
     }
   } else if (key === 'dataset' && typeof value === 'object') {
     for (const [k, v] of Object.entries(value)) el.dataset[k] = String(v);
-  } else if (key === 'href' || key === 'src') {
+  } else if (URL_ATTRS.has(lower)) {
     const safe = safeUrl(String(value));
     if (safe !== null) el.setAttribute(key, safe);
   } else if (value === true) {
@@ -64,6 +72,7 @@ function applyAttr(el, key, value) {
 }
 
 export function h(tag, attrs, ...children) {
+  if (BLOCKED_TAGS.has(String(tag).toLowerCase())) throw new Error(`h(): <${tag}> is not allowed`);
   const el = document.createElement(tag);
   if (attrs) for (const [k, v] of Object.entries(attrs)) applyAttr(el, k, v);
   for (const c of children) appendChild(el, c);

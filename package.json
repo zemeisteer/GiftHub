@@ -1,4 +1,6 @@
 {
+  "name": "gifthub",
+  "private": true,
   "scripts": {
     "test": "node --test \"web/**/*.test.mjs\""
   },

@@ -60,3 +60,28 @@ test('clear empties element and returns it', () => {
   assert.equal(clear(el), el);
   assert.equal(el.childNodes.length, 0);
 });
+test('lowercase on* string attributes never become inline handlers', () => {
+  const img = h('img', { onerror: 'alert(1)', ONCLICK: 'x()' });
+  assert.equal(img.getAttribute('onerror'), null);
+  assert.equal(img.getAttribute('onclick'), null);
+  let n = 0; const b = h('button', { onclick: () => n++ });
+  b.click(); assert.equal(n, 1);
+});
+test('url-ish and html-bearing attrs are sanitized', () => {
+  for (const k of ['formaction', 'action', 'poster', 'data', 'xlink:href', 'ping', 'cite', 'background']) {
+    assert.equal(h('div', { [k]: 'javascript:alert(1)' }).getAttribute(k), null, k);
+  }
+  assert.equal(h('form', { action: '/ok' }).getAttribute('action'), '/ok');
+  assert.equal(h('div', { srcdoc: '<b>1</b>' }).getAttribute('srcdoc'), null);
+  assert.equal(h('div', { style: 'background:url(javascript:1)' }).getAttribute('style'), null);
+});
+test('dangerous tags throw', () => {
+  for (const t of ['script', 'IFRAME', 'object', 'embed', 'style', 'frame', 'base']) {
+    assert.throws(() => h(t), t);
+  }
+});
+test('safeUrl rejects whitespace/control chars', () => {
+  for (const u of ['/\t/evil.com', '/\n/evil.com', '/\r/evil.com', ' /x', '/x ', 'https://a.b/\u0000']) {
+    assert.equal(safeUrl(u), null, JSON.stringify(u));
+  }
+});
