@@ -1,7 +1,7 @@
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
-from app.web.security_headers import CSP_POLICY, LEGACY_CSP_EXEMPT
+from app.web.security_headers import CSP_POLICY
 from app.web.server import ASSET_VERSION, app
 
 
@@ -13,7 +13,6 @@ async def client():
 
 
 async def test_user_app_is_served_with_strict_csp(client):
-    assert "/app" not in LEGACY_CSP_EXEMPT
     r = await client.get("/app")
     assert r.status_code == 200
     assert r.headers["content-security-policy"] == CSP_POLICY

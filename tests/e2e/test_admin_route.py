@@ -2,7 +2,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from app.web.auth import get_current_admin
-from app.web.security_headers import CSP_POLICY, LEGACY_CSP_EXEMPT
+from app.web.security_headers import CSP_POLICY
 from app.web.server import ASSET_VERSION, app
 
 
@@ -21,9 +21,8 @@ class _Admin:
         self.username = "ali"
 
 
-async def test_admin_new_is_served_with_strict_csp(client):
-    assert "/admin/new" not in LEGACY_CSP_EXEMPT
-    r = await client.get("/admin/new")
+async def test_admin_is_served_with_strict_csp(client):
+    r = await client.get("/admin")
     assert r.status_code == 200
     assert r.headers["content-security-policy"] == CSP_POLICY
     assert r.headers["cache-control"] == "no-cache"
@@ -32,10 +31,9 @@ async def test_admin_new_is_served_with_strict_csp(client):
     assert 'id="outlet"' in r.text
 
 
-async def test_legacy_admin_still_served_without_csp(client):
-    r = await client.get("/admin")
-    assert r.status_code == 200
-    assert "content-security-policy" not in r.headers
+async def test_old_admin_preview_route_is_gone(client):
+    r = await client.get("/admin/new")
+    assert r.status_code == 404
 
 
 async def test_admin_assets_are_served(client):

@@ -6,7 +6,7 @@ import { parseHTML } from 'linkedom';
 let boot, go, VIEW_MODULES, NAV, renderNav, confirmDialog, registerView, setBadge, adminState, tg;
 let dom, fetchLog;
 
-const html = readFileSync(new URL('./new.html', import.meta.url), 'utf8');
+const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
 
 const ALL_PERMS = [
   'USERS_READ', 'ORDERS_READ', 'ORDERS_UPDATE', 'ORDERS_REFUND', 'PRICING_READ', 'PRICING_UPDATE',

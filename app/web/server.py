@@ -132,15 +132,6 @@ def build_app(environment: str) -> FastAPI:
         return HTMLResponse("<h2>GiftHub Admin Panel fayli topilmadi.</h2>", status_code=404)
 
 
-    # Temporary preview of the redesigned admin; replaces /admin in Task 12.
-    @app.get("/admin/new", response_class=HTMLResponse)
-    async def serve_admin_new():
-        path = os.path.join(settings.BASE_DIR, "web", "admin", "new.html")
-        if os.path.exists(path):
-            return HTMLResponse(render_index(path), headers={"Cache-Control": "no-cache"})
-        return HTMLResponse("<h2>GiftHub Admin Panel fayli topilmadi.</h2>", status_code=404)
-
-
     @app.get("/")
     async def root_redirect():
         return HTMLResponse("""

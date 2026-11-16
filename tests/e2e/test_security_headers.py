@@ -1,7 +1,7 @@
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
-from app.web.security_headers import CSP_POLICY, LEGACY_CSP_EXEMPT
+from app.web.security_headers import CSP_POLICY
 from app.web.server import ASSET_VERSION, app, build_app, render_index
 
 
@@ -12,16 +12,15 @@ async def client():
         yield c
 
 
-async def test_legacy_admin_page_has_no_csp_but_other_headers(client):
-    assert LEGACY_CSP_EXEMPT == {"/admin"}
+async def test_admin_page_has_exact_csp_and_other_headers(client):
     r = await client.get("/admin")
-    assert "content-security-policy" not in r.headers
+    assert r.headers["content-security-policy"] == CSP_POLICY
     assert r.headers["x-content-type-options"] == "nosniff"
     assert r.headers["referrer-policy"] == "strict-origin-when-cross-origin"
 
 
-async def test_non_legacy_paths_have_exact_csp(client):
-    for path in ("/app", "/health", "/static/shared/tokens.css"):
+async def test_all_paths_have_exact_csp(client):
+    for path in ("/app", "/admin", "/health", "/static/shared/tokens.css"):
         r = await client.get(path)
         assert r.headers["content-security-policy"] == CSP_POLICY
         assert r.headers["x-content-type-options"] == "nosniff"

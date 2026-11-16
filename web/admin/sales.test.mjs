@@ -6,7 +6,7 @@ import { parseHTML } from 'linkedom';
 let getView, adminState, tg, field, readForm;
 let fetchLog;
 
-const html = readFileSync(new URL('./new.html', import.meta.url), 'utf8');
+const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
 const ALL = [
   'USERS_READ', 'ORDERS_READ', 'ORDERS_UPDATE', 'ORDERS_REFUND', 'PRICING_READ', 'PRICING_UPDATE',
   'PAYMENTS_READ', 'ANALYTICS_READ', 'ADMINS_READ', 'ADMINS_MANAGE', 'SETTINGS_READ', 'SETTINGS_UPDATE',
