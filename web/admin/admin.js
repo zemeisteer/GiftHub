@@ -3,7 +3,7 @@ import { h, clear, icon } from '../shared/dom.js';
 import { api, ApiError } from '../shared/api.js';
 import { tg } from '../shared/tg.js';
 import { createRouter } from '../shared/router.js';
-import { renderError, renderEmpty } from '../user/screens/state.js';
+import { renderError, renderEmpty } from '../shared/state.js';
 import { renderNav, findItem, canSee, firstAllowed } from './nav.js';
 import { adminState, getView, setBadge } from './registry.js';
 

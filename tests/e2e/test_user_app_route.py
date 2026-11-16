@@ -34,6 +34,7 @@ async def test_user_app_assets_are_served(client):
         "/static/user/app.css",
         "/static/user/store.js",
         "/static/user/screens/home.js",
+        "/static/shared/state.js",
         "/static/user/screens/state.js",
         "/static/user/screens/orders.js",
         "/static/user/screens/referral.js",

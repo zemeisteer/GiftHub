@@ -6,7 +6,7 @@ import { h, clear, icon, formatSom } from '../../shared/dom.js';
 import { api } from '../../shared/api.js';
 import { tg } from '../../shared/tg.js';
 import { appState, getProducts, productList, invalidateProducts, setBalance, refreshUser, takePrefill } from '../store.js';
-import { renderEmpty } from './state.js';
+import { renderEmpty } from '../../shared/state.js';
 import { createAction } from './action.js';
 
 // Telegram usernames start with a letter; 5–32 chars. Telegram user IDs are sent as plain digits.

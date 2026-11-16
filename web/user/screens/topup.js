@@ -4,7 +4,7 @@ import { h, clear, icon, formatSom, safeUrl } from '../../shared/dom.js';
 import { api } from '../../shared/api.js';
 import { tg } from '../../shared/tg.js';
 import { appState, getProducts, setBalance, refreshUser } from '../store.js';
-import { renderEmpty } from './state.js';
+import { renderEmpty } from '../../shared/state.js';
 import { createAction } from './action.js';
 
 const PRESETS = [20000, 50000, 100000, 200000, 500000];

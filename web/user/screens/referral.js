@@ -3,7 +3,8 @@ import { h, icon, formatSom } from '../../shared/dom.js';
 import { api } from '../../shared/api.js';
 import { tg } from '../../shared/tg.js';
 import { appState } from '../store.js';
-import { renderError, showToast, copyText } from './state.js';
+import { renderError } from '../../shared/state.js';
+import { showToast, copyText } from './state.js';
 
 // The legacy app's default botUsername, used when /api/bot-info is unavailable.
 const DEFAULT_BOT = 'gifthubuzbot';

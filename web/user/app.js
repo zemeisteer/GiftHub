@@ -3,7 +3,7 @@ import { h, clear, icon } from '../shared/dom.js';
 import { api } from '../shared/api.js';
 import { tg } from '../shared/tg.js';
 import { createRouter } from '../shared/router.js';
-import { renderLoading, renderError } from './screens/state.js';
+import { renderLoading, renderError } from '../shared/state.js';
 import { homeScreen } from './screens/home.js';
 import { appState, getProducts, gateBlocked } from './store.js';
 

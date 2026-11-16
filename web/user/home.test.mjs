@@ -57,7 +57,7 @@ before(async () => {
   };
   ({ boot, appState, getProducts, bottomNav } = await import('./app.js'));
   ({ tg } = await import('../shared/tg.js'));
-  ({ renderLoading, renderError, renderEmpty } = await import('./screens/state.js'));
+  ({ renderLoading, renderError, renderEmpty } = await import('../shared/state.js'));
 });
 
 beforeEach(() => {

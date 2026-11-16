@@ -2,7 +2,7 @@
 import { h, clear, icon, formatSom } from '../../shared/dom.js';
 import { tg } from '../../shared/tg.js';
 import { appState, cachedProducts, getProducts, productList } from '../store.js';
-import { renderError, renderEmpty, skeletonCards } from './state.js';
+import { renderError, renderEmpty, skeletonCards } from '../../shared/state.js';
 
 const CATEGORIES = [
   ['all', 'Hammasi'],
