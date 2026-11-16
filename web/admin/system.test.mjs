@@ -1,4 +1,4 @@
-import { test, before, beforeEach, afterEach } from 'node:test';
+import { test, before, after, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseHTML } from 'linkedom';
@@ -61,6 +61,12 @@ afterEach(async () => {
   const open = q('.confirm-overlay .btn-secondary');
   if (open) { fire(open); await tick(2); }
   tg.resetOverrides();
+});
+
+// Views started polling with real timers in the plain tests: detach and let them dispose.
+after(() => {
+  document.body.textContent = '';
+  document.dispatchEvent(new Event('visibilitychange'));
 });
 
 const tick = (ms = 10) => new Promise((r) => setTimeout(r, ms));
@@ -288,6 +294,118 @@ test('gate with no active channels reports the gate is off', async () => {
   assert.ok(hasText("O'chiq"));
 });
 
+// ---------------- channels auto-refresh ----------------
+const setVisibility = (state) => {
+  Object.defineProperty(document, 'visibilityState', { value: state, configurable: true });
+  fire(document, 'visibilitychange');
+};
+// Detach the view and let it dispose its timer while the fake clock is still the active one.
+const leave = (outlet) => { if (outlet) outlet.remove(); fire(document, 'visibilitychange'); };
+const listCalls = () => calls(/GET \/api\/admin\/channels$/).length;
+
+test('channels polls every 5 s and shows newly detected channels', async () => {
+  mock.timers.enable({ apis: ['setInterval'] });
+  let outlet = null;
+  try {
+    let list = [CHANNELS[0]];
+    stubFetch({ '/api/admin/channels': () => list, '/api/bot-info': {} });
+    outlet = await mount('channels');
+    assert.equal(listCalls(), 1);
+    assert.equal(hasText('Aniqlangan kanallar'), false);
+    list = CHANNELS;
+    mock.timers.tick(4000);
+    await tick();
+    assert.equal(listCalls(), 1);
+    mock.timers.tick(1000);
+    await tick();
+    assert.equal(listCalls(), 2);
+    assert.ok(hasText('Aniqlangan kanallar'));
+  } finally { leave(outlet); mock.timers.reset(); }
+});
+
+test('channels poll never overlaps a request in flight', async () => {
+  mock.timers.enable({ apis: ['setInterval'] });
+  let outlet = null;
+  try {
+    let release;
+    let slow = false;
+    stubFetch({
+      '/api/admin/channels': () => (slow ? new Promise((r) => { release = () => r([]); }) : [CHANNELS[0]]),
+      '/api/bot-info': {},
+    });
+    outlet = await mount('channels');
+    slow = true;
+    mock.timers.tick(5000);
+    await tick();
+    mock.timers.tick(5000);
+    mock.timers.tick(5000);
+    await tick();
+    assert.equal(listCalls(), 2);
+    release();
+    await tick();
+  } finally { leave(outlet); mock.timers.reset(); }
+});
+
+test('channels poll stops once the view leaves the page', async () => {
+  mock.timers.enable({ apis: ['setInterval'] });
+  let outlet = null;
+  try {
+    stubFetch({ '/api/admin/channels': [CHANNELS[0]], '/api/bot-info': {} });
+    outlet = await mount('channels');
+    outlet.remove();
+    mock.timers.tick(5000);
+    await tick();
+    mock.timers.tick(5000);
+    await tick();
+    assert.equal(listCalls(), 1);
+  } finally { leave(outlet); mock.timers.reset(); }
+});
+
+test('channels poll pauses while the page is hidden and resumes with a refresh', async () => {
+  mock.timers.enable({ apis: ['setInterval'] });
+  let outlet = null;
+  try {
+    stubFetch({ '/api/admin/channels': [CHANNELS[0]], '/api/bot-info': {} });
+    outlet = await mount('channels');
+    setVisibility('hidden');
+    mock.timers.tick(15000);
+    await tick();
+    assert.equal(listCalls(), 1);
+    setVisibility('visible');
+    await tick();
+    assert.equal(listCalls(), 2);
+    mock.timers.tick(5000);
+    await tick();
+    assert.equal(listCalls(), 3);
+  } finally { leave(outlet); mock.timers.reset(); setVisibility('visible'); }
+});
+
+test('channels poll does not repaint identical data or over an open dialog', async () => {
+  mock.timers.enable({ apis: ['setInterval'] });
+  let outlet = null;
+  try {
+    let list = [CHANNELS[0]];
+    stubFetch({ '/api/admin/channels': () => list, '/api/bot-info': {} });
+    outlet = await mount('channels');
+    const card = q('.bank-list li');
+    mock.timers.tick(5000);
+    await tick();
+    assert.equal(listCalls(), 2);
+    assert.equal(q('.bank-list li'), card);
+    list = CHANNELS;
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    document.body.appendChild(overlay);
+    mock.timers.tick(5000);
+    await tick();
+    assert.equal(hasText('Aniqlangan kanallar'), false);
+    overlay.remove();
+    mock.timers.tick(5000);
+    await tick();
+    assert.ok(hasText('Aniqlangan kanallar'));
+  } finally { leave(outlet); mock.timers.reset(); }
+});
+
 // ---------------- fragment ----------------
 const FRAG = {
   is_auto_buy: true, simulation_mode: false, ton_wallet_address: 'UQAbcdefghijklmnopqrstuvwxyz0123456789',
@@ -349,6 +467,28 @@ test('fragment is read-only without SETTINGS_UPDATE', async () => {
   await mount('fragment');
   assert.equal(btn('Saqlash'), undefined);
   assert.equal(input('tonapi_key').hasAttribute('disabled'), true);
+});
+
+test('fragment confirm names the wallet address change (Hamyon manzili)', async () => {
+  stubFetch({ '/api/admin/fragment/settings': FRAG, 'POST /api/admin/fragment/settings': { success: true } });
+  await mount('fragment');
+  input('ton_wallet_address').value = 'UQNEWADDRESS000000000000000000000000';
+  fire(q('form'), 'submit');
+  await tick();
+  assert.match(dialogText(), /Hamyon manzili/);
+  assert.ok(dialogText().includes('UQNEWADDRESS000000000000000000000000'));
+  assert.ok(dialogText().includes(FRAG.ton_wallet_address));
+  await confirmYes();
+  assert.equal(lastBody().ton_wallet_address, 'UQNEWADDRESS000000000000000000000000');
+});
+
+test('fragment confirm omits the address row when it is unchanged', async () => {
+  stubFetch({ '/api/admin/fragment/settings': FRAG, 'POST /api/admin/fragment/settings': { success: true } });
+  await mount('fragment');
+  input('min_ton_balance').value = '5';
+  fire(q('form'), 'submit');
+  await tick();
+  assert.doesNotMatch(dialogText(), /Hamyon manzili/);
 });
 
 // ---------------- health ----------------

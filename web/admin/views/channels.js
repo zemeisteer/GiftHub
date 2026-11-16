@@ -67,6 +67,8 @@ function addForm(onSaved) {
   return form;
 }
 
+export const POLL_MS = 5000;
+
 async function render() {
   const editable = canEditChannels();
   const body = h('div', { class: 'cards-body' });
@@ -89,15 +91,65 @@ async function render() {
   }
   async function reload() {
     try {
-      paint(await fetchChannels());
+      const list = await fetchChannels();
+      signature = JSON.stringify(list);
+      paint(list);
     } catch (err) {
       clear(body);
       body.appendChild(inlineError(err && err.message, reload));
     }
   }
 
+  // Auto-refresh so channels the bot was just added to appear without a manual reload.
+  // Runs only while this view is on screen and the page is visible; one request at a time;
+  // never repaints over an open edit (focus inside the list, or a confirm dialog) and skips
+  // identical data. Errors are ignored: the list on screen stays as it is.
+  let signature = '';
+  let timer = null;
+  let busy = false;
+  const visible = () => (typeof document === 'undefined' || document.visibilityState !== 'hidden');
+  function stop() {
+    if (timer !== null) { clearInterval(timer); timer = null; }
+  }
+  function editing() {
+    const a = document.activeElement;
+    return Boolean((a && a !== document.body && body.contains(a)) || document.querySelector('.confirm-overlay'));
+  }
+  async function poll() {
+    if (!body.isConnected) { dispose(); return; }
+    if (busy || !visible()) return;
+    busy = true;
+    try {
+      const list = await fetchChannels();
+      const sig = JSON.stringify(list);
+      if (sig !== signature && body.isConnected && !editing()) { signature = sig; paint(list); }
+    } catch { /* keep what is shown */ } finally {
+      busy = false;
+    }
+  }
+  function start() {
+    if (timer === null && visible()) {
+      timer = setInterval(poll, POLL_MS);
+      if (timer && typeof timer.unref === 'function') timer.unref(); // never keep a Node test process alive
+    }
+  }
+  function dispose() {
+    stop();
+    document.removeEventListener('visibilitychange', onVisibility);
+  }
+  function onVisibility() {
+    if (!body.isConnected) { dispose(); return; }
+    if (!visible()) { stop(); return; }
+    start();
+    poll();
+  }
+  document.addEventListener('visibilitychange', onVisibility);
+
   await loadBotUsername();
-  paint(await fetchChannels());
+  const first = await fetchChannels();
+  signature = JSON.stringify(first);
+  paint(first);
+  start();
   const botButtons = editable && botUsername
     ? h('div', { class: 'row-actions' },
       iconButton('Botni kanalga qo\'shish', 'telegram', () => openAdminFlow('channel')),

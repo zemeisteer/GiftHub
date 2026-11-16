@@ -81,6 +81,9 @@ async function render() {
       ['Simulyatsiya', Boolean(data.simulation_mode), body.simulation_mode],
       ['Tarmoq', data.network || 'mainnet', body.network],
       ['Minimal balans', Number(data.min_ton_balance ?? 1), body.min_ton_balance],
+      ...(body.ton_wallet_address !== (data.ton_wallet_address || '')
+        ? [['Hamyon manzili', data.ton_wallet_address || 'kiritilmagan', body.ton_wallet_address || 'kiritilmagan']]
+        : []),
     ], (v) => (typeof v === 'boolean' ? yn(v) : String(v)));
     const secrets = [
       body.ton_wallet_mnemonic ? 'hamyon mnemonic' : null,
