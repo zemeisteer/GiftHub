@@ -10,7 +10,7 @@ from app.core.correlation import get_correlation_id
 from app.core.database import AsyncSessionLocal
 from app.core.exceptions import GiftHubException, InsufficientBalanceError
 from app.core.logging import get_logger
-from app.core.security import Permission
+from app.core.security import Permission, has_permission
 from app.models.audit import AdminAuditLog
 from app.models.catalog import CatalogProduct
 from app.models.dlq import DLQStatus, FailedJob
@@ -33,7 +33,7 @@ from app.services.pricing.service import pricing_service
 from app.services.providers.circuit_breaker import circuit_breaker
 from app.services.reconciliation.service import reconciliation_service
 from app.services.wallet.service import wallet_service
-from app.web.auth import require_permission
+from app.web.auth import get_current_user, require_permission
 
 logger = get_logger("GiftHubV1API")
 
@@ -49,7 +49,7 @@ async def get_db():
 
 
 class CheckoutRequest(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None  # optional; must equal the authenticated caller when sent
     product_type: str  # stars, premium, gift, service
     quantity: int = 1
     recipient_username: Optional[str] = None
@@ -66,7 +66,7 @@ class PricePreviewRequest(BaseModel):
 
 
 class SavedRecipientCreate(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None  # optional; must equal the authenticated caller when sent
     recipient_username: str
     label: Optional[str] = None
 
@@ -95,6 +95,24 @@ class CatalogProductCreate(BaseModel):
     description: Optional[str] = None
     badge_text: Optional[str] = None
     display_order: int = 0
+
+
+def _assert_same_user(claimed_user_id: Optional[int], user: User) -> None:
+    """Reject a client-supplied user_id that doesn't match the authenticated caller."""
+    if claimed_user_id is not None and claimed_user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan.")
+
+
+def _can_read_any_order(user: User) -> bool:
+    return has_permission(user.role, user.id, Permission.ORDERS_READ)
+
+
+async def _get_visible_order(session, order_id_or_code: str, user: User) -> Order:
+    """Load an order the caller may see; 404 for a missing or someone else's order (admins see all)."""
+    order = await order_service.get_order_by_id_or_code(session, order_id_or_code)
+    if not order or (order.user_id != user.id and not _can_read_any_order(user)):
+        raise HTTPException(status_code=404, detail="Buyurtma topilmadi.")
+    return order
 
 
 # ================= CATALOG (Req 16) ================= #
@@ -133,16 +151,18 @@ async def create_checkout_order(
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     correlation_id: Optional[str] = Header(None, alias="X-Correlation-ID"),
     session=Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
-    Creates an order with authoritative pricing, checkout-level idempotency,
-    and automatic Outbox event scheduling.
+    Creates an order for the authenticated caller with authoritative pricing,
+    checkout-level idempotency, and automatic Outbox event scheduling.
     """
+    _assert_same_user(req.user_id, user)
     cid = correlation_id or get_correlation_id()
     try:
         order, bonus, referrer = await order_service.create_order(
             session=session,
-            user_id=req.user_id,
+            user_id=user.id,
             product_type=req.product_type,
             item_title=f"{req.quantity} {req.product_type.title()}",
             amount=req.quantity,
@@ -936,8 +956,11 @@ async def _order_timeline_payload(session, order_id_or_code: str):
 
 
 @router.get("/orders/{order_id_or_code}/timeline")
-async def get_order_status_timeline(order_id_or_code: str, session=Depends(get_db)):
-    """Returns chronological audit timeline for the specified order (Req 13)."""
+async def get_order_status_timeline(
+    order_id_or_code: str, session=Depends(get_db), user: User = Depends(get_current_user)
+):
+    """Returns chronological audit timeline for the caller's order (Req 13)."""
+    await _get_visible_order(session, order_id_or_code, user)
     return await _order_timeline_payload(session, order_id_or_code)
 
 
@@ -952,20 +975,19 @@ async def get_admin_order_timeline(
 
 
 @router.get("/orders/{order_id_or_code}/receipt")
-async def get_order_receipt(order_id_or_code: str, session=Depends(get_db)):
+async def get_order_receipt(order_id_or_code: str, session=Depends(get_db), user: User = Depends(get_current_user)):
     """
-    Returns immutable financial receipt snapshot for the specified order.
+    Returns immutable financial receipt snapshot for the caller's order.
     Never recalculates prices from live settings (Req 10, Req 11 & Req 16).
+    Cost price, margin and provider transaction id are included for admins only.
     """
-    order = await order_service.get_order_by_id_or_code(session, order_id_or_code)
-    if not order:
-        raise HTTPException(status_code=404, detail="Buyurtma topilmadi.")
+    order = await _get_visible_order(session, order_id_or_code, user)
 
     stmt_tx = select(PaymentTransaction).where(PaymentTransaction.order_id == order.id)
     res_tx = await session.execute(stmt_tx)
     pay_tx = res_tx.scalars().first()
 
-    return {
+    payload = {
         "success": True,
         "receipt": {
             "receipt_number": order.order_code,
@@ -997,20 +1019,23 @@ async def get_order_receipt(order_id_or_code: str, session=Depends(get_db)):
             },
         },
     }
+    if not _can_read_any_order(user):
+        payload["receipt"]["financials"].pop("cost_price_uzs")
+        payload["receipt"]["financials"].pop("margin_uzs")
+        payload["receipt"]["payment"].pop("provider_tx_id")
+    return payload
 
 
 # ================= BUY AGAIN HELPER (Req 14) ================= #
 
 
 @router.get("/orders/{order_id_or_code}/buy-again-details")
-async def get_buy_again_details(order_id_or_code: str, session=Depends(get_db)):
+async def get_buy_again_details(order_id_or_code: str, session=Depends(get_db), user: User = Depends(get_current_user)):
     """
-    Safely retrieves product and recipient details from a previous order,
+    Safely retrieves product and recipient details from the caller's previous order,
     and calculates current authoritative live pricing (Req 14).
     """
-    order = await order_service.get_order_by_id_or_code(session, order_id_or_code)
-    if not order:
-        raise HTTPException(status_code=404, detail="Buyurtma topilmadi.")
+    order = await _get_visible_order(session, order_id_or_code, user)
 
     current_price_info = await pricing_service.get_authoritative_price(
         session=session, product_type=order.product_type, amount=order.amount, item_title=order.item_title
@@ -1035,9 +1060,12 @@ async def get_buy_again_details(order_id_or_code: str, session=Depends(get_db)):
 
 
 @router.get("/recipients")
-async def list_saved_recipients(user_id: int = Query(...), session=Depends(get_db)):
-    """Lists saved favorite recipient usernames for quick checkout selection (Req 15)."""
-    stmt = select(SavedRecipient).where(SavedRecipient.user_id == user_id).order_by(SavedRecipient.created_at.desc())
+async def list_saved_recipients(
+    user_id: Optional[int] = Query(None), session=Depends(get_db), user: User = Depends(get_current_user)
+):
+    """Lists the caller's saved favorite recipient usernames for quick checkout selection (Req 15)."""
+    _assert_same_user(user_id, user)
+    stmt = select(SavedRecipient).where(SavedRecipient.user_id == user.id).order_by(SavedRecipient.created_at.desc())
     res = await session.execute(stmt)
     items = res.scalars().all()
     return {
@@ -1055,14 +1083,17 @@ async def list_saved_recipients(user_id: int = Query(...), session=Depends(get_d
 
 
 @router.post("/recipients")
-async def add_saved_recipient(req: SavedRecipientCreate, session=Depends(get_db)):
-    """Saves a new favorite recipient for the user (Req 15)."""
+async def add_saved_recipient(
+    req: SavedRecipientCreate, session=Depends(get_db), user: User = Depends(get_current_user)
+):
+    """Saves a new favorite recipient for the caller (Req 15)."""
+    _assert_same_user(req.user_id, user)
     clean_username = req.recipient_username.strip().lstrip("@")
     if not clean_username:
         raise HTTPException(status_code=400, detail="Qabul qiluvchi username bo'sh bo'lishi mumkin emas.")
 
     stmt = select(SavedRecipient).where(
-        SavedRecipient.user_id == req.user_id, SavedRecipient.recipient_username == clean_username
+        SavedRecipient.user_id == user.id, SavedRecipient.recipient_username == clean_username
     )
     res = await session.execute(stmt)
     existing = res.scalars().first()
@@ -1072,7 +1103,7 @@ async def add_saved_recipient(req: SavedRecipientCreate, session=Depends(get_db)
             await session.commit()
         return {"success": True, "recipient_id": existing.id, "message": "Qabul qiluvchi allaqachon mavjud"}
 
-    rec = SavedRecipient(user_id=req.user_id, recipient_username=clean_username, label=req.label or clean_username)
+    rec = SavedRecipient(user_id=user.id, recipient_username=clean_username, label=req.label or clean_username)
     session.add(rec)
     await session.commit()
     await session.refresh(rec)
@@ -1080,10 +1111,16 @@ async def add_saved_recipient(req: SavedRecipientCreate, session=Depends(get_db)
 
 
 @router.delete("/recipients/{recipient_id}")
-async def delete_saved_recipient(recipient_id: int, user_id: int = Query(...), session=Depends(get_db)):
-    """Removes a saved recipient for the user (Req 15)."""
+async def delete_saved_recipient(
+    recipient_id: int,
+    user_id: Optional[int] = Query(None),
+    session=Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Removes one of the caller's saved recipients (Req 15)."""
+    _assert_same_user(user_id, user)
     rec = await session.get(SavedRecipient, recipient_id)
-    if not rec or rec.user_id != user_id:
+    if not rec or rec.user_id != user.id:
         raise HTTPException(status_code=404, detail="Qabul qiluvchi topilmadi.")
     await session.delete(rec)
     await session.commit()
