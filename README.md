@@ -284,6 +284,14 @@ Access the interfaces:
 - **System Health Diagnostics:** `http://localhost:8000/api/v1/admin/health/system`
 - **Problem Orders Dashboard:** `http://localhost:8000/admin#problem-orders`
 
+### 5. The `ENVIRONMENT` Setting
+
+- **Default is `production`.** It requires a real `BOT_TOKEN`, `ADMINS`, a non-SQLite database and Redis; the schema is managed only through Alembic (`alembic upgrade head`).
+- **Local development:** set `ENVIRONMENT=development` in your `.env`. This enables the development auth fallback (`X-Auth-User-Id`) and `/docs`. Never use it on a public server or tunnel.
+- `tunnel.py` refuses to start when `ENVIRONMENT=development`.
+- The new `/app` and `/admin` UIs only work inside Telegram (open them through the bot). They contain no development login shim. To test the UI, run `tunnel.py` with `ENVIRONMENT=production` and open the tunnel URL from the bot.
+- The Swagger UI at `/docs` loads its assets from a CDN, which the strict Content-Security-Policy blocks, so the page renders blank. Use `/openapi.json` (development only) instead.
+
 ---
 
 ## 🐳 Docker Deployment
