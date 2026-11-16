@@ -1,6 +1,6 @@
 // Small UI helpers shared by the admin views. Text only, through h().
 import { h, icon } from '../../shared/dom.js';
-import { showToast } from '../../user/screens/state.js';
+import { showToast } from '../../shared/state.js';
 import { adminState } from '../registry.js';
 import { confirmDialog, confirmWithReason } from '../confirm.js';
 

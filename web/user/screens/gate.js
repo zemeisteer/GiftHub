@@ -4,7 +4,7 @@ import { h, clear, icon } from '../../shared/dom.js';
 import { api } from '../../shared/api.js';
 import { tg } from '../../shared/tg.js';
 import { gateBlocked } from '../store.js';
-import { showToast } from './state.js';
+import { showToast } from '../../shared/state.js';
 
 function openChannel(link) {
   const url = String(link || '');

@@ -5,8 +5,7 @@ import { h, clear, icon, formatSom } from '../../shared/dom.js';
 import { api } from '../../shared/api.js';
 import { tg } from '../../shared/tg.js';
 import { getProducts, productList, orderTitle, setPrefill } from '../store.js';
-import { renderError, renderEmpty, renderLoading } from '../../shared/state.js';
-import { showToast, copyText } from './state.js';
+import { renderError, renderEmpty, renderLoading, showToast, copyText } from '../../shared/state.js';
 
 // Values of the legacy activeHistoryStatus filter (legacy app before the redesign; database/queries.py list_user_orders).
 const FILTERS = [

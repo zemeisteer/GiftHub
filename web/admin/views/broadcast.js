@@ -5,7 +5,7 @@
 // the real recipient count is shown from the send response.
 // The text is previewed raw through h() text: Telegram may parse HTML tags in it, we never do.
 import { h, clear } from '../../shared/dom.js';
-import { api } from '../../shared/api.js';
+import { api, ApiError } from '../../shared/api.js';
 import { registerView } from '../registry.js';
 import { can, runAction, pageHead, chips, iconButton, formatDate } from './ui.js';
 import { field, readField, formError } from '../forms.js';
@@ -122,10 +122,25 @@ async function render() {
 
   // Result + delivery status.
   const report = h('div', { class: 'card bank-card', hidden: true, role: 'status' });
+  // After a timeout / network failure the server may still have started the broadcast, so the send
+  // stays locked until a status refresh succeeds (or the view is re-entered).
+  let sendLocked = false;
+  function lockSend() {
+    sendLocked = true;
+    send.setAttribute('disabled', '');
+    clear(report);
+    report.removeAttribute('hidden');
+    report.appendChild(h('h3', { class: 'section-title' }, "Natija noma'lum — Holat bo'limida tekshiring"));
+    report.appendChild(h('p', { class: 'muted small' }, "So'rov javobsiz qoldi; xabar yuborilgan bo'lishi mumkin. \"Holatni yangilash\" tugmasini bosing."));
+  }
   async function loadStatus() {
     try {
       const s = await api('/api/admin/broadcast/status');
       if (!s) return;
+      if (sendLocked) {
+        sendLocked = false;
+        if (canSend) send.removeAttribute('disabled');
+      }
       clear(report);
       report.removeAttribute('hidden');
       report.appendChild(h('h3', { class: 'section-title' }, s.is_running ? 'Yuborilmoqda...' : 'Oxirgi broadcast'));
@@ -163,11 +178,13 @@ async function render() {
   const send = h('button', { type: 'button', class: 'btn btn-primary' }, 'Yuborish');
   if (!canSend) send.setAttribute('disabled', '');
   send.addEventListener('click', async () => {
+    if (sendLocked) return;
     const { body, problem } = collect();
     if (problem) { error.show(problem); return; }
     error.hide();
     const audience = (SEGMENTS.find(([v]) => v === segment) || SEGMENTS[0])[2];
     let result = null;
+    let unknown = false;
     const ok = await runAction({
       button: send,
       key: 'broadcast:send',
@@ -177,9 +194,18 @@ async function render() {
         confirmLabel: 'Ha, yuborish',
         danger: true,
       },
-      call: async () => { result = await api('/api/admin/broadcast', { method: 'POST', body }); return result; },
+      call: async () => {
+        try {
+          result = await api('/api/admin/broadcast', { method: 'POST', body });
+          return result;
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 0) unknown = true;
+          throw err;
+        }
+      },
       success: (r) => (r && r.message) || 'Broadcast boshlandi',
     });
+    if (unknown) { lockSend(); return; }
     if (ok) {
       clear(report);
       report.removeAttribute('hidden');

@@ -188,7 +188,7 @@ test('bottomNav has four tabs with 44px-capable buttons', () => {
 });
 
 test('no module imports the versioned entry app.js (would create a second instance)', () => {
-  for (const f of ['./store.js', './screens/home.js', './screens/state.js', './screens/product.js', './screens/topup.js']) {
+  for (const f of ['./store.js', './screens/home.js', './screens/product.js', './screens/topup.js']) {
     const src = readFileSync(new URL(f, import.meta.url), 'utf8');
     assert.doesNotMatch(src, /from\s+['"][^'"]*app\.js['"]|import\(\s*['"][^'"]*app\.js/, f);
   }

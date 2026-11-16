@@ -625,3 +625,27 @@ test('admins: read-only without ADMINS_MANAGE', async () => {
   assert.equal(qa('li button').length, 0);
   assert.ok(hasText('@vali'));
 });
+
+test('broadcast timeout keeps send locked with an unknown-result notice until status refresh', async () => {
+  let statusOk = false;
+  stubFetch({
+    '/api/admin/broadcast/latest-draft': DRAFT,
+    'POST /api/admin/broadcast': () => { throw Object.assign(new Error('aborted'), { name: 'AbortError' }); },
+    '/api/admin/broadcast/status': () => (statusOk ? { is_running: true, total: 5, sent: 1, blocked: 0, failed: 0 } : jsonRes(500, { detail: 'x' })),
+  });
+  await mount('broadcast');
+  click('Yuborish');
+  await tick();
+  await confirmYes();
+  assert.ok(hasText("Natija noma'lum"));
+  const sendBtn = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Yuborish');
+  assert.ok(sendBtn.hasAttribute('disabled'));
+  click('Yuborish');
+  await tick();
+  assert.equal(q('[role="dialog"]'), null);
+  assert.equal(calls(/POST/).length, 1);
+  statusOk = true;
+  click('Holatni yangilash');
+  await tick();
+  assert.equal(sendBtn.hasAttribute('disabled'), false);
+});

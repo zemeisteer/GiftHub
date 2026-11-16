@@ -3,7 +3,7 @@ import { h, clear, icon } from '../shared/dom.js';
 import { api, ApiError } from '../shared/api.js';
 import { tg } from '../shared/tg.js';
 import { createRouter } from '../shared/router.js';
-import { renderError, renderEmpty } from '../shared/state.js';
+import { renderError, renderEmpty, renderLoading } from '../shared/state.js';
 import { renderNav, findItem, canSee, firstAllowed } from './nav.js';
 import { adminState, getView, setBadge } from './registry.js';
 
@@ -31,13 +31,6 @@ export const VIEW_MODULES = {
 };
 
 const byId = (id) => document.getElementById(id);
-
-function renderLoading() {
-  return h('div', { class: 'state-loading', role: 'status', 'aria-label': 'Yuklanmoqda' },
-    h('div', { class: 'sk sk-block skeleton' }),
-    h('div', { class: 'sk sk-block skeleton' }),
-    h('div', { class: 'sk sk-block skeleton' }));
-}
 
 function renderNoAccess(full = false) {
   return h('div', { class: full ? 'state state-full' : 'state', role: 'alert' },
@@ -106,7 +99,7 @@ export function go(hash) {
 
 async function loadAndStart(outlet) {
   clear(outlet);
-  outlet.appendChild(renderLoading());
+  outlet.appendChild(renderLoading({ blocks: 3 }));
   let me;
   try {
     me = await api('/api/admin/me');
