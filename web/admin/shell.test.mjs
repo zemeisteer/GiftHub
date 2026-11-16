@@ -140,13 +140,13 @@ test('a network failure on the profile shows retry, and retry recovers', async (
 });
 
 test('boot renders the nav and a view without a module as "Tez orada" placeholder', async () => {
-  stubFetch({ '/api/admin/me': { ...SUPER, permissions: ['PRICING_READ'] } });
+  stubFetch({ '/api/admin/me': { ...SUPER, permissions: ['ADMINS_READ'] } });
   await boot();
   await tick();
   assert.equal(adminState.admin.id, 1);
-  assert.equal(navEl().querySelectorAll('a.nav-item').length, 3);
+  assert.equal(navEl().querySelectorAll('a.nav-item').length, 1);
   assert.match(outlet().textContent, /Tez orada/);
-  assert.match(navEl().querySelector('[aria-current="page"]').textContent, /Narxlar/);
+  assert.match(navEl().querySelector('[aria-current="page"]').textContent, /Adminlar/);
 });
 
 test('default landing is the first item the admin may see', async () => {

@@ -18,6 +18,10 @@ const VIEW_MODULES = {
   orders: './views/orders.js',
   users: './views/users.js',
   payments: './views/payments.js',
+  pricing: './views/pricing.js',
+  services: './views/services.js',
+  promos: './views/promos.js',
+  referral: './views/referral.js',
 };
 
 const byId = (id) => document.getElementById(id);
