@@ -34,7 +34,6 @@ async def test_user_app_assets_are_served(client):
         "/static/user/store.js",
         "/static/user/screens/home.js",
         "/static/shared/state.js",
-        "/static/user/screens/state.js",
         "/static/user/screens/orders.js",
         "/static/user/screens/referral.js",
         "/static/user/screens/profile.js",
@@ -42,3 +41,19 @@ async def test_user_app_assets_are_served(client):
     ):
         r = await client.get(path)
         assert r.status_code == 200, path
+
+
+async def test_root_page_has_no_inline_style(client):
+    r = await client.get("/")
+    assert r.status_code == 200
+    assert "<style" not in r.text.lower()
+    assert 'style="' not in r.text.lower()
+    css = await client.get("/static/shared/landing.css")
+    assert css.status_code == 200
+
+
+async def test_static_does_not_serve_test_files(client):
+    assert (await client.get("/static/shared/api.test.mjs")).status_code == 404
+    assert (await client.get("/static/admin/views.test.mjs")).status_code == 404
+    assert (await client.get("/static/node_modules/x.js")).status_code == 404
+    assert (await client.get("/static/shared/api.js")).status_code == 200

@@ -34,6 +34,7 @@ ADMIN_ROUTES = [
     ),
     ("GET", "/api/v1/admin/health/system", None),
     ("GET", "/api/v1/admin/orders/problematic", None),
+    ("GET", "/api/v1/admin/orders/GH-000001/timeline", None),
     ("POST", "/api/v1/admin/orders/1/retry-fulfillment", REASON),
     ("POST", "/api/v1/admin/orders/1/manual-fulfill", REASON),
     ("POST", "/api/v1/admin/pricing/preview", {}),
@@ -106,6 +107,36 @@ async def test_super_admin_allowed(client, db_session, path):
     await _make_user(db_session, 555002, "super_admin")
     r = await client.get(path, headers={"X-Auth-User-Id": "555002"})
     assert r.status_code == 200, r.text
+
+
+async def test_admin_order_timeline_success(client, db_session):
+    from decimal import Decimal
+
+    from app.models.order import Order
+
+    await _make_user(db_session, 555005, "super_admin")
+    db_session.add(
+        Order(
+            order_code="GH-TL-01",
+            user_id=555005,
+            product_type="stars",
+            item_title="50 Stars",
+            amount=50,
+            unit_price=Decimal("1000.00"),
+            total_price=Decimal("1000.00"),
+            status="created",
+            fulfillment_status="pending",
+        )
+    )
+    await db_session.commit()
+    h = {"X-Auth-User-Id": "555005"}
+    r = await client.get("/api/v1/admin/orders/GH-TL-01/timeline", headers=h)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["order_code"] == "GH-TL-01"
+    assert body["timeline"][0]["to_status"] == "created"
+    r = await client.get("/api/v1/admin/orders/NOPE-1/timeline", headers=h)
+    assert r.status_code == 404
 
 
 async def test_limited_role_denied_outside_its_permissions(client, db_session):

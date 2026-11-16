@@ -589,8 +589,15 @@ async def _build_system_health(session):
 @router.get("/health/system")
 async def get_system_health(session=Depends(get_db)):
     """Public liveness: overall status only. Diagnostics live behind /admin/health/system."""
-    full = await _build_system_health(session)
-    return {"status": full["overall_status"], "timestamp": full["timestamp"]}
+    from sqlalchemy import text
+
+    try:
+        await session.execute(text("SELECT 1"))
+        status = "healthy"
+    except Exception as e:
+        logger.error(f"Public health DB check failed: {e}")
+        status = "critical"
+    return {"status": status, "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 @router.get("/admin/health/system")
@@ -889,9 +896,8 @@ async def preview_price_changes(
 # ================= ORDER TIMELINE & RECEIPT (Req 13 & Req 16) ================= #
 
 
-@router.get("/orders/{order_id_or_code}/timeline")
-async def get_order_status_timeline(order_id_or_code: str, session=Depends(get_db)):
-    """Returns chronological audit timeline for the specified order (Req 13)."""
+async def _order_timeline_payload(session, order_id_or_code: str):
+    """Chronological audit timeline payload for the specified order (Req 13)."""
     timeline = await order_service.get_order_timeline(session, order_id_or_code)
     if not timeline:
         order = await order_service.get_order_by_id_or_code(session, order_id_or_code)
@@ -927,6 +933,22 @@ async def get_order_status_timeline(order_id_or_code: str, session=Depends(get_d
             for t in timeline
         ],
     }
+
+
+@router.get("/orders/{order_id_or_code}/timeline")
+async def get_order_status_timeline(order_id_or_code: str, session=Depends(get_db)):
+    """Returns chronological audit timeline for the specified order (Req 13)."""
+    return await _order_timeline_payload(session, order_id_or_code)
+
+
+@router.get("/admin/orders/{order_id_or_code}/timeline")
+async def get_admin_order_timeline(
+    order_id_or_code: str,
+    session=Depends(get_db),
+    admin: User = Depends(require_permission(Permission.ORDERS_READ)),
+):
+    """Admin-gated order timeline (same payload as the public route)."""
+    return await _order_timeline_payload(session, order_id_or_code)
 
 
 @router.get("/orders/{order_id_or_code}/receipt")

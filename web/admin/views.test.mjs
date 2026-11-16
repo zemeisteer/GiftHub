@@ -704,7 +704,7 @@ const TIMELINE = {
 };
 
 test('timeline modal opens from an attention row and renders entries as text', async () => {
-  stubFetch(dashRoutes({ '/api/v1/orders/GH-000001/timeline': TIMELINE }));
+  stubFetch(dashRoutes({ '/api/v1/admin/orders/GH-000001/timeline': TIMELINE }));
   await mount('dash');
   fire(qa('.attention')[0].querySelectorAll('button')[2]);
   await tick();
@@ -723,13 +723,13 @@ test('timeline modal opens from an attention row and renders entries as text', a
 });
 
 test('timeline opens from the orders view and shows empty and error states', async () => {
-  stubFetch({ '/api/admin/orders': ORDERS, '/api/v1/orders/GH-000005/timeline': { timeline: [] } });
+  stubFetch({ '/api/admin/orders': ORDERS, '/api/v1/admin/orders/GH-000005/timeline': { timeline: [] } });
   await mount('orders');
   fire(qa('.orders td button').find((b) => b.textContent.trim() === 'Tarix'));
   await tick();
   assert.match(q('[role="dialog"]').textContent, /Tarix topilmadi/);
   click('Yopish');
-  stubFetch({ '/api/admin/orders': ORDERS, '/api/v1/orders/GH-000005/timeline': () => jsonRes(404, { detail: 'Buyurtma topilmadi.' }) });
+  stubFetch({ '/api/admin/orders': ORDERS, '/api/v1/admin/orders/GH-000005/timeline': () => jsonRes(404, { detail: 'Buyurtma topilmadi.' }) });
   fire(qa('.orders td button').find((b) => b.textContent.trim() === 'Tarix'));
   await tick();
   assert.match(q('[role="dialog"]').textContent, /Buyurtma topilmadi/);

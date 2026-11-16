@@ -1,0 +1,7 @@
+body { background: #080C0A; color: #EFFBF4; font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; padding: 60px 20px; }
+.card { max-width: 480px; margin: 0 auto; background: #121A16; border: 1px solid #22302A; border-radius: 20px; padding: 40px 30px; }
+h1 { color: #12E88B; margin-bottom: 10px; font-size: 28px; }
+p { color: #8AA69A; font-size: 15px; margin-bottom: 30px; }
+.btn { display: inline-block; padding: 12px 24px; border-radius: 12px; font-weight: 600; text-decoration: none; margin: 8px; font-size: 14px; }
+.btn-primary { background: #12E88B; color: #0A100D; }
+.btn-secondary { background: #1D2A24; color: #BFFFDD; border: 1px solid #2A3C34; }

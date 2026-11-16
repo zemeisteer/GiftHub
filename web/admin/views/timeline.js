@@ -1,4 +1,4 @@
-// Order audit timeline modal: GET /api/v1/orders/{code}/timeline. Every field is rendered as text.
+// Order audit timeline modal: GET /api/v1/admin/orders/{code}/timeline. Every field is rendered as text.
 import { h, clear } from '../../shared/dom.js';
 import { api } from '../../shared/api.js';
 import { formatDate } from './ui.js';
@@ -38,7 +38,7 @@ export async function openTimeline(code) {
   document.body.appendChild(overlay);
   closeBtn.focus();
   try {
-    const data = await api(`/api/v1/orders/${encodeURIComponent(code)}/timeline`);
+    const data = await api(`/api/v1/admin/orders/${encodeURIComponent(code)}/timeline`);
     if (!overlay.isConnected) return;
     clear(body);
     const list = Array.isArray(data && data.timeline) ? data.timeline : [];

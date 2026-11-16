@@ -134,42 +134,36 @@ def build_app(environment: str) -> FastAPI:
 
     @app.get("/")
     async def root_redirect():
-        return HTMLResponse("""
-        <!DOCTYPE html>
-        <html lang="uz">
-          <head>
-            <meta charset="UTF-8">
-            <title>GiftHub — Digital Commerce Platform</title>
-            <style>
-              body { background:#080C0A; color:#EFFBF4; font-family:-apple-system,BlinkMacSystemFont,sans-serif; text-align:center; padding:60px 20px; }
-              .card { max-width:480px; margin:0 auto; background:#121A16; border:1px solid #22302A; border-radius:20px; padding:40px 30px; }
-              h1 { color:#12E88B; margin-bottom:10px; font-size:28px; }
-              p { color:#8AA69A; font-size:15px; margin-bottom:30px; }
-              .btn { display:inline-block; padding:12px 24px; border-radius:12px; font-weight:600; text-decoration:none; margin:8px; font-size:14px; }
-              .btn-primary { background:#12E88B; color:#0A100D; }
-              .btn-secondary { background:#1D2A24; color:#BFFFDD; border:1px solid #2A3C34; }
-            </style>
-          </head>
-          <body>
-            <div class="card">
-              <h1>⭐ GiftHub</h1>
-              <p>Telegram Stars, Premium obuna va Raqamli sovg'alar platformasi</p>
-              <div>
-                <a href="/app" class="btn btn-primary">Foydalanuvchi Do'koni (Web App)</a>
-                <a href="/admin" class="btn btn-secondary">Admin Boshqaruv Paneli</a>
-              </div>
-            </div>
-          </body>
-        </html>
-        """)
+        return HTMLResponse("""<!DOCTYPE html>
+<html lang="uz">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>GiftHub — Digital Commerce Platform</title>
+    <link rel="stylesheet" href="/static/shared/landing.css">
+  </head>
+  <body>
+    <div class="card">
+      <h1>GiftHub</h1>
+      <p>Telegram Stars, Premium obuna va Raqamli sovg'alar platformasi</p>
+      <div>
+        <a href="/app" class="btn btn-primary">Foydalanuvchi Do'koni (Web App)</a>
+        <a href="/admin" class="btn btn-secondary">Admin Boshqaruv Paneli</a>
+      </div>
+    </div>
+  </body>
+</html>
+""")
 
     # 7. Static files (web/ directory) with caching
     app.mount("/static", StaticFiles(directory=os.path.join(settings.BASE_DIR, "web")), name="static")
 
     @app.middleware("http")
     async def static_cache_middleware(request: Request, call_next):
-        response: Response = await call_next(request)
         path = request.url.path
+        if path.startswith("/static/") and (path.endswith(".test.mjs") or "node_modules" in path):
+            return Response(status_code=404)
+        response: Response = await call_next(request)
         if path.startswith("/static/") and response.status_code in (200, 304):
             # Code is revalidated every load (ETag -> cheap 304): modules imported by the
             # versioned entry carry no ?v=, so a long max-age would mix old and new code.
