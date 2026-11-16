@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { parseHTML } from 'linkedom';
 
-let boot, go, NAV, renderNav, confirmDialog, registerView, setBadge, adminState, tg;
+let boot, go, VIEW_MODULES, NAV, renderNav, confirmDialog, registerView, setBadge, adminState, tg;
 let dom, fetchLog;
 
 const html = readFileSync(new URL('./new.html', import.meta.url), 'utf8');
@@ -42,7 +42,7 @@ before(async () => {
     hash: '',
     replace(hh) { this.hash = hh.startsWith('#') ? hh : '#' + hh; },
   };
-  ({ boot, go } = await import('./admin.js'));
+  ({ boot, go, VIEW_MODULES } = await import('./admin.js'));
   ({ NAV, renderNav } = await import('./nav.js'));
   ({ confirmDialog } = await import('./confirm.js'));
   ({ registerView, setBadge, adminState } = await import('./registry.js'));
@@ -140,13 +140,21 @@ test('a network failure on the profile shows retry, and retry recovers', async (
 });
 
 test('boot renders the nav and a view without a module as "Tez orada" placeholder', async () => {
-  stubFetch({ '/api/admin/me': { ...SUPER, permissions: ['ADMINS_READ'] } });
-  await boot();
-  await tick();
-  assert.equal(adminState.admin.id, 1);
-  assert.equal(navEl().querySelectorAll('a.nav-item').length, 1);
-  assert.match(outlet().textContent, /Tez orada/);
-  assert.match(navEl().querySelector('[aria-current="page"]').textContent, /Adminlar/);
+  // Every real nav item has a module now, so simulate a not-yet-built section by dropping its entry.
+  // (No view is registered for "admins" at this point in the file; later tests register stubs.)
+  const saved = VIEW_MODULES.admins;
+  delete VIEW_MODULES.admins;
+  try {
+    stubFetch({ '/api/admin/me': { ...SUPER, permissions: ['ADMINS_READ'] } });
+    await boot();
+    await tick();
+    assert.equal(adminState.admin.id, 1);
+    assert.equal(navEl().querySelectorAll('a.nav-item').length, 1);
+    assert.match(outlet().textContent, /Tez orada/);
+    assert.match(navEl().querySelector('[aria-current="page"]').textContent, /Adminlar/);
+  } finally {
+    VIEW_MODULES.admins = saved;
+  }
 });
 
 test('default landing is the first item the admin may see', async () => {

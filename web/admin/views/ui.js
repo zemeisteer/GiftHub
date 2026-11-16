@@ -150,3 +150,15 @@ export function saveBlob(blob, filename) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), REVOKE_MS);
 }
+
+// Accessible on/off switch. onToggle(el) runs on click; read/write state with switchOn/setSwitch.
+export function toggleSwitch(label, checked, disabled, onToggle) {
+  const sw = h('button', {
+    type: 'button', role: 'switch', class: 'switch', 'aria-label': label, 'aria-checked': String(!!checked),
+  }, h('span', { class: 'switch-knob' }));
+  if (disabled) sw.setAttribute('disabled', '');
+  sw.addEventListener('click', () => onToggle(sw));
+  return sw;
+}
+export const switchOn = (sw) => sw.getAttribute('aria-checked') === 'true';
+export const setSwitch = (sw, v) => sw.setAttribute('aria-checked', String(!!v));

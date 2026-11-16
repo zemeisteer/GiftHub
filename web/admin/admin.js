@@ -11,9 +11,9 @@ export { registerView, setBadge, adminState } from './registry.js';
 
 const NO_ACCESS = "Bu bo'lim uchun ruxsatingiz yo'q";
 
-// id -> module path for views that live in their own file (Tasks 9-11 add entries).
+// id -> module path for views that live in their own file.
 // A view module calls registerView(id, fn) from './registry.js' when imported.
-const VIEW_MODULES = {
+export const VIEW_MODULES = {
   dash: './views/dash.js',
   orders: './views/orders.js',
   users: './views/users.js',
@@ -22,6 +22,12 @@ const VIEW_MODULES = {
   services: './views/services.js',
   promos: './views/promos.js',
   referral: './views/referral.js',
+  broadcast: './views/broadcast.js',
+  channels: './views/channels.js',
+  gate: './views/gate.js',
+  fragment: './views/fragment.js',
+  health: './views/health.js',
+  admins: './views/admins.js',
 };
 
 const byId = (id) => document.getElementById(id);

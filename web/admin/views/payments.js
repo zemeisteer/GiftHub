@@ -4,21 +4,10 @@
 import { h, clear } from '../../shared/dom.js';
 import { api } from '../../shared/api.js';
 import { registerView } from '../registry.js';
-import { can, runAction, chips, pageHead, emptyNote, inlineError, badge } from './ui.js';
+import { can, runAction, chips, pageHead, emptyNote, inlineError, badge, toggleSwitch as toggle, switchOn as isOn, setSwitch as setOn } from './ui.js';
 
 const METHODS = [['click_active', 'Click'], ['payme_active', 'Payme'], ['card_active', "Karta orqali o'tkazma"]];
 const CARD_TYPES = [['UZCARD', 'Uzcard'], ['HUMO', 'Humo'], ['VISA', 'Visa'], ['MASTERCARD', 'Mastercard']];
-
-function toggle(label, checked, disabled, onToggle) {
-  const sw = h('button', {
-    type: 'button', role: 'switch', class: 'switch', 'aria-label': label, 'aria-checked': String(!!checked),
-  }, h('span', { class: 'switch-knob' }));
-  if (disabled) sw.setAttribute('disabled', '');
-  sw.addEventListener('click', () => onToggle(sw));
-  return sw;
-}
-const isOn = (sw) => sw.getAttribute('aria-checked') === 'true';
-const setOn = (sw, v) => sw.setAttribute('aria-checked', String(!!v));
 
 function groupDigits(value) {
   const digits = String(value || '').replace(/\D/g, '').slice(0, 16);

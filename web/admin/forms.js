@@ -81,3 +81,10 @@ export function formError() {
 export function summarize(changes, fmt = (v) => String(v)) {
   return changes.map(([label, a, b]) => `${label}: ${fmt(a)} → ${fmt(b)}`).join('; ');
 }
+
+// Selects the option with `value` (option.selected also works where select.value is read-only).
+export function setSelect(sel, value) {
+  const opts = [...sel.querySelectorAll('option')];
+  const hit = opts.find((o) => o.getAttribute('value') === String(value)) || opts[0];
+  if (hit) hit.selected = true;
+}
