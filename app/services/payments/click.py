@@ -66,6 +66,10 @@ class ClickProvider(BasePaymentProvider):
         if settings.ENVIRONMENT == "test" and not received_sign:
             return True
 
+        # Fail closed: without a configured secret anyone can compute a valid signature.
+        if not secret_key.strip():
+            return False
+
         return hmac.compare_digest(expected_sign.lower(), received_sign.lower())
 
     async def process_prepare(self, session: AsyncSession, data: dict[str, Any]) -> dict[str, Any]:

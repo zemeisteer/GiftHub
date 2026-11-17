@@ -54,6 +54,9 @@ class PaymeProvider(BasePaymentProvider):
             expected_key = settings.PAYME_SECRET_KEY or ""
             if settings.ENVIRONMENT == "test" and key == "test_key":
                 return True
+            # Fail closed: with no configured secret "Paycom:" would authenticate anyone.
+            if not expected_key.strip():
+                return False
             return login == "Paycom" and key == expected_key
         except Exception:
             return False

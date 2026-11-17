@@ -73,11 +73,13 @@ async def test_database_negative_balance_check_constraint(db_session: AsyncSessi
 
 
 @pytest.mark.asyncio
-async def test_click_complete_duplicate_idempotency(db_session: AsyncSession, sample_user: User):
+async def test_click_complete_duplicate_idempotency(db_session: AsyncSession, sample_user: User, monkeypatch):
     """
     Tests Click prepare and duplicate complete requests.
     Duplicate complete must return already-processed response without crediting user balance twice.
     """
+    # Click signatures are only accepted when a secret is configured (empty secret fails closed).
+    monkeypatch.setattr(settings, "CLICK_SECRET_KEY", "test_click_secret_key")
     amount = Decimal("25000.00")
     click_trans_id = 987654321
     secret_key = settings.CLICK_SECRET_KEY or ""
