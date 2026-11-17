@@ -1,0 +1,22 @@
+# Secrets and local state must never be baked into the image
+.env
+.env.*
+!.env.example
+data/*.db
+data/*.db-*
+data/*.sqlite*
+
+# Heavy or irrelevant for runtime
+.git
+.venv
+venv
+node_modules
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.claude
+.superpowers
+tests
+docs
+web/**/*.test.mjs
