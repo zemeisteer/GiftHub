@@ -6,8 +6,35 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     KeyboardButton,
     KeyboardButtonRequestUsers,
+    MenuButtonCommands,
+    MenuButtonWebApp,
     ReplyKeyboardMarkup,
+    WebAppInfo,
 )
+
+from app.core.config import settings
+
+STORE_BUTTON_TEXT = "🛍 Do'konni ochish"
+STORE_MENU_BUTTON_TEXT = "Do'kon"
+
+
+def _store_url() -> str | None:
+    """Telegram opens Web Apps only over HTTPS; anything else means the store isn't reachable yet."""
+    url = (settings.WEB_APP_URL or "").strip()
+    return url if url.startswith("https://") else None
+
+
+def store_web_app_button() -> InlineKeyboardButton | None:
+    url = _store_url()
+    return InlineKeyboardButton(text=STORE_BUTTON_TEXT, web_app=WebAppInfo(url=url)) if url else None
+
+
+def get_chat_menu_button() -> MenuButtonWebApp | MenuButtonCommands:
+    """The chat's bottom-left Menu button: opens the store when it is reachable, else the command list."""
+    url = _store_url()
+    if url:
+        return MenuButtonWebApp(text=STORE_MENU_BUTTON_TEXT, web_app=WebAppInfo(url=url))
+    return MenuButtonCommands()
 
 
 def get_shop_main_menu(
@@ -16,7 +43,9 @@ def get_shop_main_menu(
     # Barqaror va o'zgarmas tugma nomi (qo'shimcha xizmat qo'shilganda o'zgarib ketmaydi)
     services_btn = InlineKeyboardButton(text="⚡ Qo'shimcha Xizmatlar", callback_data="shop:services")
 
-    buttons = [
+    store_btn = store_web_app_button()
+    buttons = [[store_btn]] if store_btn else []
+    buttons += [
         [
             InlineKeyboardButton(text="⭐ Telegram Stars", callback_data="shop:stars"),
             InlineKeyboardButton(text="💎 Telegram Premium", callback_data="shop:premium"),

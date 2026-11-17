@@ -98,12 +98,18 @@ async def start_bot(shutdown_event: asyncio.Event = None):
 
         await set_bot_commands(bot)
 
-        # Standart Telegram buyruqlar menyusini o'rnatish
+        # Pastki "Menu" tugmasi: do'kon (Web App) ochiq bo'lsa uni ochadi, aks holda buyruqlar ro'yxati
         try:
-            from aiogram.types import MenuButtonCommands
+            from aiogram.types import MenuButtonWebApp
 
-            await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-            logging.info("✅ Telegram Chat Menu Button standart buyruqlar menyusiga sozlandi.")
+            from app.keyboards.shop_keyboards import get_chat_menu_button
+
+            menu_button = get_chat_menu_button()
+            await bot.set_chat_menu_button(menu_button=menu_button)
+            if isinstance(menu_button, MenuButtonWebApp):
+                logging.info(f"✅ Telegram Menu tugmasi do'konni ochadi: {menu_button.web_app.url}")
+            else:
+                logging.info("✅ Telegram Menu tugmasi buyruqlar menyusiga sozlandi (HTTPS Web App manzili yo'q).")
         except Exception as err:
             logging.warning(f"Chat menu button sozlashda ogohlantirish: {err}")
 

@@ -4,18 +4,15 @@ from datetime import datetime
 from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
+from app.keyboards.shop_keyboards import store_web_app_button
 from data import config
 
 logger = logging.getLogger(__name__)
 
 
 def get_store_keyboard() -> InlineKeyboardMarkup | None:
-    url = config.get_web_app_url() if hasattr(config, "get_web_app_url") else config.WEB_APP_URL
-    if url and url.startswith("https://"):
-        return InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text="⭐ Do'konni ochish", web_app=WebAppInfo(url=url))]]
-        )
-    return None
+    button = store_web_app_button()
+    return InlineKeyboardMarkup(inline_keyboard=[[button]]) if button else None
 
 
 def get_admin_keyboard() -> InlineKeyboardMarkup | None:
