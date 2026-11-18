@@ -13,6 +13,9 @@ Branch: `feat/webapp-redesign`. Hamma bosqichlar va yakuniy review tugagan; quyi
 - `/api/promo/apply` commit qilmaydi → `balance_bonus` kodlar qo'shilgandek ko'rinib bekor bo'ladi.
 - Legacy sovg'a buyurtmasi nom bo'yicha 60 000 fallback narx (yangi ilova id yuboradi).
 - `tunnel.js` (Node) development himoyasisiz — `tunnel.py` dagi tekshiruvni chetlab o'tadi.
+- **Sovg'alar haqiqatda yetkazilmaydi:** `app/services/fragment.py:267` da sovg'a buyurtmasi qabul qiluvchiga 50 ta Stars sifatida ketadi (`create_stars_invoice(recipient, 50)`), sovg'aning o'zi emas. Foydalanuvchi 64 000 so'mlik Teddy Bear sotib olsa ham, bajarish 50 Stars'ga teng. Haqiqiy sovg'a yetkazish (Bot API `sendGift`) alohida ishlab chiqilishi kerak.
+- Stars/Premium faqat foydalanuvchi `@username`iga yetkaziladi; kanal/guruhga yetkazadigan mahsulot yo'q. Kanal/guruh tanlash faqat haqiqiy sovg'a yetkazish (`sendGift`, kanal `chat_id`) paydo bo'lgach mantiqli.
+- Fragment raqamli Telegram ID'ni qabul qiladimi — tasdiqlanmagan (`@username`siz odam tanlanganda ID yuboriladi).
 
 ## Backend imkoniyat yetishmasliklari
 - `/api/orders/create` idempotency yo'q → `/api/v1/orders/checkout` + `Idempotency-Key`ga o'tish (hozir timeout'da "holat noma'lum" ko'rsatiladi).
@@ -33,3 +36,4 @@ Branch: `feat/webapp-redesign`. Hamma bosqichlar va yakuniy review tugagan; quyi
 - README'dagi `/docs` havolasini `/openapi.json`ga almashtirish.
 - Guard: `<a/onclick>` (bo'shliqsiz) holatini ushlamaydi; `style` obyekt qiymatlari tekshirilmaydi.
 - Node ≥ 20.19 (linkedom bog'liqliklari) README'da qayd etilmagan.
+- `tests/integration/test_postgres_concurrency.py` beqaror: haqiqiy lokal Postgres'da ishlaydi, foydalanuvchi ID'larini vaqtdan oladi va ma'lumotlarni tozalamaydi. To'liq ishga tushirishda ba'zan har xil testlari yiqiladi, yolg'iz ishga tushirganda o'tadi.

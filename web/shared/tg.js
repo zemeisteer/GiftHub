@@ -48,6 +48,24 @@ export const tg = {
     root.setAttribute('data-theme', scheme);
   },
 
+  // Telegram's native chooser (Bot API 9.6+): `preparedId` comes from the server's savePreparedKeyboardButton.
+  // `onResult(ok)` is called by Telegram; the chosen user reaches the bot, so the caller reads it back from the server.
+  canRequestChat() {
+    return typeof getWebApp()?.requestChat === 'function';
+  },
+  requestChat(preparedId, onResult) {
+    const wa = getWebApp();
+    if (!wa || typeof wa.requestChat !== 'function') return false;
+    try {
+      wa.requestChat(String(preparedId), (ok) => {
+        try { onResult?.(Boolean(ok)); } catch { /* ignore */ }
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
   // Matches Telegram's header, background and MainButton to the app palette (older clients ignore it).
   setColors(colors) {
     chrome = colors || null;

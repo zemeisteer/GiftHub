@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseHTML } from 'linkedom';
 
-let boot, appState, getProducts, tg, productScreen, topupScreen;
+let boot, appState, getProducts, tg, productScreen, topupScreen, pickerTiming;
+let defaultTiming;
 let dom, fetchLog, routes, listeners, mb, bb, haptics, opened;
 
 const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
@@ -95,8 +96,9 @@ before(async () => {
   };
   ({ boot, appState, getProducts } = await import('./app.js'));
   ({ tg } = await import('../shared/tg.js'));
-  ({ productScreen } = await import('./screens/product.js'));
+  ({ productScreen, pickerTiming } = await import('./screens/product.js'));
   ({ topupScreen } = await import('./screens/topup.js'));
+  defaultTiming = { ...pickerTiming };
 });
 
 beforeEach(() => {
@@ -106,7 +108,10 @@ beforeEach(() => {
   location.hash = '';
   stubFetch();
 });
-afterEach(() => { tg.hideMainButton(); tg.backButton(null); tg.resetOverrides(); delete globalThis.Telegram; });
+afterEach(() => {
+  tg.hideMainButton(); tg.backButton(null); tg.resetOverrides(); delete globalThis.Telegram;
+  Object.assign(pickerTiming, defaultTiming);
+});
 
 const tick = (ms = 15) => new Promise((r) => setTimeout(r, ms));
 const outlet = () => document.getElementById('outlet');
@@ -281,6 +286,155 @@ test('saved recipients load for the user and fill the field', async () => {
   assert.equal(outlet().querySelector('input[name="recipient"]').value, '@dost_bek');
   await pay();
   assert.equal(lastBody('/api/orders/create').recipient_username, '@dost_bek');
+});
+
+// --- Recipient picker (Telegram's native chooser) ---
+
+const PICKED = { status: 'done', recipient: { id: 555000111, username: 'dost_bek', name: 'Dost Valiyev', value: '@dost_bek' } };
+const PICK_PATH = '/api/recipients/picker/1234567890';
+const recipientValue = () => outlet().querySelector('input[name="recipient"]').value;
+
+function enablePicker(extra = {}) {
+  const chat = { requested: [], cb: null };
+  globalThis.Telegram.WebApp.requestChat = (id, cb) => { chat.requested.push(id); chat.cb = cb; };
+  Object.assign(pickerTiming, { pollMs: 5, timeoutMs: 300, cancelGraceMs: 30 });
+  stubFetch({
+    '/api/orders/create': ORDER_OK,
+    '/api/recipients/picker': { request_id: 1234567890, prepared_id: 'prep-1' },
+    ...extra,
+  });
+  return chat;
+}
+
+test('picker: opens the native chooser, waits for the answer and fills the recipient', async () => {
+  let polls = 0;
+  const chat = enablePicker({ [PICK_PATH]: () => jsonRes(200, ++polls < 3 ? { status: 'pending' } : PICKED) });
+  await openProduct('stars-100');
+  click('Boshqa odamga');
+  click('Chatdan tanlash');
+  await tick(80);
+  assert.deepEqual(chat.requested, ['prep-1']);
+  assert.equal(recipientValue(), '@dost_bek');
+  assert.match(text(), /Tanlandi: Dost Valiyev @dost_bek/);
+  assert.equal(calls('/api/recipients/picker'), 1);
+  assert.ok(polls >= 3);
+  await pay();
+  assert.equal(lastBody('/api/orders/create').recipient_username, '@dost_bek');
+});
+
+test('picker: a person without @username is filled by ID with a clear warning', async () => {
+  enablePicker({ [PICK_PATH]: { status: 'done', recipient: { id: 555000111, username: null, name: '', value: '555000111' } } });
+  await openProduct('stars-100');
+  click('Boshqa odamga');
+  click('Chatdan tanlash');
+  await tick(50);
+  assert.equal(recipientValue(), '555000111');
+  assert.match(text(), /@username yo'q/);
+});
+
+test('picker: names from Telegram are shown as text, never as HTML', async () => {
+  enablePicker({ [PICK_PATH]: { status: 'done', recipient: { id: 555000111, username: 'dost_bek', name: '<img src=x onerror=alert(1)>', value: '@dost_bek' } } });
+  await openProduct('stars-100');
+  click('Boshqa odamga');
+  click('Chatdan tanlash');
+  await tick(50);
+  assert.equal(outlet().querySelector('img'), null);
+  assert.match(text(), /<img src=x onerror=alert\(1\)>/);
+});
+
+test('picker: an unusable answer value is rejected, not typed into the field', async () => {
+  enablePicker({ [PICK_PATH]: { status: 'done', recipient: { id: 1, username: null, name: 'X', value: 'not a recipient!' } } });
+  await openProduct('stars-100');
+  click('Boshqa odamga');
+  click('Chatdan tanlash');
+  await tick(50);
+  assert.equal(recipientValue(), '');
+  assert.match(text(), /qabul qilib bo'lmadi/);
+});
+
+test('picker: an old Telegram client gets a hint and no request is made', async () => {
+  stubFetch({ '/api/orders/create': ORDER_OK });
+  await openProduct('stars-100');
+  click('Boshqa odamga');
+  click('Chatdan tanlash');
+  await tick(20);
+  assert.equal(calls('/api/recipients/picker'), 0);
+  assert.match(text(), /Telegram'ni yangilang/);
+});
+
+test('picker: cancelling in Telegram ends the wait and leaves the field alone', async () => {
+  const chat = enablePicker({ [PICK_PATH]: { status: 'pending' } });
+  await openProduct('stars-100');
+  click('Boshqa odamga');
+  setInput('recipient', '@oldfriend');
+  click('Chatdan tanlash');
+  await tick(20);
+  chat.cb(false);
+  await tick(120);
+  assert.match(text(), /bekor qilindi/);
+  assert.equal(recipientValue(), '@oldfriend');
+  assert.equal(findBtn('Chatdan tanlash').disabled, false);
+});
+
+test('picker: a late answer after the callback still arrives (callback true or false)', async () => {
+  let polls = 0;
+  const chat = enablePicker({ [PICK_PATH]: () => jsonRes(200, ++polls < 4 ? { status: 'pending' } : PICKED) });
+  pickerTiming.cancelGraceMs = 250; // the answer arrives well inside the grace window
+  pickerTiming.timeoutMs = 1000;
+  await openProduct('stars-100');
+  click('Boshqa odamga');
+  click('Chatdan tanlash');
+  await tick(8);
+  chat.cb(false); // some clients report false even when the bot gets the choice a moment later
+  await tick(120);
+  assert.equal(recipientValue(), '@dost_bek');
+  assert.doesNotMatch(text(), /bekor qilindi/);
+});
+
+test('picker: server failure is shown and the button works again', async () => {
+  enablePicker({ '/api/recipients/picker': () => jsonRes(502, { detail: "Telegram tanlash oynasini tayyorlay olmadi. Qo'lda yozing." }) });
+  await openProduct('stars-100');
+  click('Boshqa odamga');
+  click('Chatdan tanlash');
+  await tick(30);
+  assert.match(text(), /tayyorlay olmadi/);
+  assert.equal(findBtn('Chatdan tanlash').disabled, false);
+});
+
+test('picker: an expired request says so and stops polling', async () => {
+  enablePicker({ [PICK_PATH]: () => jsonRes(404, { detail: 'yo\'q' }) });
+  await openProduct('stars-100');
+  click('Boshqa odamga');
+  click('Chatdan tanlash');
+  await tick(60);
+  assert.match(text(), /muddati tugadi/);
+  const n = calls(PICK_PATH);
+  await tick(40);
+  assert.equal(calls(PICK_PATH), n);
+});
+
+test('picker: a double tap makes one request', async () => {
+  enablePicker({ [PICK_PATH]: PICKED });
+  await openProduct('stars-100');
+  click('Boshqa odamga');
+  const btn = findBtn('Chatdan tanlash');
+  btn.dispatchEvent(new Event('click'));
+  btn.dispatchEvent(new Event('click'));
+  await tick(50);
+  assert.equal(calls('/api/recipients/picker'), 1);
+});
+
+test('picker: leaving the product page stops the polling', async () => {
+  enablePicker({ [PICK_PATH]: { status: 'pending' } });
+  await openProduct('stars-100');
+  click('Boshqa odamga');
+  click('Chatdan tanlash');
+  await tick(30);
+  navigate('#/orders');
+  await tick(20);
+  const n = calls(PICK_PATH);
+  await tick(60);
+  assert.equal(calls(PICK_PATH), n);
 });
 
 test('insufficient balance offers top-up', async () => {

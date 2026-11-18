@@ -17,6 +17,10 @@ export const STARS_MIN = 15;
 export const STARS_MAX = 50000;
 const CUSTOM_DEBOUNCE_MS = 300;
 
+// Timing of the native "choose a person" flow (exported so tests can shorten it).
+export const pickerTiming = { pollMs: 1000, timeoutMs: 90000, cancelGraceMs: 3000 };
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const CAT_ICON = { stars: 'star', premium: 'diamond', gifts: 'gift' };
 
 // "@name" for a username, the digits for a Telegram ID, otherwise null.
@@ -220,7 +224,97 @@ export async function productScreen({ id } = {}) {
   });
   const savedChips = h('div', { class: 'chips chips-wrap', role: 'group', 'aria-label': 'Saqlangan qabul qiluvchilar' });
   const saveBox = h('input', { type: 'checkbox', name: 'save_recipient' });
+
+  // --- Telegram's native chooser: the person is picked from the user's own chats ---
+  let pickInFlight = false;
+  const pickHint = h('p', { class: 'field-hint pick-hint', 'aria-live': 'polite', hidden: true });
+  const pickBtn = h('button', { type: 'button', class: 'btn btn-secondary pick-btn', onclick: () => pickRecipient() },
+    icon('users'), 'Chatdan tanlash');
+
+  function setPickHint(msg, kind) {
+    pickHint.textContent = msg || '';
+    pickHint.className = kind === 'error' ? 'field-error pick-hint' : 'field-hint pick-hint';
+    if (msg) pickHint.removeAttribute('hidden');
+    else pickHint.setAttribute('hidden', '');
+  }
+
+  function applyPicked(r) {
+    const value = parseRecipient(r && typeof r.value === 'string' ? r.value : '');
+    if (!value) {
+      setPickHint("Tanlangan odamni qabul qilib bo'lmadi. Username yoki ID ni qo'lda yozing.", 'error');
+      return;
+    }
+    recipientInput.value = value;
+    showRecipientError(null);
+    tg.haptic('success');
+    const who = [r.name, r.username ? `@${r.username}` : ''].filter(Boolean).join(' ');
+    if (r.username) {
+      setPickHint(`Tanlandi: ${who}`);
+    } else {
+      setPickHint(`${who || 'Tanlandi'} — @username yo'q, ID bilan yuboriladi. Fragment ID ni qabul qilmasligi mumkin.`);
+    }
+  }
+
+  async function pickRecipient() {
+    if (pickInFlight || payInFlight || locked) return;
+    if (!tg.canRequestChat()) {
+      setPickHint("Chatdan tanlash uchun Telegram'ni yangilang yoki @username/ID ni qo'lda yozing.", 'error');
+      return;
+    }
+    pickInFlight = true;
+    pickBtn.disabled = true;
+    showRecipientError(null);
+    setPickHint('Telegram tanlash oynasi ochilmoqda…');
+    try {
+      const req = await api('/api/recipients/picker', { method: 'POST', body: {} });
+      if (!req || !Number.isSafeInteger(req.request_id) || typeof req.prepared_id !== 'string') {
+        throw new Error("Tanlash oynasini tayyorlab bo'lmadi");
+      }
+      let cancelledAt = null;
+      const opened = tg.requestChat(req.prepared_id, (ok) => { if (!ok && cancelledAt === null) cancelledAt = Date.now(); });
+      if (!opened) throw new Error("Tanlash oynasini ochib bo'lmadi");
+      setPickHint('Telegram ro\'yxatidan odamni tanlang…');
+      const startedAt = Date.now();
+      for (;;) {
+        await sleep(pickerTiming.pollMs);
+        if (!active() || mode !== 'other') return;
+        let res = null;
+        try {
+          res = await api(`/api/recipients/picker/${req.request_id}`);
+        } catch (e) {
+          if (e && e.status === 404) {
+            setPickHint("Tanlov muddati tugadi. Qayta urinib ko'ring.", 'error');
+            return;
+          }
+          // A dropped connection is retried until the timeout below.
+        }
+        if (res && res.status === 'done' && res.recipient) {
+          applyPicked(res.recipient);
+          return;
+        }
+        const now = Date.now();
+        // Some clients report "false" even when the choice reaches the bot a moment later, so wait a little.
+        if (cancelledAt !== null && now - cancelledAt > pickerTiming.cancelGraceMs) {
+          setPickHint('Tanlash bekor qilindi.');
+          return;
+        }
+        if (now - startedAt > pickerTiming.timeoutMs) {
+          setPickHint("Tanlov kelmadi. Qayta urinib ko'ring yoki qo'lda yozing.", 'error');
+          return;
+        }
+      }
+    } catch (err) {
+      tg.haptic('error');
+      setPickHint(err && err.message ? err.message : "Tanlash oynasini ochib bo'lmadi", 'error');
+    } finally {
+      pickInFlight = false;
+      pickBtn.disabled = false;
+    }
+  }
+
   const otherBox = h('div', { class: 'recipient-other', hidden: true },
+    pickBtn,
+    pickHint,
     recipientInput,
     recipientError,
     savedChips,

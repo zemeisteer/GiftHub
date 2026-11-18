@@ -146,6 +146,20 @@ test('setColors paints Telegram chrome and the MainButton; tolerates old clients
   tg.setColors(null);
 });
 
+test('requestChat opens the native chooser and reports Telegram\'s answer; absent on old clients', () => {
+  assert.equal(tg.canRequestChat(), false);
+  assert.equal(tg.requestChat('prep-1', () => {}), false);
+  let asked = null;
+  let answers = [];
+  installTelegram({ requestChat: (id, cb) => { asked = id; cb(true); cb(false); } });
+  assert.equal(tg.canRequestChat(), true);
+  assert.equal(tg.requestChat(42, (ok) => answers.push(ok)), true);
+  assert.equal(asked, '42', 'the id is passed as a string');
+  assert.deepEqual(answers, [true, false]);
+  installTelegram({ requestChat: () => { throw new Error('boom'); } });
+  assert.equal(tg.requestChat('x', () => {}), false, 'a throwing SDK never breaks the page');
+});
+
 test('openLink / openTelegramLink validate urls', () => {
   tg.openLink('javascript:alert(1)');
   tg.openLink('http://a.b');
