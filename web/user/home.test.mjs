@@ -80,11 +80,8 @@ const click = (label) => {
   assert.ok(b, `button "${label}" not found`);
   b.dispatchEvent(new Event('click'));
 };
-const type = (value) => {
-  const input = outlet().querySelector('input[type="search"]');
-  input.value = value;
-  input.dispatchEvent(new Event('input'));
-};
+const tile = (cat) => outlet().querySelector(`.tile[data-cat="${cat}"]`);
+const press = (el) => { assert.ok(el, 'element not found'); el.dispatchEvent(new Event('click')); };
 
 async function bootHome() {
   await boot();
@@ -123,24 +120,31 @@ test('home shows balance and product prices from server', async () => {
   assert.equal(appState.balance, 12500);
 });
 
-test('category chip filters grid', async () => {
+test('greets the user by name (as text) and shows the balance pill', async () => {
+  stubFetch({ '/api/gate/check': GATE_OK, '/api/user/me': { ...ME, first_name: '<b>Ali</b>' }, '/api/products': PRODUCTS });
   await bootHome();
-  click('Premium');
-  assert.equal(cards().length, 3);
-  assert.equal(find('Premium').getAttribute('aria-pressed'), 'true');
-  click("Sovg'alar");
-  assert.deepEqual(names(), ['Teddy Bear', 'Neon Heart']);
-  click('Hammasi');
-  assert.equal(cards().length, 8);
+  assert.match(outlet().textContent, /Salom, <b>Ali<\/b>!/);
+  assert.equal(outlet().querySelector('.home-head b'), null);
+  assert.match(outlet().querySelector('.balance-pill').textContent, /12 500 so'm/);
 });
 
-test('search filters by name', async () => {
+test('category tiles filter the shelf and show the lowest server price', async () => {
   await bootHome();
-  type('100');
-  assert.deepEqual(names(), ['100 Stars']);
-  type('zzz');
-  assert.equal(cards().length, 0);
-  assert.match(outlet().textContent, /Hech narsa topilmadi/);
+  assert.match(tile('stars').textContent, /10 350 so'm dan/);
+  assert.match(tile('premium').textContent, /142 000 so'm dan/);
+  assert.match(outlet().querySelector('.shelf-title').textContent, /Tezkor xarid/);
+  press(tile('premium'));
+  assert.equal(cards().length, 3);
+  assert.equal(tile('premium').getAttribute('aria-pressed'), 'true');
+  assert.match(outlet().querySelector('.shelf-title').textContent, /Telegram Premium/);
+  press(tile('gifts'));
+  assert.deepEqual(names(), ['Teddy Bear', 'Neon Heart']);
+  assert.equal(tile('premium').getAttribute('aria-pressed'), 'false');
+  click('Hammasi');
+  assert.equal(cards().length, 8);
+  press(tile('stars'));
+  press(tile('stars'));
+  assert.equal(cards().length, 8, 'tapping the active tile again shows everything');
 });
 
 test('network failure shows retry, and retry recovers', async () => {
@@ -154,12 +158,14 @@ test('network failure shows retry, and retry recovers', async () => {
   assert.match(text(), /10 350 so'm/);
 });
 
-test('product card and top-up navigate by hash', async () => {
+test('product card, balance pill and referral tile navigate by hash', async () => {
   await bootHome();
   cards()[1].dispatchEvent(new Event('click'));
   assert.equal(location.hash, '#/product/stars-100');
-  click("To'ldirish");
+  press(outlet().querySelector('.balance-pill'));
   assert.equal(location.hash, '#/topup');
+  press(outlet().querySelector('.tile-ref'));
+  assert.equal(location.hash, '#/referral');
 });
 
 test('tab routes render their screens and nav marks the active tab', async () => {

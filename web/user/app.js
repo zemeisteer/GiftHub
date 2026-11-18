@@ -30,6 +30,10 @@ export function bottomNav(active) {
 
 const byId = (id) => document.getElementById(id);
 
+// Telegram's header, background and MainButton follow the D palette (see app.css).
+const LIGHT_CHROME = { background: '#f7f5ef', button: '#1d1b16', buttonText: '#ffd84d' };
+const DARK_CHROME = { background: '#121212', button: '#ffd84d', buttonText: '#3d2f00' };
+
 function setNav(active) {
   const nav = byId('nav');
   if (!nav) return;
@@ -130,6 +134,7 @@ export async function boot() {
   try {
     tg.ready();
     tg.applyTheme(document.documentElement);
+    tg.setColors(document.documentElement.getAttribute('data-theme') === 'dark' ? DARK_CHROME : LIGHT_CHROME);
     clear(outlet);
     if (nav) clear(nav);
   } catch (err) {

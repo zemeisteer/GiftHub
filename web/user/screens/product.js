@@ -469,7 +469,7 @@ export async function productScreen({ id } = {}) {
   }
 
   const root = h('div', { class: 'product-page' },
-    h('section', { class: 'product-hero' }, heroIcon, h('div', { class: 'product-hero-info' }, heroName, priceEl), heroBadge),
+    h('section', { class: `product-hero hero-${selected.cat}` }, heroIcon, h('div', { class: 'product-hero-info' }, heroName, priceEl), heroBadge),
     variantButtons.length > 1 ? h('section', { class: 'section' },
       h('h2', { class: 'section-title' }, 'Variant'),
       h('div', { class: 'chips chips-wrap', role: 'group', 'aria-label': 'Variantlar' }, variantButtons),

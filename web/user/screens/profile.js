@@ -27,6 +27,13 @@ function avatar(user) {
   return box;
 }
 
+// ISO timestamps become dd.mm.yyyy; display strings from the server pass through unchanged.
+function joinedDate(value) {
+  const s = String(value || '');
+  const m = /^(\d{4})-(\d{2})-(\d{2})T/.exec(s);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : s || '—';
+}
+
 const menuItem = (ic, label, onclick) => h('button', { type: 'button', class: 'menu-item', onclick },
   icon(ic), h('span', { class: 'menu-label' }, label), icon('chevron-right'));
 
@@ -86,16 +93,18 @@ export async function profileScreen() {
 
   return h('div', { class: 'profile-page' },
     h('section', { class: 'profile-head' },
-      avatar(user),
-      h('div', null,
-        h('h1', { class: 'product-title' }, fullName),
-        h('span', { class: 'field-hint' }, handle))),
-    h('section', { class: 'balance-card' },
-      h('div', { class: 'balance-info' }, h('span', { class: 'balance-label' }, 'Balansingiz'), balanceEl),
-      h('button', { type: 'button', class: 'btn btn-primary btn-topup', onclick: () => { location.hash = '#/topup'; } }, icon('plus'), "To'ldirish")),
+      h('div', { class: 'profile-id' },
+        avatar(user),
+        h('div', { class: 'profile-names' },
+          h('h1', { class: 'profile-name' }, fullName),
+          h('span', { class: 'profile-handle' }, handle))),
+      h('span', { class: 'profile-balance-label' }, 'Balansingiz'),
+      h('div', { class: 'profile-balance' },
+        balanceEl,
+        h('button', { type: 'button', class: 'btn btn-topup', onclick: () => { location.hash = '#/topup'; } }, icon('plus'), "To'ldirish"))),
     h('div', { class: 'stat-row' },
       stat(String(Number(user.orders_count) || 0), 'Buyurtmalar'),
-      stat(String(user.created_at || '—'), "Ro'yxatdan o'tgan")),
+      stat(joinedDate(user.created_at), "Ro'yxatdan o'tgan")),
     h('section', { class: 'section' },
       h('h2', { class: 'section-title' }, 'Promo-kod'),
       h('div', { class: 'field-row' }, promoInput, applyBtn),

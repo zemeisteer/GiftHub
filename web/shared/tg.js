@@ -6,6 +6,8 @@ const getWebApp = () => globalThis.Telegram?.WebApp || null;
 
 let currentMainHandler = null;
 let mainGen = 0;
+// App palette for Telegram's own chrome: { background, button, buttonText } (set via tg.setColors).
+let chrome = null;
 
 function clearMainHandler() {
   const wa = getWebApp();
@@ -46,6 +48,16 @@ export const tg = {
     root.setAttribute('data-theme', scheme);
   },
 
+  // Matches Telegram's header, background and MainButton to the app palette (older clients ignore it).
+  setColors(colors) {
+    chrome = colors || null;
+    const wa = getWebApp();
+    if (!wa || !chrome || !chrome.background) return;
+    for (const fn of ['setHeaderColor', 'setBackgroundColor', 'setBottomBarColor']) {
+      try { wa[fn]?.(chrome.background); } catch { /* ignore */ }
+    }
+  },
+
   // Shows a main button; while onClick's promise is pending it shows progress and ignores re-clicks.
   // { disabled: true } shows it greyed out and ignores clicks.
   mainButton(text, onClick, { disabled = false } = {}) {
@@ -82,6 +94,9 @@ export const tg = {
     };
     currentMainHandler = handler;
     mb.setText(text);
+    if (chrome && chrome.button) {
+      try { mb.setParams?.({ color: chrome.button, text_color: chrome.buttonText }); } catch { /* ignore */ }
+    }
     mb.onClick(handler);
     mb.show();
   },

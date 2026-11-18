@@ -131,6 +131,21 @@ test('mainButton: disabled option disables the button and ignores clicks', async
   assert.equal(n, 1);
 });
 
+test('setColors paints Telegram chrome and the MainButton; tolerates old clients', () => {
+  installTelegram({
+    setHeaderColor: (c) => calls.push(['header', c]),
+    setBackgroundColor: (c) => calls.push(['background', c]),
+  });
+  globalThis.Telegram.WebApp.MainButton.setParams = (p) => calls.push(['params', p]);
+  tg.setColors({ background: '#f7f5ef', button: '#1d1b16', buttonText: '#ffd84d' });
+  assert.deepEqual(calls.filter((c) => c[0] === 'header' || c[0] === 'background'), [['header', '#f7f5ef'], ['background', '#f7f5ef']]);
+  tg.mainButton("To'lash", () => {});
+  assert.deepEqual(calls.find((c) => c[0] === 'params'), ['params', { color: '#1d1b16', text_color: '#ffd84d' }]);
+  delete globalThis.Telegram;
+  assert.doesNotThrow(() => tg.setColors({ background: '#121212' }));
+  tg.setColors(null);
+});
+
 test('openLink / openTelegramLink validate urls', () => {
   tg.openLink('javascript:alert(1)');
   tg.openLink('http://a.b');

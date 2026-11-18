@@ -1,20 +1,20 @@
-// Home screen (B · store style): balance, search, category chips, product grid.
+// Home screen (D · colourful tiles): greeting + balance pill, category tiles, product shelf.
 import { h, clear, icon, formatSom } from '../../shared/dom.js';
 import { tg } from '../../shared/tg.js';
 import { appState, cachedProducts, getProducts, productList } from '../store.js';
 import { renderError, renderEmpty, skeletonCards } from '../../shared/state.js';
 
-const CATEGORIES = [
-  ['all', 'Hammasi'],
-  ['stars', 'Stars'],
-  ['premium', 'Premium'],
-  ['gifts', "Sovg'alar"],
-];
-
 // The slug <-> product mapping lives in store.js so product.js resolves the same ids.
 export { productList };
 
 const CAT_ICON = { stars: 'star', premium: 'diamond', gifts: 'gift' };
+const SHELF_TITLE = { all: 'Tezkor xarid', stars: 'Telegram Stars', premium: 'Telegram Premium', gifts: "Sovg'alar" };
+// [category, label, extra class]; Stars is the large tile on the left.
+const TILES = [
+  ['stars', 'Stars', 'tile-big'],
+  ['premium', 'Premium', ''],
+  ['gifts', "Sovg'alar", ''],
+];
 
 function productCard(p) {
   return h('button', {
@@ -28,13 +28,67 @@ function productCard(p) {
   h('span', { class: 'product-price' }, formatSom(p.price)));
 }
 
+// Lowest price of a category, straight from server prices (nothing is computed for checkout).
+function fromPrice(items, cat) {
+  if (!items) return '';
+  const prices = items.filter((p) => p.cat === cat && Number.isFinite(p.price) && p.price > 0).map((p) => p.price);
+  return prices.length ? `${formatSom(Math.min(...prices))} dan` : '';
+}
+
 export async function homeScreen() {
   let cat = 'all';
-  let query = '';
   let items = null;
 
   const grid = h('div', { class: 'grid', 'aria-live': 'polite' });
   const results = h('div', { class: 'results' }, grid);
+  const shelfTitle = h('h2', { class: 'shelf-title' }, SHELF_TITLE.all);
+  const resetBtn = h('button', {
+    type: 'button',
+    class: 'shelf-reset',
+    hidden: true,
+    onclick: () => select('all'),
+  }, 'Hammasi');
+  const shelf = h('section', { class: 'shelf' }, h('div', { class: 'shelf-head' }, shelfTitle, resetBtn), results);
+
+  const subs = {};
+  const tiles = TILES.map(([key, label, extra]) => {
+    subs[key] = h('span', { class: 'tile-sub' });
+    return h('button', {
+      type: 'button',
+      class: `tile tile-${key} ${extra}`.trim(),
+      'aria-pressed': 'false',
+      dataset: { cat: key },
+      onclick: () => {
+        tg.haptic('light');
+        select(cat === key ? 'all' : key);
+        shelf.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+      },
+    },
+    h('span', { class: 'tile-icon' }, icon(CAT_ICON[key])),
+    h('span', { class: 'tile-text' }, h('span', { class: 'tile-name' }, label), subs[key]));
+  });
+
+  const refTile = h('button', {
+    type: 'button',
+    class: 'tile tile-ref tile-wide',
+    onclick: () => { tg.haptic('light'); location.hash = '#/referral'; },
+  },
+  h('span', { class: 'tile-icon' }, icon('users')),
+  h('span', { class: 'tile-text' }, h('span', { class: 'tile-name' }, "Do'stni taklif qil"), h('span', { class: 'tile-sub' }, 'Har bir xariddan bonus')),
+  h('span', { class: 'tile-arrow' }, icon('chevron-right')));
+
+  function paintSubs() {
+    for (const [key] of TILES) subs[key].textContent = fromPrice(items, key);
+  }
+
+  function select(next) {
+    cat = next;
+    for (const t of tiles) t.setAttribute('aria-pressed', t.dataset.cat === cat ? 'true' : 'false');
+    shelfTitle.textContent = SHELF_TITLE[cat];
+    if (cat === 'all') resetBtn.setAttribute('hidden', '');
+    else resetBtn.removeAttribute('hidden');
+    renderGrid();
+  }
 
   function renderGrid() {
     clear(results);
@@ -44,54 +98,35 @@ export async function homeScreen() {
       results.appendChild(grid);
       return;
     }
-    const q = query.trim().toLowerCase();
-    const shown = items.filter((p) => (cat === 'all' || p.cat === cat) && (!q || p.name.toLowerCase().includes(q)));
+    const shown = items.filter((p) => cat === 'all' || p.cat === cat);
     clear(grid);
     if (!shown.length) {
-      results.appendChild(renderEmpty('Hech narsa topilmadi', "Boshqa so'z yoki toifani tanlab ko'ring"));
+      results.appendChild(renderEmpty('Hozircha mahsulot yo\'q', "Boshqa toifani tanlab ko'ring"));
       return;
     }
     for (const p of shown) grid.appendChild(productCard(p));
     results.appendChild(grid);
   }
 
-  const chips = CATEGORIES.map(([key, label]) => h('button', {
-    type: 'button',
-    class: 'chip',
-    'aria-pressed': key === cat ? 'true' : 'false',
-    dataset: { cat: key },
-    onclick: () => {
-      cat = key;
-      for (const c of chips) c.setAttribute('aria-pressed', c.dataset.cat === cat ? 'true' : 'false');
-      tg.haptic('light');
-      renderGrid();
-    },
-  }, label));
-
-  const search = h('input', {
-    type: 'search',
-    class: 'search-input',
-    placeholder: 'Mahsulot qidirish',
-    'aria-label': 'Mahsulot qidirish',
-    autocomplete: 'off',
-    enterkeyhint: 'search',
-    oninput: (e) => { query = e.target.value || ''; renderGrid(); },
-  });
-
+  const name = appState.user && appState.user.first_name;
   const root = h('div', { class: 'home' },
-    h('section', { class: 'balance-card' },
-      h('div', { class: 'balance-info' },
-        h('span', { class: 'balance-label' }, 'Balansingiz'),
-        h('span', { class: 'balance-value' }, formatSom(appState.balance))),
-      h('button', { type: 'button', class: 'btn btn-primary btn-topup', onclick: () => { location.hash = '#/topup'; } }, icon('plus'), "To'ldirish")),
-    h('label', { class: 'search' }, icon('search'), search),
-    h('div', { class: 'chips', role: 'group', 'aria-label': 'Toifalar' }, chips),
-    results);
+    h('header', { class: 'home-head' },
+      h('div', { class: 'greet' },
+        h('span', { class: 'greet-hi' }, name ? `Salom, ${name}!` : 'Salom!'),
+        h('span', { class: 'greet-brand' }, 'GiftHub')),
+      h('button', {
+        type: 'button',
+        class: 'balance-pill',
+        'aria-label': `Balans ${formatSom(appState.balance)}, to'ldirish`,
+        onclick: () => { tg.haptic('light'); location.hash = '#/topup'; },
+      }, h('span', { class: 'balance-value' }, formatSom(appState.balance)), icon('plus'))),
+    h('div', { class: 'tiles', role: 'group', 'aria-label': 'Toifalar' }, tiles, refTile),
+    shelf);
 
   function load(force) {
     items = null;
     renderGrid();
-    getProducts({ force }).then((data) => { items = productList(data); renderGrid(); }).catch((err) => {
+    getProducts({ force }).then((data) => { items = productList(data); paintSubs(); renderGrid(); }).catch((err) => {
       clear(results);
       results.appendChild(renderError(err && err.message, () => load(true)));
     });
@@ -100,6 +135,7 @@ export async function homeScreen() {
   const fresh = cachedProducts();
   if (fresh) {
     items = productList(fresh);
+    paintSubs();
     renderGrid();
   } else {
     load(false);
