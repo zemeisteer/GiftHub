@@ -11,6 +11,7 @@ from app.core.database import AsyncSessionLocal, get_db
 from app.core.exceptions import GiftHubException
 from app.models.payment import PaymentSetting
 from app.models.user import User
+from app.services import gift_catalog
 from app.services.pricing.service import pricing_service
 from app.services.promotions.service import promotion_service
 from app.web.auth import get_current_user
@@ -53,10 +54,7 @@ async def get_products(stars_amount: int | None = None, session: AsyncSession = 
         {"months": 12, "name": "Premium — 12 oy", "price_uzs": prem_data.get("12", 380000), "icon": "👑"},
     ]
 
-    try:
-        gifts_list = json.loads(pricing.gifts_json) if pricing and pricing.gifts_json else []
-    except Exception:
-        gifts_list = []
+    gifts_list = await gift_catalog.list_public(session)
 
     payment_setting = await session.get(PaymentSetting, 1)
     payment_methods = []

@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.web.routes.admin.analytics import router as analytics_router
 from app.web.routes.admin.broadcasts import router as broadcasts_router
 from app.web.routes.admin.channels import router as channels_router
+from app.web.routes.admin.gifts import router as gifts_router
 from app.web.routes.admin.orders import router as orders_router
 from app.web.routes.admin.payments import router as payments_router
 from app.web.routes.admin.pricing import router as pricing_router
@@ -18,6 +19,7 @@ router.include_router(analytics_router)
 router.include_router(orders_router)
 router.include_router(users_router)
 router.include_router(pricing_router)
+router.include_router(gifts_router)
 router.include_router(payments_router)
 router.include_router(promos_router)
 router.include_router(referrals_router)
