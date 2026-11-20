@@ -120,3 +120,46 @@ async def test_successful_gift_order_stores_price_and_recipient_user_id(db_sessi
     assert order.total_price > Decimal(0)
     assert order.status == OrderStatus.PAID
     assert await _balance(db_session, sample_user) == before - order.total_price
+
+
+@pytest.mark.parametrize("bad", ["00000", "0000000", "4503599627370496", "9999999999999999"])
+async def test_out_of_range_numeric_id_rejected(db_session, sample_user, bad):
+    with pytest.raises(GiftHubException, match="noto'g'ri"):
+        await resolve_gift_recipient(db_session, BUYER_ID, bad)
+
+
+async def test_price_lock_for_cheap_gift_cannot_lower_price_of_pricier_gift(db_session, sample_user):
+    from app.services.pricing.service import PricingService
+
+    await _setup(
+        db_session,
+        gifts=[TelegramGift(id="cheap", star_count=15), TelegramGift(id="pricey", star_count=100)],
+    )
+    lock = await PricingService.create_price_lock(db_session, "gift", 1, user_id=BUYER_ID, item_title="cheap")
+    fresh = await PricingService.get_authoritative_price(db_session, "gift", 1, item_title="pricey")
+    assert fresh["total_price_decimal"] > lock.total_price
+
+    order, _, _ = await OrderService.create_order(
+        db_session,
+        user_id=BUYER_ID,
+        product_type="gift",
+        item_title="pricey",
+        price_lock_id=lock.id,
+    )
+    assert order.total_price == fresh["total_price_decimal"]
+    assert order.price_lock_id is None
+
+
+async def test_gift_order_with_bogus_price_lock_succeeds_at_fresh_price(db_session, sample_user):
+    from app.services.pricing.service import PricingService
+
+    await _setup(db_session)
+    fresh = await PricingService.get_authoritative_price(db_session, "gift", 1, item_title="g15")
+    order, _, _ = await OrderService.create_order(
+        db_session,
+        user_id=BUYER_ID,
+        product_type="gift",
+        item_title="g15",
+        price_lock_id="pl_doesnotexist",
+    )
+    assert order.total_price == fresh["total_price_decimal"]

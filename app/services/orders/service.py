@@ -115,6 +115,9 @@ class OrderService:
                 raise GiftHubException("Bu sovg'ani hozir yuborib bo'lmaydi. Keyinroq urinib ko'ring.")
 
         # 1. Authoritative price calculation or price lock consumption
+        if product_type == "gift":
+            # Locks are not bound to a gift (amount is usually 1), so they could lower the price: always price fresh.
+            price_lock_id = None
         if price_lock_id:
             lock = await pricing_service.validate_or_consume_price_lock(
                 session=session, lock_id=price_lock_id, product_type=product_type, amount=amount

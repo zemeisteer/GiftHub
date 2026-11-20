@@ -8,6 +8,7 @@ from app.models.user import User
 
 # Telegram user ids can reach 2**52 (16 digits), so allow up to 16.
 _NUMERIC_ID = re.compile(r"^\d{5,16}$")
+MAX_TELEGRAM_ID = 2**52 - 1
 _USERNAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]{4,31}$")
 
 UNKNOWN_RECIPIENT = (
@@ -27,7 +28,10 @@ async def resolve_gift_recipient(session: AsyncSession, buyer_id: int, recipient
         return buyer_id
 
     if _NUMERIC_ID.match(value):
-        return int(value)
+        numeric = int(value)
+        if not 1 <= numeric <= MAX_TELEGRAM_ID:
+            raise GiftHubException(INVALID_RECIPIENT)
+        return numeric
 
     name = value[1:] if value.startswith("@") else value
     if not _USERNAME.match(name):
