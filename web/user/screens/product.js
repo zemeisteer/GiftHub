@@ -255,6 +255,9 @@ export async function productScreen({ id } = {}) {
     const who = [r.name, r.username ? `@${r.username}` : ''].filter(Boolean).join(' ');
     if (r.username) {
       setPickHint(`Tanlandi: ${who}`);
+    } else if (selected.cat === 'gifts') {
+      // Gifts go through Telegram sendGift by numeric ID (not Fragment), so no username is fine.
+      setPickHint(`Tanlandi: ${who || value} — sovg'a Telegram ID orqali yuboriladi.`);
     } else {
       setPickHint(`${who || 'Tanlandi'} — @username yo'q, ID bilan yuboriladi. Fragment ID ni qabul qilmasligi mumkin.`);
     }

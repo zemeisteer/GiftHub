@@ -99,6 +99,24 @@ async def test_success_sends_once_and_completes(db_session, sample_user):
     assert _to(bot, BUYER_ID)
 
 
+async def test_without_bot_nothing_is_claimed_and_outbox_retries(db_session, sample_user):
+    """Standalone worker runs with bot=None: leave the order untouched so a bot-backed run can deliver it."""
+    order = await _paid_order(db_session)
+    before = await _wallet(db_session)
+
+    res = await gift_delivery.deliver(db_session, order.id, None)
+
+    assert res == {"success": False, "error": "bot unavailable"}
+    o = await _reload(db_session, order.id)
+    assert o.status == OrderStatus.PAID
+    assert o.fulfillment_status == "pending"
+    assert await _wallet(db_session) == before
+
+    bot = FakeGiftBot()
+    res = await gift_delivery.deliver(db_session, order.id, bot)
+    assert res["outcome"] == "sent" and len(bot.sent) == 1
+
+
 async def test_second_call_is_skipped_and_sends_nothing(db_session, sample_user):
     order = await _paid_order(db_session)
     bot = FakeGiftBot()

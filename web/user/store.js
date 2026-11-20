@@ -49,7 +49,7 @@ export function productList(data) {
   for (const g of Array.isArray(d.gifts) ? d.gifts : []) {
     if (price(g.price_uzs) === null || g.id === undefined || g.id === null || g.id === '') continue;
     const emoji = typeof g.icon === 'string' && g.icon.length <= 8 ? g.icon : null;
-    // The server finds the gift price by item_title == gift id (pricing_service.calculate_gift_price).
+    // The server prices a gift from its catalog by item_title == gift id (pricing_service.get_gift_price).
     out.push({ id: `gift-${String(g.id)}`, cat: 'gifts', type: 'gift', amount: 1, itemTitle: String(g.id), name: String(g.name || "Sovg'a"), price: price(g.price_uzs), discount: 0, emoji });
   }
   return out;

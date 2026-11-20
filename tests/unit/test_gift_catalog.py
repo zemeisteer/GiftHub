@@ -88,6 +88,34 @@ async def test_sync_error_keeps_catalog(db_session):
     assert "telegram down" in state.last_sync_error
 
 
+async def test_sync_error_scrubs_bot_token_and_caps_length(db_session):
+    class LeakyBot(FakeGiftBot):
+        async def get_available_gifts(self, **kw):
+            raise RuntimeError(
+                "Cannot connect to https://api.telegram.org/bot123456789:AAH-x_Yz0abcDEF/getAvailableGifts " + "x" * 400
+            )
+
+    with pytest.raises(GiftHubException):
+        await gift_catalog.sync(db_session, LeakyBot([]))
+
+    state = await db_session.get(GiftSyncState, 1)
+    assert "AAH-x_Yz0abcDEF" not in state.last_sync_error
+    assert "123456789" not in state.last_sync_error
+    assert "bot<redacted>" in state.last_sync_error
+    assert len(state.last_sync_error) <= 255
+
+
+async def test_sync_dedupes_duplicate_gift_ids(db_session):
+    bot = FakeGiftBot([make_gift("dup", star_count=10), make_gift("dup", star_count=25), make_gift("other")])
+
+    res = await gift_catalog.sync(db_session, bot)
+
+    gifts = await _all(db_session)
+    assert set(gifts) == {"dup", "other"}
+    assert gifts["dup"].star_count in (10, 25)
+    assert res["added"] == 2
+
+
 async def test_sticker_without_emoji_uses_gift_emoji(db_session):
     await gift_catalog.sync(db_session, FakeGiftBot([make_gift("g1", emoji=None)]))
     assert (await _all(db_session))["g1"].emoji == "🎁"

@@ -796,6 +796,28 @@ test('gift to a picked person is sent by numeric ID so friends who never used th
   assert.equal(lastBody('/api/orders/create').recipient_username, '555000111');
 });
 
+test('picker: a username-less person on Stars keeps the Fragment warning', async () => {
+  enablePicker({ [PICK_PATH]: { status: 'done', recipient: { id: 555000111, username: null, name: 'Dost', value: '555000111' } } });
+  await openProduct('stars-100');
+  click('Boshqa odamga');
+  click('Chatdan tanlash');
+  await tick(50);
+  assert.match(text(), /Fragment ID ni qabul qilmasligi mumkin/);
+});
+
+test('gift: a username-less picked person gets a gift hint, not the Fragment warning', async () => {
+  enablePicker({ '/api/products': GIFT_PRODUCTS, [PICK_PATH]: { status: 'done', recipient: { id: 555000111, username: null, name: 'Dost', value: '555000111' } } });
+  await openProduct(`gift-${BIG_ID}`);
+  click('Boshqa odamga');
+  click('Chatdan tanlash');
+  await tick(60);
+  assert.equal(recipientValue(), '555000111');
+  assert.doesNotMatch(text(), /Fragment/);
+  assert.match(text(), /Tanlandi: Dost — sovg'a Telegram ID orqali yuboriladi/);
+  await pay();
+  assert.equal(lastBody('/api/orders/create').recipient_username, '555000111');
+});
+
 test('gift: a recipient edited after picking is sent as typed, not the picked ID', async () => {
   enablePicker({ '/api/products': GIFT_PRODUCTS, [PICK_PATH]: PICKED });
   await openProduct(`gift-${BIG_ID}`);

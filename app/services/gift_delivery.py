@@ -252,8 +252,15 @@ async def _complete(session: AsyncSession, bot, order_id: int, order_code: str, 
 
 
 async def deliver(session: AsyncSession, order_id: int, bot) -> dict[str, Any]:
-    """Send the gift of a paid gift order at most once. Always returns ``success=True``."""
+    """Send the gift of a paid gift order at most once.
+
+    Returns ``success=True`` once the order has been handled (sent, refunded, manual review or skipped). Without a
+    bot (standalone worker) nothing is claimed and ``success=False`` is returned so the outbox event is retried.
+    """
     from app.services.orders.service import order_service  # local import: avoid circular import
+
+    if bot is None:
+        return {"success": False, "error": "bot unavailable"}
 
     if not await _claim(session, order_id):
         logger.info(f"[GiftDelivery] order={order_id} o'tkazib yuborildi (pending/paid/gift emas)")

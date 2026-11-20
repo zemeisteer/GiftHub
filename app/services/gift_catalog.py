@@ -1,6 +1,7 @@
 """Telegram gift catalog: sync from the Bot API, public listing, bot Stars balance."""
 
 import logging
+import re
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +15,7 @@ from app.models.pricing import PricingSetting
 logger = logging.getLogger(__name__)
 
 NOT_ON_SALE = "Bu sovg'a hozir sotuvda emas."
+_BOT_TOKEN_RE = re.compile(r"bot\d+:[\w-]+")
 
 
 async def _get_state(session: AsyncSession) -> GiftSyncState:
@@ -25,9 +27,14 @@ async def _get_state(session: AsyncSession) -> GiftSyncState:
     return state
 
 
+def _scrub(message: str) -> str:
+    """Remove bot tokens (``bot<id>:<secret>`` in API URLs) from text shown to admins or logged."""
+    return _BOT_TOKEN_RE.sub("bot<redacted>", message)
+
+
 async def _record_error(session: AsyncSession, message: str) -> None:
     state = await _get_state(session)
-    state.last_sync_error = message[:255]
+    state.last_sync_error = _scrub(message)[:255]
     await session.commit()
 
 
@@ -40,7 +47,7 @@ async def sync(session: AsyncSession, bot) -> dict[str, int]:
     try:
         gifts = (await bot.get_available_gifts()).gifts
     except Exception as exc:
-        logger.warning("Gift catalog sync failed: %s", exc)
+        logger.warning("Gift catalog sync failed: %s", _scrub(str(exc)))
         await _record_error(session, f"get_available_gifts: {exc}")
         raise GiftHubException("Sovg'alar ro'yxatini olib bo'lmadi.", code="GIFT_SYNC_FAILED") from exc
 
@@ -52,7 +59,7 @@ async def sync(session: AsyncSession, bot) -> dict[str, int]:
     existing = {g.id: g for g in (await session.execute(select(TelegramGift))).scalars()}
     added = updated = 0
     seen: set[str] = set()
-    for gift in gifts:
+    for gift in {g.id: g for g in gifts}.values():  # a duplicated id would hit the primary key twice
         seen.add(gift.id)
         is_limited = gift.total_count is not None
         emoji = (gift.sticker.emoji if gift.sticker else None) or "🎁"

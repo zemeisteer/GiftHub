@@ -17,6 +17,16 @@ down_revision: Union[str, Sequence[str], None] = "0005_complete_missing_schema"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+# Old Fragment flow left wallet-paid gift orders (status 'paid'/'processing') in any of these fulfillment states,
+# including 'waiting_payment' and 'failed' (not refunded). Module-level so tests can run it against SQLite.
+QUARANTINE_LEGACY_GIFTS_SQL = (
+    "UPDATE orders SET fulfillment_status='manual_review', "
+    "fulfillment_error='Eski katalog: qo''lda ko''rib chiqing' "
+    "WHERE product_type='gift' AND status IN ('paid','processing') "
+    "AND fulfillment_status IN ('pending','processing','retry_scheduled','waiting_payment','failed') "
+    "AND recipient_user_id IS NULL"
+)
+
 
 def upgrade() -> None:
     bind = op.get_bind()
@@ -55,15 +65,7 @@ def upgrade() -> None:
             op.add_column("orders", sa.Column("recipient_user_id", sa.BigInteger(), nullable=True))
 
         # Quarantine in-flight gift orders created against the old (non-Telegram) catalog.
-        op.execute(
-            sa.text(
-                "UPDATE orders SET fulfillment_status='manual_review', "
-                "fulfillment_error='Eski katalog: qo''lda ko''rib chiqing' "
-                "WHERE product_type='gift' AND status IN ('paid','processing') "
-                "AND fulfillment_status IN ('pending','processing','retry_scheduled') "
-                "AND recipient_user_id IS NULL"
-            )
-        )
+        op.execute(sa.text(QUARANTINE_LEGACY_GIFTS_SQL))
 
 
 def downgrade() -> None:

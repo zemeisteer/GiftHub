@@ -210,3 +210,65 @@ async def test_double_confirmation_creates_one_order_and_one_debit(db_session, s
     assert (await db_session.execute(select(func.count()).select_from(Order))).scalar_one() == 1
     await db_session.refresh(sample_user)
     assert sample_user.balance == Decimal("150000.00") - price
+
+
+async def test_self_after_stale_picker_friend_sends_to_buyer(db_session, sample_user, factory, state):
+    """Picker friend X -> older gift:pkg button -> "O'zimga": the gift must go to the buyer, not X."""
+    await _seed(db_session)
+    await shop.cb_gift_package(_callback(f"gift:pkg:{GIFT_ID}"), state)
+    await state.update_data(recipient="friendx", recipient_name="Friend X", recipient_id=555000999)
+    await shop.cb_gift_package(_callback(f"gift:pkg:{GIFT_ID}"), state)  # an older package button, list not reopened
+    data = await state.get_data()
+    assert data.get("recipient_id") is None and data.get("recipient") is None and data.get("recipient_name") == ""
+
+    await shop.cb_recipient_self(_callback("recipient:self:testbuyer"), state)
+    data = await state.get_data()
+    assert data["recipient_id"] == BUYER_ID and data["recipient_name"] == ""
+
+    await shop.cb_execute_purchase(_callback("buy:confirm:gift:1"), state)
+    order = (await db_session.execute(select(Order))).scalars().one()
+    assert order.recipient_user_id == BUYER_ID
+
+
+async def test_self_overrides_stale_picker_id_without_pkg_reset(db_session, sample_user, factory, state):
+    await _seed(db_session)
+    await _selected_state(state, recipient="friendx")
+    await state.update_data(recipient_id=555000999, recipient_name="Friend X")
+    await shop.cb_recipient_self(_callback("recipient:self:testbuyer"), state)
+    await shop.cb_execute_purchase(_callback("buy:confirm:gift:1"), state)
+    order = (await db_session.execute(select(Order))).scalars().one()
+    assert order.recipient_user_id == BUYER_ID
+
+
+async def test_stale_confirm_after_new_selection_is_refused(db_session, sample_user, factory, state):
+    await _seed(db_session)
+    await _selected_state(state, recipient="friendx")
+    await state.update_data(recipient_id=555000999)
+    await shop.cb_gift_package(_callback(f"gift:pkg:{GIFT_ID}"), state)  # resets the recipient
+    cb = _callback("buy:confirm:gift:1")  # confirm button of the earlier screen
+    await shop.cb_execute_purchase(cb, state)
+    assert cb.answer.await_args.kwargs.get("show_alert") is True
+    assert (await db_session.execute(select(func.count()).select_from(Order))).scalar_one() == 0
+
+
+ESCAPED = "Ayiq &lt;b&gt;x&lt;/b&gt; &amp; &lt;"
+
+
+async def test_gift_title_is_html_escaped_in_bot_messages(db_session, sample_user, factory, state):
+    db_session.add(TelegramGift(id=GIFT_ID, star_count=15, title="Ayiq <b>x</b> & <", emoji="🧸"))
+    db_session.add(GiftSyncState(id=1, bot_star_balance=1000))
+    await db_session.commit()
+    pick = _callback(f"gift:pkg:{GIFT_ID}")
+    await shop.cb_gift_package(pick, state)
+    assert ESCAPED in pick.message.edit_text.await_args.args[0]
+
+    confirm_view = _callback("recipient:self:testbuyer")
+    await shop.cb_recipient_self(confirm_view, state)
+    # SimpleNamespace is not a CallbackQuery, so show_order_confirmation replies via .answer(text, ...)
+    text = confirm_view.answer.await_args_list[0].args[0]
+    assert ESCAPED in text and "<b>x</b>" not in text
+
+    done = _callback("buy:confirm:gift:1")
+    await shop.cb_execute_purchase(done, state)
+    text = done.message.edit_text.await_args.args[0]
+    assert ESCAPED in text and "<b>x</b>" not in text

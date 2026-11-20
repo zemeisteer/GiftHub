@@ -195,7 +195,7 @@ async def cb_order_confirm_buy_again(callback: CallbackQuery):
             await callback.answer("Buyurtma topilmadi!", show_alert=True)
             return
 
-        user = await queries.get_user(session, user_id=user_id)
+        user = await queries.get_user_by_id(session, user_id)
         if not user:
             await callback.answer("Foydalanuvchi topilmadi!", show_alert=True)
             return
@@ -229,37 +229,21 @@ async def cb_order_confirm_buy_again(callback: CallbackQuery):
             await callback.answer()
             return
 
-        # Create order and atomically debit balance via WalletService
-        new_order, _, _ = await order_service.create_order(
-            session=session,
-            user_id=user_id,
-            product_type=order.product_type,
-            item_title=order.item_title,
-            amount=order.amount,
-            recipient_username=order.recipient_username,
-            payment_method="balance",
-        )
-
-        from app.services.wallet.service import wallet_service
-
-        await wallet_service.debit_balance(
-            session=session,
-            user_id=user_id,
-            amount=total_price,
-            tx_type="purchase",
-            reference_type="order",
-            reference_id=new_order.order_code,
-            note=f"Qayta xarid: #{new_order.order_code} ({new_order.item_title})",
-        )
-
-        await order_service.transition_order_status(
-            session=session,
-            order_id=new_order.id,
-            new_status_raw="paid",
-            actor="USER",
-            reason="Hamyon balansidan to'landi",
-        )
-        await session.commit()
+        # create_order(payment_method="balance") is the single charge: it debits the wallet, creates the order
+        # as PAID and emits the fulfillment outbox event in one commit. No second debit / status transition here.
+        try:
+            new_order, _, _ = await order_service.create_order(
+                session=session,
+                user_id=user_id,
+                product_type=order.product_type,
+                item_title=order.item_title,
+                amount=order.amount,
+                recipient_username=order.recipient_username,
+                payment_method="balance",
+            )
+        except GiftHubException as e:
+            await callback.answer(e.message, show_alert=True)
+            return
 
         # Trigger fulfillment asynchronously
         from app.services.fulfillment.service import fulfillment_service

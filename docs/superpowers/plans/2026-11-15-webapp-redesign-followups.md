@@ -9,28 +9,38 @@ Branch: `feat/webapp-redesign`. Hamma bosqichlar va yakuniy review tugagan; quyi
 - `/api/v1` foydalanuvchi route'lari autentifikatsiyasiz: `POST /orders/checkout` body'dagi `user_id`ga ishonadi (boshqaning hamyonidan yechish), `/orders/{id}/receipt` (cost/margin/tx), `/timeline`, `/buy-again-details`, `GET/POST/DELETE /recipients` (`user_id` query). Alohida hotfix sessiyasi taklif qilingan.
 - `GET /api/admin/fragment/settings` `tonapi_key`ni ochiq qaytaradi — `has_tonapi_key` bo'lishi kerak.
 - Backend adminga o'zini o'chirishga ruxsat beradi; `POST /api/admin/admins` rolni tekshirmaydi (UI bloklaydi).
-- `/api/products` sovg'alar `cost_uzs`ini login'siz qaytaradi.
+- ~~`/api/products` sovg'alar `cost_uzs`ini login'siz qaytaradi.~~ YOPILDI: `gift_catalog.list_public` tannarxni qaytarmaydi (feat/telegram-gifts).
 - `/api/promo/apply` commit qilmaydi → `balance_bonus` kodlar qo'shilgandek ko'rinib bekor bo'ladi.
-- Legacy sovg'a buyurtmasi nom bo'yicha 60 000 fallback narx (yangi ilova id yuboradi).
+- ~~Legacy sovg'a buyurtmasi nom bo'yicha 60 000 fallback narx.~~ YOPILDI: fallback olib tashlandi; narx faqat katalogdagi gift id bo'yicha (`pricing_service.get_gift_price`).
 - `tunnel.js` (Node) development himoyasisiz — `tunnel.py` dagi tekshiruvni chetlab o'tadi.
 - ~~**Sovg'alar haqiqatda yetkazilmaydi** (50 Stars sifatida ketardi).~~ YOPILDI: sovg'alar endi haqiqiy katalogdan (`telegram_gifts`) sotiladi va Bot API `sendGift` orqali yetkaziladi (`app/services/gift_delivery.py`). Haqiqiy sinash: README "Sovg'alarni haqiqiy sinash".
 - Sovg'a: kanal/guruhga yuborish yo'q (`sendGift` `chat_id`), faqat shaxsga. Stars/Premium ham faqat foydalanuvchi `@username`iga ketadi.
 - Sovg'a: stiker/animatsiya rasmi katalogda yo'q (faqat emoji), sovg'a bilan matn (`text`) yuborilmaydi.
 - Premium'ni `giftPremiumSubscription` (Bot API) orqali yetkazish ko'rib chiqilmagan.
 - **Stars/Premium hamon yolg'on "bajarildi" bo'lib belgilanadi:** `app/services/fragment.py` dagi Fragment/TON yetkazish simulyatsiya (soxta); haqiqiy yetkazish yo'q.
-- Qayta buyurtma ikki marta yechishi mumkin: `orders.py` `create_order` + `debit_balance` (idempotentlik yo'q).
-- `last_sync_error` xom exception matnini saqlashi mumkin (ichki ma'lumot chiqib ketishi).
-- Botdagi do'kon: `cb_recipient_self` eskirgan `recipient_id`ni tozalamaydi.
+- ~~Qayta buyurtma ikki marta yechishi mumkin: `orders.py` `create_order` + `debit_balance`.~~ YOPILDI (fix wave): ortiqcha `debit_balance` va `transition_order_status` olib tashlandi; `create_order` yagona yechim.
+- ~~`last_sync_error` xom exception matnini saqlashi mumkin.~~ YOPILDI (fix wave): `bot<id>:<token>` ko'rinishlari `bot<redacted>` bilan almashtiriladi (boshqa xom matn hamon saqlanadi).
+- ~~Botdagi do'kon: `cb_recipient_self` eskirgan `recipient_id`ni tozalamaydi.~~ YOPILDI (fix wave): "O'zimga" o'z raqamli ID'ni yozadi, yangi sovg'a tanlovi qabul qiluvchini tozalaydi.
 - Idempotentlikda `request_hash` hech qachon solishtirilmaydi (bir xil kalit, boshqa tana qabul qilinadi).
 - `test_postgres_concurrency` beqarorligi (pastga qarang) sovg'a oqimlari testlariga ham ta'sir qilishi mumkin.
-- Fragment raqamli Telegram ID'ni qabul qiladimi — tasdiqlanmagan (`@username`siz odam tanlanganda ID yuboriladi).
+- Fragment raqamli Telegram ID'ni qabul qiladimi — tasdiqlanmagan (`@username`siz odam tanlanganda ID yuboriladi). Endi faqat Stars/Premium'ga tegishli: sovg'alar `sendGift` orqali raqamli ID bilan yuboriladi.
+
+## Sovg'alar (feat/telegram-gifts) — yakuniy review'dan qolganlar
+- `app/services/worker.py:112` `send_order_created_notification` noto'g'ri kwargs bilan chaqiriladi (TypeError) → `ORDER_CREATED_NOTIFICATION` hodisalari doim yiqiladi (oldindan mavjud).
+- Admin guard (`gift_admin_conflict`) check-then-act: tekshiruv va `transition_order_status` orasida sovg'a `processing`ga o'tishi mumkin. `transition_order_status` ichida qator qulfi ostida `fulfillment_status`ni qayta tekshirish kerak.
+- Sweep cutoff (5 daqiqa) va eng yomon yuborish budjeti (~240 s) bir-biriga bog'lanmagan: `sendGift`ga `request_timeout` qo'shish yoki konstantalarni bog'lash.
+- `startup_gift_sync` Telegram'ga ulanib bo'lmasa worker ishga tushishini kechiktiradi (timeout/fon vazifa qilish).
+- `adm_srv` cancel/link handler'lari (`app/handlers/users/admin_panel.py` ~:347, ~:397) sovg'a guard'isiz (hozir UI orqali sovg'aga yetib bo'lmaydi).
+- Admin Sovg'alar narx kiritish: `type=number` "5 000"ni bo'sh deb oladi (noto'g'ri tasdiq matni), klientda 1e9 maksimum yo'q.
+- Admin Sovg'alar ko'rinishini 375px kenglikda vizual tekshirish hali qilinmagan.
+- Bot "qayta xarid" `fulfill_order_automated`ni to'g'ridan-to'g'ri ham chaqiradi, outbox hodisasi ham yaratiladi (ikki yo'l; sovg'a uchun `_claim`, Stars uchun dublikat tekshiruvi himoya qiladi).
 
 ## Backend imkoniyat yetishmasliklari
 - `/api/orders/create` idempotency yo'q → `/api/v1/orders/checkout` + `Idempotency-Key`ga o'tish (hozir timeout'da "holat noma'lum" ko'rsatiladi).
 - `/api/admin/stats` davr (period) filtrini qo'llamaydi — KPI'lar umumiy.
 - CSV eksport filtrsiz (oxirgi 1000 ta).
 - Broadcast oldidan qabul qiluvchilar sonini beradigan endpoint yo'q.
-- Sovg'a katalogiga yangi sovg'a qo'shish endpoint'i yo'q (eski UI qattiq kodlangan ro'yxatdan qo'shardi) — release notes'ga.
+- ~~Sovg'a katalogiga yangi sovg'a qo'shish endpoint'i yo'q.~~ YOPILDI: katalog Telegram'dan (`getAvailableGifts`) sinxronlanadi; admin faqat yoqadi/o'chiradi va narxni o'zgartiradi (Sovg'alar bo'limi).
 - Admin "Qaytarish" `/status cancel` orqali (legacy parity); `/refund` (sabab bilan) ishlatilmaydi.
 - `manual-fulfill` `ORDERS_UPDATE` (support roli ham) — qattiqroq ruxsat ko'rib chiqilsin.
 

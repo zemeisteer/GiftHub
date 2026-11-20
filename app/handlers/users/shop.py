@@ -1,3 +1,4 @@
+import html
 import json
 import logging
 import uuid
@@ -265,10 +266,14 @@ async def cb_gift_package(callback: CallbackQuery, state: FSMContext):
         total_price=price,
         cost_price=0.0,
         checkout_token=uuid.uuid4().hex,  # one token per selection: a double tap on confirm reuses it
+        # A new selection forgets any earlier recipient (an older picker choice must not survive into this order).
+        recipient=None,
+        recipient_name="",
+        recipient_id=None,
     )
 
     my_username = callback.from_user.username
-    text = f"🎁 <b>{name}</b> tanlandi.\nNarxi: <b>{price:,.0f} so'm</b>\n\nSovg'a qaysi profilga yuborilishi kerak?"
+    text = f"🎁 <b>{html.escape(name)}</b> tanlandi.\nNarxi: <b>{price:,.0f} so'm</b>\n\nSovg'a qaysi profilga yuborilishi kerak?"
     try:
         await callback.message.edit_text(text, reply_markup=get_recipient_keyboard(my_username))
     except Exception:
@@ -287,7 +292,8 @@ async def cb_recipient_self(callback: CallbackQuery, state: FSMContext):
         await callback.answer("⚠️ Ma'lumot eskirgan, iltimos qaytadan tanlang.", show_alert=True)
         return
 
-    await state.update_data(recipient=clean_user)
+    # Own numeric id: overrides any stale picker recipient_id and does not depend on the username stored in the DB.
+    await state.update_data(recipient=clean_user, recipient_name="", recipient_id=callback.from_user.id)
     await show_order_confirmation(callback, state, clean_user)
     await callback.answer()
 
@@ -396,18 +402,22 @@ async def process_recipient_text(message: Message, state: FSMContext):
     await show_order_confirmation(message, state, txt)
 
 
+def _recipient_display(recipient: str, recip_name: str | None) -> str:
+    """HTML-escaped recipient label for parse_mode=HTML messages (names come from Telegram users)."""
+    if recipient.isdigit():
+        display = f"{recip_name} (ID: {recipient})" if recip_name else f"ID: {recipient}"
+    else:
+        display = f"@{recipient.lstrip('@')}"
+        if recip_name:
+            display += f" ({recip_name})"
+    return html.escape(display)
+
+
 async def show_order_confirmation(target_event, state: FSMContext, recipient: str):
     data = await state.get_data()
-    item_title = data.get("item_title", "Mahsulot")
+    item_title = html.escape(data.get("item_title", "Mahsulot"))  # gift titles are admin/Telegram-controlled
     total_price = data.get("total_price", 0.0)
-    recip_name = data.get("recipient_name")
-
-    if recipient.isdigit():
-        recip_display = f"{recip_name} (ID: {recipient})" if recip_name else f"ID: {recipient}"
-    else:
-        recip_display = f"@{recipient.lstrip('@')}"
-        if recip_name:
-            recip_display += f" ({recip_name})"
+    recip_display = _recipient_display(recipient, data.get("recipient_name"))
 
     user_id = target_event.from_user.id
     async with AsyncSessionLocal() as session:
@@ -456,15 +466,12 @@ async def cb_execute_purchase(callback: CallbackQuery, state: FSMContext):
     amount = data.get("amount", 1)
     total_price = float(data.get("total_price", 0.0))
     cost_price = float(data.get("cost_price", 0.0))
-    recipient = data.get("recipient", callback.from_user.username or "")
-    recip_name = data.get("recipient_name")
-
-    if recipient.isdigit():
-        recip_display = f"{recip_name} (ID: {recipient})" if recip_name else f"ID: {recipient}"
-    else:
-        recip_display = f"@{recipient.lstrip('@')}"
-        if recip_name:
-            recip_display += f" ({recip_name})"
+    recipient = data.get("recipient")
+    if not recipient:
+        # A confirm button from an earlier screen after a new product selection reset the recipient.
+        await callback.answer("⚠️ Ma'lumot eskirgan, iltimos qabul qiluvchini qayta tanlang.", show_alert=True)
+        return
+    recip_display = _recipient_display(recipient, data.get("recipient_name"))
 
     if product_type == "gift":
         await _execute_gift_purchase(callback, state, data, recip_display)
@@ -506,7 +513,7 @@ async def cb_execute_purchase(callback: CallbackQuery, state: FSMContext):
     success_text = (
         "🎉 <b>Xaridingiz muvaffaqiyatli qabul qilindi!</b>\n\n"
         f"🔖 Buyurtma raqami: <code>{order.order_code}</code>\n"
-        f"📦 Mahsulot: <b>{item_title}</b>\n"
+        f"📦 Mahsulot: <b>{html.escape(item_title)}</b>\n"
         f"👤 Qabul qiluvchi: <b>{recip_display}</b>\n"
         f"💵 To'langan summa: <b>{total_price:,.0f} so'm</b>\n"
         f"💳 Qolgan balansingiz: <b>{new_balance:,.0f} so'm</b>\n\n"
@@ -527,7 +534,7 @@ async def _execute_gift_purchase(callback: CallbackQuery, state: FSMContext, dat
         await callback.answer("⚠️ Ma'lumot eskirgan, iltimos boshidan tanlang.", show_alert=True)
         return
     user_id = callback.from_user.id
-    recipient = data.get("recipient", callback.from_user.username or "")
+    recipient = data["recipient"]  # checked by cb_execute_purchase
     item_title = data.get("item_title", "Sovg'a")
     # The picker supplies Telegram's numeric id: prefer it (a username may belong to someone who never started the
     # bot and cannot be resolved); `recipient` stays for display only.
@@ -563,7 +570,7 @@ async def _execute_gift_purchase(callback: CallbackQuery, state: FSMContext, dat
     success_text = (
         "🎉 <b>Xaridingiz muvaffaqiyatli qabul qilindi!</b>\n\n"
         f"🔖 Buyurtma raqami: <code>{order.order_code}</code>\n"
-        f"🎁 Sovg'a: <b>{item_title}</b>\n"
+        f"🎁 Sovg'a: <b>{html.escape(item_title)}</b>\n"
         f"👤 Qabul qiluvchi: <b>{recip_display}</b>\n"
         f"💵 To'langan summa: <b>{paid:,.0f} so'm</b>\n"
         f"💳 Qolgan balansingiz: <b>{float(new_balance):,.0f} so'm</b>\n\n"
