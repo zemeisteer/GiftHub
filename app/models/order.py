@@ -104,6 +104,7 @@ class Order(Base):
     payment_method = Column(String(32), default="balance", nullable=False)
     status = Column(String(32), default=OrderStatus.CREATED, index=True, nullable=False)
     recipient_username = Column(String(64), nullable=True)
+    recipient_user_id = Column(BigInteger, nullable=True)
     price_lock_id = Column(String(64), nullable=True)
     correlation_id = Column(String(64), nullable=True, index=True)
 
