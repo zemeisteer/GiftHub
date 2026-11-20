@@ -1,5 +1,6 @@
 import json
 import logging
+import uuid
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -257,7 +258,13 @@ async def cb_gift_package(callback: CallbackQuery, state: FSMContext):
     name = f"{matched.get('icon') or '🎁'} {matched['name']}"
 
     await state.update_data(
-        product_type="gift", gift_id=gift_id, item_title=name, amount=1, total_price=price, cost_price=0.0
+        product_type="gift",
+        gift_id=gift_id,
+        item_title=name,
+        amount=1,
+        total_price=price,
+        cost_price=0.0,
+        checkout_token=uuid.uuid4().hex,  # one token per selection: a double tap on confirm reuses it
     )
 
     my_username = callback.from_user.username
@@ -522,6 +529,12 @@ async def _execute_gift_purchase(callback: CallbackQuery, state: FSMContext, dat
     user_id = callback.from_user.id
     recipient = data.get("recipient", callback.from_user.username or "")
     item_title = data.get("item_title", "Sovg'a")
+    # The picker supplies Telegram's numeric id: prefer it (a username may belong to someone who never started the
+    # bot and cannot be resolved); `recipient` stays for display only.
+    if data.get("recipient_id"):
+        recipient = str(data["recipient_id"])
+    token = data.get("checkout_token") or f"msg{getattr(callback.message, 'message_id', '')}"
+    idempotency_key = f"gift:{user_id}:{token}:{gift_id}"
 
     async with AsyncSessionLocal() as session:
         try:
@@ -532,6 +545,7 @@ async def _execute_gift_purchase(callback: CallbackQuery, state: FSMContext, dat
                 item_title=str(gift_id),
                 amount=1,
                 recipient_username=recipient,
+                idempotency_key=idempotency_key,
             )
         except GiftHubException as e:
             await callback.answer(e.message, show_alert=True)

@@ -157,3 +157,56 @@ async def test_gift_purchase_does_not_start_fragment_task(db_session, sample_use
     await asyncio.sleep(0)
     spy.assert_not_called()
     assert (await db_session.execute(select(func.count()).select_from(Order))).scalar_one() == 1
+
+
+async def test_picker_recipient_id_wins_over_unknown_username(db_session, sample_user, factory, state):
+    await _seed(db_session)
+    await _selected_state(state, recipient="never_started_bot")
+    await state.update_data(recipient_id=555000999, recipient_name="Dost")
+    cb = _callback("buy:confirm:gift:1")
+    await shop.cb_execute_purchase(cb, state)
+
+    order = (await db_session.execute(select(Order))).scalars().one()
+    assert order.recipient_user_id == 555000999
+
+
+async def test_manually_typed_numeric_id_recipient_works(db_session, sample_user, factory, state):
+    await _seed(db_session)
+    await _selected_state(state, recipient="777000111")
+    await state.update_data(recipient_id=None)
+    cb = _callback("buy:confirm:gift:1")
+    await shop.cb_execute_purchase(cb, state)
+
+    order = (await db_session.execute(select(Order))).scalars().one()
+    assert order.recipient_user_id == 777000111
+
+
+async def test_unknown_username_without_recipient_id_still_errors(db_session, sample_user, factory, state):
+    await _seed(db_session)
+    await _selected_state(state, recipient="nobody_here")
+    await state.update_data(recipient_id=None)
+    before = sample_user.balance
+    cb = _callback("buy:confirm:gift:1")
+    await shop.cb_execute_purchase(cb, state)
+
+    assert cb.answer.await_args.kwargs.get("show_alert") is True
+    assert "botdan foydalanmagan" in cb.answer.await_args.args[0]
+    await db_session.refresh(sample_user)
+    assert sample_user.balance == before
+    assert (await db_session.execute(select(func.count()).select_from(Order))).scalar_one() == 0
+
+
+async def test_double_confirmation_creates_one_order_and_one_debit(db_session, sample_user, factory, state):
+    await _seed(db_session)
+    price = Decimal(str((await gift_catalog.list_public(db_session))[0]["price_uzs"]))
+    await shop.cb_gift_package(_callback(f"gift:pkg:{GIFT_ID}"), state)
+    await state.update_data(recipient="testbuyer")
+    snapshot = await state.get_data()  # a double tap reads the same FSM data before the first one clears it
+
+    await shop.cb_execute_purchase(_callback("buy:confirm:gift:1"), state)
+    await state.set_data(snapshot)
+    await shop.cb_execute_purchase(_callback("buy:confirm:gift:1"), state)
+
+    assert (await db_session.execute(select(func.count()).select_from(Order))).scalar_one() == 1
+    await db_session.refresh(sample_user)
+    assert sample_user.balance == Decimal("150000.00") - price
