@@ -179,7 +179,6 @@ async def test_spendable_subtracts_reserved_and_decrement(db_session, sample_use
     assert state.bot_star_balance == 0
 
 
-@pytest.mark.skip(reason="Task 3")
 async def test_list_public_hides_unorderable_and_has_no_cost(db_session):
     db_session.add_all(
         [
@@ -206,7 +205,6 @@ async def test_list_public_hides_unorderable_and_has_no_cost(db_session):
     assert items[1]["remaining"] == 7
 
 
-@pytest.mark.skip(reason="Task 3")
 async def test_list_public_uses_price_override(db_session):
     db_session.add(TelegramGift(id="ov", star_count=15, price_override_uzs=Decimal("12345.00")))
     await db_session.commit()

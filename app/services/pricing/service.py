@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.exceptions import GiftHubException, PriceExpiredError
 from app.core.logging import get_logger
 from app.models.base import utc_now
+from app.models.gift import TelegramGift
 from app.models.pricing import PriceLock, PricingSetting
 
 logger = get_logger(__name__)
@@ -18,20 +19,6 @@ logger = get_logger(__name__)
 # Fragment baseline constants
 FRAGMENT_STAR_BASE_UZS = Decimal("176.46")
 FRAGMENT_PREMIUM_BASE_UZS = {"3": Decimal("138000.00"), "6": Decimal("205000.00"), "12": Decimal("375000.00")}
-DEFAULT_GIFTS = [
-    {"id": "bear", "name": "Teddy Bear", "price_uzs": 64000, "cost_uzs": 50000, "icon": "🧸", "type": "3d"},
-    {"id": "heart", "name": "Neon Heart", "price_uzs": 85000, "cost_uzs": 68000, "icon": "💖", "type": "3d"},
-    {"id": "rocket", "name": "Cosmo Rocket", "price_uzs": 120000, "cost_uzs": 95000, "icon": "🚀", "type": "3d"},
-    {"id": "star", "name": "Cosmic Star", "price_uzs": 60000, "cost_uzs": 45000, "icon": "⭐", "type": "classic"},
-    {"id": "ring", "name": "Diamond Ring", "price_uzs": 165000, "cost_uzs": 130000, "icon": "💍", "type": "3d"},
-    {"id": "trophy", "name": "Gold Trophy", "price_uzs": 195000, "cost_uzs": 155000, "icon": "🏆", "type": "vip"},
-    {"id": "yacht", "name": "Luxury Yacht", "price_uzs": 270000, "cost_uzs": 220000, "icon": "🛥️", "type": "vip"},
-    {"id": "crown", "name": "Ruby Crown", "price_uzs": 225000, "cost_uzs": 180000, "icon": "👑", "type": "vip"},
-    {"id": "medal", "name": "Star Medal", "price_uzs": 95000, "cost_uzs": 75000, "icon": "🎖️", "type": "classic"},
-    {"id": "hat", "name": "Magic Hat", "price_uzs": 78000, "cost_uzs": 60000, "icon": "🎩", "type": "classic"},
-    {"id": "eagle", "name": "Flying Eagle", "price_uzs": 110000, "cost_uzs": 88000, "icon": "🦅", "type": "3d"},
-    {"id": "lion", "name": "Golden Lion", "price_uzs": 175000, "cost_uzs": 140000, "icon": "🦁", "type": "vip"},
-]
 
 
 class PricingService:
@@ -149,39 +136,22 @@ class PricingService:
         }
 
     @classmethod
-    def calculate_gift_price(cls, gift_id: str, pricing: PricingSetting | None = None) -> dict[str, Any]:
-        """Calculates authoritative Gift price from catalog."""
-        gifts_list = DEFAULT_GIFTS
-        if pricing and pricing.gifts_json:
-            try:
-                parsed = json.loads(pricing.gifts_json)
-                if parsed:
-                    gifts_list = parsed
-            except Exception as e:
-                logger.warning(f"gifts_json ni o'qishda xatolik: {e}")
+    def get_gift_price(cls, gift: TelegramGift, pricing: PricingSetting | None = None) -> dict[str, Any]:
+        """Price of a catalog gift: admin override, else the same as that many Stars.
 
-        for g in gifts_list:
-            if g.get("id") == gift_id:
-                p = Decimal(str(g.get("price_uzs", 60000)))
-                c = Decimal(str(g.get("cost_uzs", 45000)))
-                return {
-                    "id": gift_id,
-                    "name": g.get("name"),
-                    "total_price_uzs": float(p),
-                    "total_price_decimal": p,
-                    "cost_total_decimal": c,
-                    "formatted_price": f"{int(p):,} so'm".replace(",", " "),
-                }
-
-        fallback_p = Decimal("60000.00")
-        fallback_c = Decimal("45000.00")
+        Cost always comes from the Stars calculation.
+        """
+        stars = cls.calculate_stars_price(gift.star_count, pricing)
+        sell = stars["total_price_decimal"]
+        if gift.price_override_uzs is not None:
+            sell = Decimal(str(gift.price_override_uzs))
         return {
-            "id": gift_id,
-            "name": gift_id.title(),
-            "total_price_uzs": float(fallback_p),
-            "total_price_decimal": fallback_p,
-            "cost_total_decimal": fallback_c,
-            "formatted_price": f"{int(fallback_p):,} so'm".replace(",", " "),
+            "id": gift.id,
+            "name": gift.title or f"{gift.star_count} ⭐ sovg'a",
+            "total_price_uzs": float(sell),
+            "total_price_decimal": sell,
+            "cost_total_decimal": stars["cost_total_decimal"],
+            "formatted_price": f"{int(sell):,} so'm".replace(",", " "),
         }
 
     @classmethod
@@ -201,8 +171,10 @@ class PricingService:
         elif p_type == "premium":
             return cls.calculate_premium_price(months=amount, pricing=pricing)
         elif p_type == "gift":
-            gift_id = (item_title or "").lower().replace(" ", "")
-            return cls.calculate_gift_price(gift_id=gift_id, pricing=pricing)
+            from app.services import gift_catalog  # local import: avoid circular import
+
+            gift = await gift_catalog.get_orderable(session, item_title or "")
+            return cls.get_gift_price(gift, pricing)
         elif p_type == "service":
             # Lookup custom service
             from app.models.services import CustomService
