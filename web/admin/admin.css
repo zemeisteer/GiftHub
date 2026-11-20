@@ -264,6 +264,12 @@ a { color: inherit; text-decoration: none; }
 .bank-top, .bank-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-1); flex-wrap: wrap; }
 .bank-number { font-size: 16px; font-weight: 700; letter-spacing: 1px; overflow-wrap: anywhere; }
 .bank-actions { margin-top: var(--gap-1); }
+.gift-balance { display: flex; flex-direction: column; gap: var(--gap-1); margin-bottom: var(--gap-2); overflow-wrap: anywhere; }
+.gift-warning { margin: 0; padding: var(--gap-1); border-radius: 8px; background: var(--danger); color: #ffffff; }
+.gift-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+.gift-edit { display: flex; align-items: flex-end; gap: var(--gap-1); flex-wrap: wrap; }
+.gift-edit .field { flex: 1 1 140px; min-width: 0; }
+.gift-card .bank-top b { overflow-wrap: anywhere; min-width: 0; }
 
 .period-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--gap-1); }
 .attention-meta { display: flex; align-items: center; gap: var(--gap-1); flex-wrap: wrap; margin: 2px 0; }

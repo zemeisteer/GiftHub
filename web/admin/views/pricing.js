@@ -1,7 +1,8 @@
-// Narxlar: Stars/TON pricing, Stars discounts, Premium and gift prices.
+// Narxlar: Stars/TON pricing, Stars discounts and Premium prices (gifts live in the Sovg'alar view).
 // GET /api/admin/pricing (PRICING_READ), POST /api/admin/pricing (PRICING_UPDATE, server-enforced).
 // The POST resets stars_cost_ton / ton_rate_uzs / margin_percent to defaults when omitted and
-// replaces discounts / premium_prices / gifts whole, so the whole current state is always sent.
+// replaces discounts / premium_prices whole, so the whole current state is always sent.
+// `gifts` is deliberately omitted: the server leaves the legacy gifts_json untouched then.
 import { h, formatSom } from '../../shared/dom.js';
 import { api } from '../../shared/api.js';
 import { registerView } from '../registry.js';
@@ -34,7 +35,6 @@ async function render() {
     star_unit_price_uzs: num(data.star_unit_price_uzs, num(data.fragment_stars_base_uzs, 180)),
     discounts: Array.isArray(data.discounts) ? data.discounts : [],
     premium_prices: data.premium_prices || {},
-    gifts: Array.isArray(data.gifts) ? data.gifts : [],
   };
   const origPrem = (m) => num(orig.premium_prices[m], 0);
 
@@ -54,11 +54,6 @@ async function render() {
   };
   orig.discounts.forEach(addRow);
 
-  const giftInputs = orig.gifts.map((g) => ({
-    gift: g,
-    node: field({ label: g.name || g.id, name: `gift_price_${g.id}`, type: 'number', value: g.price_uzs, min: 1, step: 1, attrs: dis }),
-  }));
-
   const form = h('form', { class: 'pricing-form', novalidate: true },
     h('section', { class: 'card card-form' },
       h('h2', { class: 'section-title' }, 'Stars'),
@@ -76,9 +71,6 @@ async function render() {
       h('h2', { class: 'section-title' }, 'Premium narxlari'),
       h('div', { class: 'form-grid' },
         PREMIUM_MONTHS.map((m) => field({ label: `${m} oy (so'm)`, name: `prem_${m}`, type: 'number', value: origPrem(m) || '', min: 1, step: 1, attrs: dis })))),
-    orig.gifts.length ? h('section', { class: 'card card-form' },
-      h('h2', { class: 'section-title' }, "Sovg'a narxlari"),
-      h('div', { class: 'form-grid' }, giftInputs.map((g) => g.node))) : null,
     error,
     editable ? h('div', { class: 'form-actions' }, submit) : h('p', { class: 'muted small' }, "O'zgartirish uchun ruxsat yo'q"));
 
@@ -113,14 +105,6 @@ async function render() {
       premium_prices[m] = v;
     }
 
-    const gifts = [];
-    for (const { gift, node } of giftInputs) {
-      const v = readField(node);
-      const p = numberProblem(v, { label: `${gift.name || gift.id} narxi`, gt: 0 });
-      if (p) return { problem: p };
-      gifts.push({ ...gift, price_uzs: v });
-    }
-
     return {
       body: {
         stars_cost_ton: f.stars_cost_ton,
@@ -129,7 +113,6 @@ async function render() {
         star_unit_price_uzs: f.star_unit_price_uzs,
         discounts,
         premium_prices,
-        gifts,
       },
     };
   }
@@ -147,10 +130,6 @@ async function render() {
     for (const m of PREMIUM_MONTHS) {
       if (body.premium_prices[m] !== origPrem(m)) out.push([`Premium ${m} oy`, som(origPrem(m)), som(body.premium_prices[m])]);
     }
-    body.gifts.forEach((g, i) => {
-      const old = num(orig.gifts[i].price_uzs, 0);
-      if (g.price_uzs !== old) out.push([g.name || g.id, som(old), som(g.price_uzs)]);
-    });
     return out;
   }
 
@@ -178,10 +157,8 @@ async function render() {
       Object.assign(orig, {
         stars_cost_ton: body.stars_cost_ton, ton_rate_uzs: body.ton_rate_uzs, margin_percent: body.margin_percent,
         star_unit_price_uzs: body.star_unit_price_uzs, discounts: body.discounts,
-        premium_prices: body.premium_prices, gifts: body.gifts,
+        premium_prices: body.premium_prices,
       });
-      // gifts[] indexes stay aligned with giftInputs
-      giftInputs.forEach((g, i) => { g.gift = body.gifts[i]; });
     }
   });
 

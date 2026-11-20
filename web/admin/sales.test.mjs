@@ -107,6 +107,18 @@ const PRICING = {
   gifts: [{ id: 'bear', name: 'Ayiq', price_uzs: 65000, icon: 'x', type: '3d' }],
 };
 
+test('pricing no longer edits gifts and does not send them (catalog lives in Sovg\'alar)', async () => {
+  stubFetch({ '/api/admin/pricing': PRICING, 'POST /api/admin/pricing': { success: true } });
+  await mount('pricing');
+  assert.equal(input('gift_price_bear'), null);
+  assert.ok(!hasText("Sovg'a narxlari"));
+  setField('margin_percent', '20');
+  submit();
+  await tick();
+  await confirmYes();
+  assert.equal('gifts' in lastBody(), false);
+});
+
 // ---- forms ----
 test('field builds label + named input; readForm converts types', () => {
   const form = document.createElement('form');
@@ -137,7 +149,6 @@ test('pricing save confirms (danger) and sends the full body with numbers', asyn
   assert.equal(b.star_unit_price_uzs, 180);
   assert.deepEqual(b.discounts, [{ min_amount: 1000, discount_pct: 5 }]);
   assert.deepEqual(b.premium_prices, { 3: 143000, 6: 210000, 12: 380000 });
-  assert.equal(b.gifts[0].id, 'bear');
   assert.equal(typeof b.margin_percent, 'number');
 });
 
@@ -161,13 +172,13 @@ test('pricing with no changes sends nothing', async () => {
   assert.equal(calls(/POST/).length, 0);
 });
 
-test('pricing cancel sends nothing; gift price change is in the summary', async () => {
+test('pricing cancel sends nothing', async () => {
   stubFetch({ '/api/admin/pricing': PRICING });
   await mount('pricing');
-  setField('gift_price_bear', '70000');
+  setField('margin_percent', '30');
   submit();
   await tick();
-  assert.match(dialogText(), /Ayiq/);
+  assert.ok(q('[role="dialog"]'));
   click('Bekor qilish');
   await tick();
   assert.equal(calls(/POST/).length, 0);

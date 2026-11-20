@@ -92,12 +92,12 @@ test('NAV has the legacy sections in four groups, in spec order', () => {
   assert.deepEqual(NAV.map((g) => g.group), ['Asosiy', 'Savdo', 'Marketing', 'Tizim']);
   assert.deepEqual(NAV.map((g) => g.items.map((i) => i.id)), [
     ['dash', 'orders', 'users'],
-    ['pricing', 'services', 'promos', 'referral'],
+    ['pricing', 'services', 'gifts', 'promos', 'referral'],
     ['broadcast', 'channels', 'gate'],
     ['payments', 'fragment', 'health', 'admins'],
   ]);
   const items = NAV.flatMap((g) => g.items);
-  assert.equal(items.length, 14);
+  assert.equal(items.length, 15);
   for (const i of items) {
     assert.ok(i.label && i.icon && ALL_PERMS.includes(i.perm), i.id);
   }
@@ -106,7 +106,7 @@ test('NAV has the legacy sections in four groups, in spec order', () => {
 test('super admin sees every item; active item is marked', () => {
   const n = renderNav(SUPER, 'orders');
   const links = [...n.querySelectorAll('a.nav-item')];
-  assert.equal(links.length, 14);
+  assert.equal(links.length, 15);
   const cur = n.querySelector('[aria-current="page"]');
   assert.match(cur.textContent, /Buyurtmalar/);
   assert.equal(cur.getAttribute('href'), '#/orders');

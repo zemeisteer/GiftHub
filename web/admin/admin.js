@@ -20,6 +20,7 @@ export const VIEW_MODULES = {
   payments: './views/payments.js',
   pricing: './views/pricing.js',
   services: './views/services.js',
+  gifts: './views/gifts.js',
   promos: './views/promos.js',
   referral: './views/referral.js',
   broadcast: './views/broadcast.js',

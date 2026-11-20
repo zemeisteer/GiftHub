@@ -13,6 +13,7 @@ export const NAV = [
   { group: 'Savdo', items: [
     { id: 'pricing', label: 'Narxlar', icon: 'tag', perm: 'PRICING_READ' },
     { id: 'services', label: 'Xizmatlar', icon: 'gift', perm: 'PRICING_READ' },
+    { id: 'gifts', label: "Sovg'alar", icon: 'gift', perm: 'PRICING_READ' },
     { id: 'promos', label: 'Promo-kodlar', icon: 'discount', perm: 'PRICING_READ' },
     { id: 'referral', label: 'Referal', icon: 'user', perm: 'SETTINGS_READ' },
   ] },
