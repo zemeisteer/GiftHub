@@ -324,6 +324,21 @@ pytest
 
 ---
 
+## Sovg'alarni haqiqiy sinash
+
+Sovg'alar Bot API `sendGift` orqali bot hisobidagi Stars evaziga yuboriladi. Avtomatik testlar Telegram'ni chaqirmaydi, shuning uchun bir marta qo'lda sinang:
+
+1. Egasi botning Stars balansini to'ldiradi. Buning usuli Telegram hujjatlarida tasdiqlanmagan: @BotFather va bot sozlamalarini tekshiring.
+2. Admin → Sovg'alar → Sinxronlash.
+3. Eng arzon sovg'ani yoqing.
+4. O'zingizga bitta buyurtma bering.
+5. Telegram'da sovg'a kelganini, botning Stars balansi kamayganini va buyurtma "bajarildi" bo'lganini tekshiring.
+6. Noma'lum xato matnlarini jurnaldan (`WARNING`/`ERROR`) toping. `app/services/gift_delivery.py` dagi balans xatosini aniqlovchi kalit so'zlar (`balance`, `BALANCE_TOO_LOW`, `not enough`) Telegram'ning haqiqiy matniga mosligini tekshiring va kerak bo'lsa tuzating.
+
+Qabul qiluvchi: «Chatdan tanlash» orqali tanlangan odam Telegram ID bilan yuboriladi (botdan foydalanmagan bo'lsa ham ishlaydi); qo'lda yozilgan `@username` faqat botdan foydalangan odam uchun topiladi.
+
+---
+
 ## 🔒 Security Summary
 
 1. **HMAC-SHA256 WebApp Verification:** Validates Telegram initData hash using the bot token as an HMAC key, combined with `auth_date` expiry rejection (< 86,400s).

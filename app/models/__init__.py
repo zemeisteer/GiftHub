@@ -6,8 +6,8 @@ from app.models.channels import ChannelRequirement, UserJoinRequest
 from app.models.dlq import DLQStatus, FailedJob
 from app.models.feature_flags import FeatureFlag
 from app.models.fragment import FragmentSetting
-from app.models.notification import InAppNotification
 from app.models.gift import GiftSyncState, TelegramGift
+from app.models.notification import InAppNotification
 from app.models.order import (
     VALID_ORDER_TRANSITIONS,
     CheckoutIdempotency,

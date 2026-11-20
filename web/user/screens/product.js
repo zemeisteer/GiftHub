@@ -227,6 +227,7 @@ export async function productScreen({ id } = {}) {
 
   // --- Telegram's native chooser: the person is picked from the user's own chats ---
   let pickInFlight = false;
+  let picked = null; // { value, id } of the last person chosen in Telegram
   const pickHint = h('p', { class: 'field-hint pick-hint', 'aria-live': 'polite', hidden: true });
   const pickBtn = h('button', { type: 'button', class: 'btn btn-secondary pick-btn', onclick: () => pickRecipient() },
     icon('users'), 'Chatdan tanlash');
@@ -245,6 +246,10 @@ export async function productScreen({ id } = {}) {
       return;
     }
     recipientInput.value = value;
+    // A gift is sent by the numeric ID: the server knows only bot users by @username,
+    // but accepts any Telegram ID, so friends who never used the bot still work.
+    const pickedId = r && Number.isSafeInteger(r.id) && r.id > 0 ? String(r.id) : null;
+    picked = pickedId ? { value, id: pickedId } : null;
     showRecipientError(null);
     tg.haptic('success');
     const who = [r.name, r.username ? `@${r.username}` : ''].filter(Boolean).join(' ');
@@ -315,6 +320,7 @@ export async function productScreen({ id } = {}) {
   const otherBox = h('div', { class: 'recipient-other', hidden: true },
     pickBtn,
     pickHint,
+    selected.cat === 'gifts' ? h('p', { class: 'field-hint' }, "Sovg'a «Chatdan tanlash» orqali tanlangan yoki botdan foydalangan odamga yuboriladi") : null,
     recipientInput,
     recipientError,
     savedChips,
@@ -508,6 +514,7 @@ export async function productScreen({ id } = {}) {
         showRecipientError("Username noto'g'ri. @username (harf bilan boshlanadi, 5–32 belgi) yoki ID raqamini kiriting");
         return;
       }
+      if (selected.cat === 'gifts' && picked && picked.value === recipient) recipient = picked.id;
     } else {
       recipient = selfRecipient();
     }

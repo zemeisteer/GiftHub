@@ -741,6 +741,82 @@ test('top-up: returning to the app re-reads the balance', async () => {
   assert.equal(appState.balance, 90000);
 });
 
+// --- Gifts from the real catalog ---
+
+const BIG_ID = '5170145012310081615';
+const GIFT_PRODUCTS = { ...PRODUCTS, gifts: [{ id: BIG_ID, name: 'Yurak', price_uzs: 15000, icon: '❤️', type: 'gift', stars: 15, remaining: null }] };
+const GIFT_HINT = "Sovg'a «Chatdan tanlash» orqali tanlangan yoki botdan foydalangan odamga yuboriladi";
+
+test('gift product shows recipient hint', async () => {
+  stubFetch({ '/api/products': GIFT_PRODUCTS });
+  await openProduct(`gift-${BIG_ID}`);
+  click('Boshqa odamga');
+  assert.ok(find(GIFT_HINT));
+  const hint = [...outlet().querySelectorAll('.field-hint')].find((e) => e.textContent.includes(GIFT_HINT));
+  assert.ok(hint);
+  assert.equal(hint.closest('.recipient-other').hasAttribute('hidden'), false);
+});
+
+test('stars page has no gift recipient hint', async () => {
+  await openProduct('stars-100');
+  click('Boshqa odamga');
+  assert.equal(find(GIFT_HINT), false);
+});
+
+test('gift page keeps 19-digit gift id as string in the hash and order body', async () => {
+  stubFetch({ '/api/products': GIFT_PRODUCTS, '/api/orders/create': ORDER_OK });
+  await openProduct(`gift-${BIG_ID}`);
+  assert.match(text(), /Yurak/);
+  assert.equal(location.hash, `#/product/gift-${BIG_ID}`);
+  await pay();
+  const body = lastBody('/api/orders/create');
+  assert.equal(body.item_title, BIG_ID);
+  assert.equal(typeof body.item_title, 'string');
+});
+
+test('unresolved recipient error from server is shown and no second order is sent', async () => {
+  stubFetch({ '/api/products': GIFT_PRODUCTS, '/api/orders/create': () => jsonRes(400, { detail: "Qabul qiluvchi topilmadi. U avval botga kirgan bo'lishi kerak." }) });
+  await openProduct(`gift-${BIG_ID}`);
+  setRecipient('@never_used');
+  await pay();
+  assert.ok(find('Qabul qiluvchi topilmadi'));
+  assert.equal(calls('/api/orders/create'), 1);
+  assert.equal(findBtn("Hamyonni to'ldirish"), undefined);
+});
+
+test('gift to a picked person is sent by numeric ID so friends who never used the bot work', async () => {
+  const chat = enablePicker({ '/api/products': GIFT_PRODUCTS, [PICK_PATH]: PICKED });
+  await openProduct(`gift-${BIG_ID}`);
+  click('Boshqa odamga');
+  click('Chatdan tanlash');
+  await tick(60);
+  assert.deepEqual(chat.requested, ['prep-1']);
+  assert.equal(recipientValue(), '@dost_bek');
+  await pay();
+  assert.equal(lastBody('/api/orders/create').recipient_username, '555000111');
+});
+
+test('gift: a recipient edited after picking is sent as typed, not the picked ID', async () => {
+  enablePicker({ '/api/products': GIFT_PRODUCTS, [PICK_PATH]: PICKED });
+  await openProduct(`gift-${BIG_ID}`);
+  click('Boshqa odamga');
+  click('Chatdan tanlash');
+  await tick(60);
+  setInput('recipient', '@someone_else');
+  await pay();
+  assert.equal(lastBody('/api/orders/create').recipient_username, '@someone_else');
+});
+
+test('stars to a picked person still use the @username', async () => {
+  enablePicker({ [PICK_PATH]: PICKED });
+  await openProduct('stars-100');
+  click('Boshqa odamga');
+  click('Chatdan tanlash');
+  await tick(60);
+  await pay();
+  assert.equal(lastBody('/api/orders/create').recipient_username, '@dost_bek');
+});
+
 test('new screens never import the versioned entry app.js', () => {
   for (const f of ['./screens/product.js', './screens/topup.js', './store.js']) {
     const src = readFileSync(new URL(f, import.meta.url), 'utf8');

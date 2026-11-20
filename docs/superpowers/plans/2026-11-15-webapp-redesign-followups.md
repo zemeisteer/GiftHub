@@ -13,8 +13,16 @@ Branch: `feat/webapp-redesign`. Hamma bosqichlar va yakuniy review tugagan; quyi
 - `/api/promo/apply` commit qilmaydi → `balance_bonus` kodlar qo'shilgandek ko'rinib bekor bo'ladi.
 - Legacy sovg'a buyurtmasi nom bo'yicha 60 000 fallback narx (yangi ilova id yuboradi).
 - `tunnel.js` (Node) development himoyasisiz — `tunnel.py` dagi tekshiruvni chetlab o'tadi.
-- **Sovg'alar haqiqatda yetkazilmaydi:** `app/services/fragment.py:267` da sovg'a buyurtmasi qabul qiluvchiga 50 ta Stars sifatida ketadi (`create_stars_invoice(recipient, 50)`), sovg'aning o'zi emas. Foydalanuvchi 64 000 so'mlik Teddy Bear sotib olsa ham, bajarish 50 Stars'ga teng. Haqiqiy sovg'a yetkazish (Bot API `sendGift`) alohida ishlab chiqilishi kerak.
-- Stars/Premium faqat foydalanuvchi `@username`iga yetkaziladi; kanal/guruhga yetkazadigan mahsulot yo'q. Kanal/guruh tanlash faqat haqiqiy sovg'a yetkazish (`sendGift`, kanal `chat_id`) paydo bo'lgach mantiqli.
+- ~~**Sovg'alar haqiqatda yetkazilmaydi** (50 Stars sifatida ketardi).~~ YOPILDI: sovg'alar endi haqiqiy katalogdan (`telegram_gifts`) sotiladi va Bot API `sendGift` orqali yetkaziladi (`app/services/gift_delivery.py`). Haqiqiy sinash: README "Sovg'alarni haqiqiy sinash".
+- Sovg'a: kanal/guruhga yuborish yo'q (`sendGift` `chat_id`), faqat shaxsga. Stars/Premium ham faqat foydalanuvchi `@username`iga ketadi.
+- Sovg'a: stiker/animatsiya rasmi katalogda yo'q (faqat emoji), sovg'a bilan matn (`text`) yuborilmaydi.
+- Premium'ni `giftPremiumSubscription` (Bot API) orqali yetkazish ko'rib chiqilmagan.
+- **Stars/Premium hamon yolg'on "bajarildi" bo'lib belgilanadi:** `app/services/fragment.py` dagi Fragment/TON yetkazish simulyatsiya (soxta); haqiqiy yetkazish yo'q.
+- Qayta buyurtma ikki marta yechishi mumkin: `orders.py` `create_order` + `debit_balance` (idempotentlik yo'q).
+- `last_sync_error` xom exception matnini saqlashi mumkin (ichki ma'lumot chiqib ketishi).
+- Botdagi do'kon: `cb_recipient_self` eskirgan `recipient_id`ni tozalamaydi.
+- Idempotentlikda `request_hash` hech qachon solishtirilmaydi (bir xil kalit, boshqa tana qabul qilinadi).
+- `test_postgres_concurrency` beqarorligi (pastga qarang) sovg'a oqimlari testlariga ham ta'sir qilishi mumkin.
 - Fragment raqamli Telegram ID'ni qabul qiladimi — tasdiqlanmagan (`@username`siz odam tanlanganda ID yuboriladi).
 
 ## Backend imkoniyat yetishmasliklari
