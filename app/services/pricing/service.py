@@ -198,12 +198,17 @@ class PricingService:
 
     @classmethod
     async def create_price_lock(
-        cls, session: AsyncSession, product_type: str, amount: int, user_id: int | None = None
+        cls,
+        session: AsyncSession,
+        product_type: str,
+        amount: int,
+        user_id: int | None = None,
+        item_title: str | None = None,
     ) -> PriceLock:
         """
         Creates a checkout price lock valid for configured duration (e.g., 10 minutes).
         """
-        price_data = await cls.get_authoritative_price(session, product_type, amount)
+        price_data = await cls.get_authoritative_price(session, product_type, amount, item_title=item_title)
         res = await session.execute(select(PricingSetting).where(PricingSetting.id == 1))
         pricing = res.scalars().first()
 

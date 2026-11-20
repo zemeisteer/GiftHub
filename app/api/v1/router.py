@@ -1037,9 +1037,14 @@ async def get_buy_again_details(order_id_or_code: str, session=Depends(get_db), 
     """
     order = await _get_visible_order(session, order_id_or_code, user)
 
-    current_price_info = await pricing_service.get_authoritative_price(
-        session=session, product_type=order.product_type, amount=order.amount, item_title=order.item_title
-    )
+    try:
+        current_price_info = await pricing_service.get_authoritative_price(
+            session=session, product_type=order.product_type, amount=order.amount, item_title=order.item_title
+        )
+    except GiftHubException:
+        if order.product_type != "gift":
+            raise
+        raise HTTPException(status_code=400, detail="Bu sovg'a hozir mavjud emas. Do'kondan boshqa sovg'ani tanlang.")
 
     return {
         "success": True,

@@ -102,6 +102,18 @@ class OrderService:
                     )
                     return existing_order, Decimal("0.00"), None
 
+        # Gift-specific validation: everything here must run BEFORE any wallet debit.
+        gift_recipient_id: int | None = None
+        if product_type == "gift":
+            from app.services import gift_catalog  # local import: avoid circular import
+            from app.services.gift_recipients import resolve_gift_recipient
+
+            gift = await gift_catalog.get_orderable(session, item_title)
+            gift_recipient_id = await resolve_gift_recipient(session, user_id, recipient_username)
+            spendable = await gift_catalog.spendable_stars(session)
+            if spendable is not None and spendable < gift.star_count:
+                raise GiftHubException("Bu sovg'ani hozir yuborib bo'lmaydi. Keyinroq urinib ko'ring.")
+
         # 1. Authoritative price calculation or price lock consumption
         if price_lock_id:
             lock = await pricing_service.validate_or_consume_price_lock(
@@ -180,6 +192,7 @@ class OrderService:
             payment_method=payment_method,
             status=initial_status,
             recipient_username=recipient_username,
+            recipient_user_id=gift_recipient_id,
             price_lock_id=price_lock_id,
             correlation_id=cid,
             fulfillment_status="pending",

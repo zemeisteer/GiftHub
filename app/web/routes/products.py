@@ -104,6 +104,7 @@ async def get_products(stars_amount: int | None = None, session: AsyncSession = 
 class PriceLockRequest(BaseModel):
     product_type: str
     amount: int = 1
+    item_title: str | None = None
 
 
 @router.post("/api/checkout/price-lock")
@@ -111,7 +112,11 @@ async def create_price_lock_endpoint(req: PriceLockRequest, user: User = Depends
     """Creates a temporary price lock for checkout."""
     async with AsyncSessionLocal() as session:
         lock = await pricing_service.create_price_lock(
-            session=session, product_type=req.product_type, amount=req.amount, user_id=user.id
+            session=session,
+            product_type=req.product_type,
+            amount=req.amount,
+            user_id=user.id,
+            item_title=req.item_title,
         )
         now = datetime.now(timezone.utc)
         time_left = max(0, int((lock.expires_at - now).total_seconds()))

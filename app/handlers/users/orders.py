@@ -4,11 +4,14 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
+from app.core.exceptions import GiftHubException
 from app.keyboards.shop_keyboards import get_orders_keyboard
 from app.services.orders.service import order_service
 from app.services.pricing.service import pricing_service
 from database import queries
 from database.db import AsyncSessionLocal
+
+GIFT_BUY_AGAIN_UNAVAILABLE = "Bu sovg'a hozir mavjud emas. Do'kondan boshqa sovg'ani tanlang."
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -138,9 +141,15 @@ async def cb_order_buy_again(callback: CallbackQuery):
             return
 
         # Calculate current authoritative live price
-        live_price_info = await pricing_service.get_authoritative_price(
-            session=session, product_type=order.product_type, amount=order.amount, item_title=order.item_title
-        )
+        try:
+            live_price_info = await pricing_service.get_authoritative_price(
+                session=session, product_type=order.product_type, amount=order.amount, item_title=order.item_title
+            )
+        except GiftHubException:
+            if order.product_type != "gift":
+                raise
+            await callback.answer(GIFT_BUY_AGAIN_UNAVAILABLE, show_alert=True)
+            return
         current_price = float(live_price_info["total_price_decimal"])
         currency = "UZS"
         rec = f"@{order.recipient_username}" if order.recipient_username else "O'zim"
@@ -191,9 +200,15 @@ async def cb_order_confirm_buy_again(callback: CallbackQuery):
             await callback.answer("Foydalanuvchi topilmadi!", show_alert=True)
             return
 
-        live_price_info = await pricing_service.get_authoritative_price(
-            session=session, product_type=order.product_type, amount=order.amount, item_title=order.item_title
-        )
+        try:
+            live_price_info = await pricing_service.get_authoritative_price(
+                session=session, product_type=order.product_type, amount=order.amount, item_title=order.item_title
+            )
+        except GiftHubException:
+            if order.product_type != "gift":
+                raise
+            await callback.answer(GIFT_BUY_AGAIN_UNAVAILABLE, show_alert=True)
+            return
         total_price = live_price_info["total_price_decimal"]
 
         # Check user balance
