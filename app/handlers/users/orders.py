@@ -264,7 +264,7 @@ async def cb_order_confirm_buy_again(callback: CallbackQuery):
         # Trigger fulfillment asynchronously
         from app.services.fulfillment.service import fulfillment_service
 
-        _ = await fulfillment_service.fulfill_order_automated(session, new_order.id)
+        _ = await fulfillment_service.fulfill_order_automated(session, new_order.id, bot=callback.bot)
 
         await callback.message.answer(
             f"🎉 <b>Buyurtma muvaffaqiyatli qabul qilindi!</b>\n\n"

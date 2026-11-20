@@ -153,8 +153,8 @@ def get_premium_keyboard(premium_prices: dict[str, Any]) -> InlineKeyboardMarkup
 def get_gifts_keyboard(gifts: list[dict[str, Any]]) -> InlineKeyboardMarkup:
     buttons = []
     for g in gifts:
-        icon = g.get("icon", "🎁")
-        name = g.get("name", "Sovg'a")
+        icon = g.get("icon") or "🎁"
+        name = g.get("name") or "Sovg'a"
         price = g.get("price_uzs", 0)
         gid = g.get("id", "gift")
         buttons.append(

@@ -11,6 +11,7 @@ from aiogram.types import (
     ReplyKeyboardRemove,
 )
 
+from app.core.exceptions import GiftHubException
 from app.keyboards.shop_keyboards import (
     get_back_to_main_keyboard,
     get_confirm_purchase_keyboard,
@@ -25,7 +26,9 @@ from app.keyboards.shop_keyboards import (
     get_stars_keyboard,
     get_user_request_keyboard,
 )
+from app.services import gift_catalog
 from app.services.fragment import pricing_engine
+from app.services.orders.service import order_service
 from app.state.user_states import (
     ServicePurchaseState,
     StarsPurchaseState,
@@ -219,111 +222,19 @@ async def cb_premium_package(callback: CallbackQuery, state: FSMContext):
 async def cb_shop_gifts(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     async with AsyncSessionLocal() as session:
-        pricing = await queries.get_pricing(session)
-        gifts = []
-        try:
-            if pricing.gifts_json:
-                gifts = json.loads(pricing.gifts_json)
-        except Exception:
-            gifts = []
-        if not gifts:
-            gifts = [
-                {"id": "bear", "name": "Teddy Bear", "price_uzs": 64000, "cost_uzs": 50000, "icon": "🧸", "type": "3d"},
-                {
-                    "id": "heart",
-                    "name": "Neon Heart",
-                    "price_uzs": 85000,
-                    "cost_uzs": 68000,
-                    "icon": "💖",
-                    "type": "3d",
-                },
-                {
-                    "id": "rocket",
-                    "name": "Cosmo Rocket",
-                    "price_uzs": 120000,
-                    "cost_uzs": 95000,
-                    "icon": "🚀",
-                    "type": "3d",
-                },
-                {
-                    "id": "star",
-                    "name": "Cosmic Star",
-                    "price_uzs": 60000,
-                    "cost_uzs": 45000,
-                    "icon": "⭐",
-                    "type": "classic",
-                },
-                {
-                    "id": "ring",
-                    "name": "Diamond Ring",
-                    "price_uzs": 165000,
-                    "cost_uzs": 130000,
-                    "icon": "💍",
-                    "type": "3d",
-                },
-                {
-                    "id": "trophy",
-                    "name": "Gold Trophy",
-                    "price_uzs": 195000,
-                    "cost_uzs": 155000,
-                    "icon": "🏆",
-                    "type": "vip",
-                },
-                {
-                    "id": "yacht",
-                    "name": "Luxury Yacht",
-                    "price_uzs": 270000,
-                    "cost_uzs": 220000,
-                    "icon": "🛥️",
-                    "type": "vip",
-                },
-                {
-                    "id": "crown",
-                    "name": "Ruby Crown",
-                    "price_uzs": 225000,
-                    "cost_uzs": 180000,
-                    "icon": "👑",
-                    "type": "vip",
-                },
-                {
-                    "id": "medal",
-                    "name": "Star Medal",
-                    "price_uzs": 95000,
-                    "cost_uzs": 75000,
-                    "icon": "🎖️",
-                    "type": "classic",
-                },
-                {
-                    "id": "hat",
-                    "name": "Magic Hat",
-                    "price_uzs": 78000,
-                    "cost_uzs": 60000,
-                    "icon": "🎩",
-                    "type": "classic",
-                },
-                {
-                    "id": "eagle",
-                    "name": "Flying Eagle",
-                    "price_uzs": 110000,
-                    "cost_uzs": 88000,
-                    "icon": "🦅",
-                    "type": "3d",
-                },
-                {
-                    "id": "lion",
-                    "name": "Golden Lion",
-                    "price_uzs": 175000,
-                    "cost_uzs": 140000,
-                    "icon": "🦁",
-                    "type": "vip",
-                },
-            ]
+        gifts = await gift_catalog.list_public(session)
 
-    text = (
-        "🎁 <b>Raqamli Sovg'alar (Telegram Gifts)</b>\n\n"
-        "Do'stlaringiz va yaqinlaringiz profiliga Telegram orqali chiroyli va qimmatbaho sovg'alar yuboring!\n\n"
-        "Kerakli sovg'ani tanlang:"
-    )
+    if gifts:
+        text = (
+            "🎁 <b>Raqamli Sovg'alar (Telegram Gifts)</b>\n\n"
+            "Do'stlaringiz va yaqinlaringiz profiliga Telegram orqali chiroyli va qimmatbaho sovg'alar yuboring!\n\n"
+            "Kerakli sovg'ani tanlang:"
+        )
+    else:
+        text = (
+            "🎁 <b>Raqamli Sovg'alar (Telegram Gifts)</b>\n\n"
+            "Hozirda sotuvda sovg'alar mavjud emas. Iltimos, keyinroq qayta urinib ko'ring."
+        )
     try:
         await callback.message.edit_text(text, reply_markup=get_gifts_keyboard(gifts))
     except Exception:
@@ -333,26 +244,21 @@ async def cb_shop_gifts(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("gift:pkg:"))
 async def cb_gift_package(callback: CallbackQuery, state: FSMContext):
-    gift_id = callback.data.split(":")[2]
+    gift_id = callback.data.split(":", 2)[2]  # Telegram gift ids are 19-digit strings: never int()
     async with AsyncSessionLocal() as session:
-        pricing = await queries.get_pricing(session)
-        gifts = []
-        try:
-            if pricing.gifts_json:
-                gifts = json.loads(pricing.gifts_json)
-        except Exception:
-            gifts = []
-        matched = next((g for g in gifts if g.get("id") == gift_id), None)
+        gifts = await gift_catalog.list_public(session)
+    matched = next((g for g in gifts if g["id"] == gift_id), None)
 
     if not matched:
-        matched = {"id": gift_id, "name": "Sovg'a", "price_uzs": 75000, "cost_uzs": 65000, "icon": "🎁"}
+        await callback.answer("Bu sovg'a hozir sotuvda yo'q. Boshqasini tanlang.", show_alert=True)
+        return
 
-    price = float(matched.get("price_uzs", 75000))
-    cost = float(matched.get("cost_uzs", 65000))
-    matched_name = matched.get("name", "Sovg'a")
-    name = f"{matched.get('icon', '🎁')} {matched_name}"
+    price = float(matched["price_uzs"])  # server-calculated catalog price
+    name = f"{matched.get('icon') or '🎁'} {matched['name']}"
 
-    await state.update_data(product_type="gift", item_title=name, amount=1, total_price=price, cost_price=cost)
+    await state.update_data(
+        product_type="gift", gift_id=gift_id, item_title=name, amount=1, total_price=price, cost_price=0.0
+    )
 
     my_username = callback.from_user.username
     text = f"🎁 <b>{name}</b> tanlandi.\nNarxi: <b>{price:,.0f} so'm</b>\n\nSovg'a qaysi profilga yuborilishi kerak?"
@@ -553,6 +459,10 @@ async def cb_execute_purchase(callback: CallbackQuery, state: FSMContext):
         if recip_name:
             recip_display += f" ({recip_name})"
 
+    if product_type == "gift":
+        await _execute_gift_purchase(callback, state, data, recip_display)
+        return
+
     async with AsyncSessionLocal() as session:
         user = await queries.get_user_by_id(session, user_id)
         if not user or user.balance < total_price:
@@ -578,8 +488,8 @@ async def cb_execute_purchase(callback: CallbackQuery, state: FSMContext):
 
     await state.clear()
 
-    # Trigger Fragment auto-fulfillment in background for Stars, Premium, Gifts
-    if product_type in ["stars", "premium", "gift"]:
+    # Trigger Fragment auto-fulfillment in background for Stars and Premium (gifts go through the outbox)
+    if product_type in ["stars", "premium"]:
         import asyncio
 
         from app.services.fragment import fragment_client
@@ -596,6 +506,55 @@ async def cb_execute_purchase(callback: CallbackQuery, state: FSMContext):
         "⚡ <i>Telegram Stars / Premium tez orada profilingizga yetkazib beriladi!</i>"
     )
 
+    try:
+        await callback.message.edit_text(success_text, reply_markup=get_back_to_main_keyboard())
+    except Exception:
+        await callback.message.answer(success_text, reply_markup=get_back_to_main_keyboard())
+    await callback.answer("✅ Xarid muvaffaqiyatli amalga oshirildi!")
+
+
+async def _execute_gift_purchase(callback: CallbackQuery, state: FSMContext, data: dict, recip_display: str):
+    """Gift orders are validated, priced and debited by order_service; delivery runs from the outbox event."""
+    gift_id = data.get("gift_id")
+    if not gift_id:
+        await callback.answer("⚠️ Ma'lumot eskirgan, iltimos boshidan tanlang.", show_alert=True)
+        return
+    user_id = callback.from_user.id
+    recipient = data.get("recipient", callback.from_user.username or "")
+    item_title = data.get("item_title", "Sovg'a")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            order, _, _ = await order_service.create_order(
+                session,
+                user_id,
+                "gift",
+                item_title=str(gift_id),
+                amount=1,
+                recipient_username=recipient,
+            )
+        except GiftHubException as e:
+            await callback.answer(e.message, show_alert=True)
+            return
+        except Exception as e:
+            logger.error(f"Sovg'a xaridini yaratishda xatolik: {e}")
+            await callback.answer("❌ Xatolik yuz berdi. Iltimos, qayta urinib ko'ring.", show_alert=True)
+            return
+        user = await queries.get_user_by_id(session, user_id)
+        new_balance = user.balance if user else 0.0
+        paid = float(order.total_price)
+
+    await state.clear()
+
+    success_text = (
+        "🎉 <b>Xaridingiz muvaffaqiyatli qabul qilindi!</b>\n\n"
+        f"🔖 Buyurtma raqami: <code>{order.order_code}</code>\n"
+        f"🎁 Sovg'a: <b>{item_title}</b>\n"
+        f"👤 Qabul qiluvchi: <b>{recip_display}</b>\n"
+        f"💵 To'langan summa: <b>{paid:,.0f} so'm</b>\n"
+        f"💳 Qolgan balansingiz: <b>{float(new_balance):,.0f} so'm</b>\n\n"
+        "⚡ <i>Sovg'a tez orada qabul qiluvchi profiliga yuboriladi!</i>"
+    )
     try:
         await callback.message.edit_text(success_text, reply_markup=get_back_to_main_keyboard())
     except Exception:
