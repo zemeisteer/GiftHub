@@ -44,6 +44,24 @@ async def send_topup_notification(bot: Bot | None, user_id: int, amount: float, 
         logger.warning(f"Foydalanuvchiga to'ldirish xabarnomasi yuborilmadi ({user_id}): {e}")
 
 
+async def notify_admins_text(bot, text: str) -> None:
+    """Send ``text`` to every admin in ``settings.ADMINS``. Never raises."""
+    if not bot:
+        return
+    try:
+        from app.core.config import settings
+
+        admin_ids = list(settings.ADMINS or [])
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Admin ro'yxati o'qilmadi: {e}")
+        return
+    for admin_id in admin_ids:
+        try:
+            await bot.send_message(chat_id=int(admin_id), text=text, disable_web_page_preview=True)
+        except Exception as e:  # noqa: BLE001 - one unreachable admin must not stop the rest
+            logger.warning(f"Adminga ({admin_id}) xabar yuborilmadi: {e}")
+
+
 def format_recipient_link(recipient: str | None) -> str:
     if not recipient:
         return ""
