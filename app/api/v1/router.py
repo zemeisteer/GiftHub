@@ -28,6 +28,7 @@ from app.services.catalog.service import catalog_service
 from app.services.dlq.service import dlq_service
 from app.services.feature_flags.service import feature_flag_service
 from app.services.fulfillment.service import fulfillment_service
+from app.services.gift_jobs import gift_admin_conflict
 from app.services.orders.service import order_service
 from app.services.pricing.service import pricing_service
 from app.services.providers.circuit_breaker import circuit_breaker
@@ -799,6 +800,8 @@ async def retry_order_fulfillment(
     order = await session.get(Order, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Buyurtma topilmadi.")
+    if conflict := await gift_admin_conflict(session, order_id, retry=True):
+        raise HTTPException(status_code=409, detail=conflict)
 
     order.fulfillment_status = "processing"
     order.status = "processing"
@@ -816,6 +819,8 @@ async def manual_fulfill_order(
     admin: User = Depends(require_permission(Permission.ORDERS_UPDATE)),
 ):
     """Admin manually marks a problematic order as fulfilled with required reason."""
+    if conflict := await gift_admin_conflict(session, order_id):
+        raise HTTPException(status_code=409, detail=conflict)
     order = await order_service.transition_order_status(
         session=session, order_id=order_id, new_status_raw="completed", reason=f"Qo'lda bajarildi: {action.reason}"
     )

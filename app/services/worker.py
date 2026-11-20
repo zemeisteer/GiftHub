@@ -15,6 +15,7 @@ from app.models.outbox import OutboxEvent, OutboxStatus
 from app.models.pricing import PriceLock
 from app.services.dlq.service import dlq_service
 from app.services.fulfillment.service import fulfillment_service
+from app.services.gift_jobs import run_gift_maintenance, startup_gift_sync
 from app.services.outbox.service import outbox_service
 from app.services.reconciliation.service import reconciliation_service
 
@@ -195,6 +196,8 @@ async def run_worker_loop(bot=None):
     logger.info("Starting GiftHub background worker loop with Outbox & DLQ support...")
     cycle_counter = 0
 
+    await startup_gift_sync(bot)
+
     while not _shutdown_event.is_set():
         now_dt = datetime.now(timezone.utc)
         _worker_stats["is_running"] = True
@@ -242,6 +245,9 @@ async def run_worker_loop(bot=None):
             cycle_counter += 1
             if cycle_counter % 15 == 0:  # Every ~30s
                 await process_dlq_retries_cycle(bot=bot)
+
+            # 3b. Gift maintenance: stale-processing sweep (~5 min) and catalog sync (~1 hour)
+            await run_gift_maintenance(bot, cycle_counter)
 
             # 4. Periodically run reconciliation audit
             if cycle_counter % 1800 == 0:  # Every ~1 hour

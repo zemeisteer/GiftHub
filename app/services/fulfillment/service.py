@@ -32,6 +32,13 @@ class FulfillmentService:
         if not order:
             raise OrderNotFoundError(f"Buyurtma topilmadi: {order_id}")
 
+        # Telegram gifts bypass Fragment, the circuit breaker, retry counting and the DLQ entirely:
+        # gift_delivery owns the single guarded send (and its own refund / manual review handling).
+        if order.product_type == "gift":
+            from app.services import gift_delivery  # local import: avoid circular import
+
+            return await gift_delivery.deliver(session, order_id, bot)
+
         # DUPLICATE DELIVERY PREVENTION
         if order.fulfillment_status == "fulfilled" or order.status == OrderStatus.COMPLETED:
             logger.warning(f"[Fulfillment] Order {order.order_code} is already fulfilled. Skipping duplicate delivery.")

@@ -251,6 +251,12 @@ class FragmentService:
             if not order:
                 return {"success": False, "error": "Buyurtma topilmadi"}
 
+            if order.product_type == "gift":
+                # Real Telegram gifts never go through Fragment: guarded delivery only.
+                from app.services import gift_delivery  # local import: avoid circular import
+
+                return await gift_delivery.deliver(session, order_id, bot)
+
             setting = await queries.get_fragment_settings(session)
             user = await session.get(User, order.user_id) if order.user_id else None
             recipient = order.recipient_username or (user.username if user and user.username else "")

@@ -31,6 +31,7 @@ from app.models import (
     User,
 )
 from app.services.fulfillment.service import fulfillment_service
+from app.services.gift_jobs import gift_admin_conflict
 from app.services.orders.service import order_service
 from app.services.wallet.service import wallet_service
 from app.utils.notifications import (
@@ -96,6 +97,8 @@ async def update_order_status_endpoint(
     order_id: int, req: OrderStatusUpdate, admin: User = Depends(require_permission(Permission.ORDERS_UPDATE))
 ):
     async with AsyncSessionLocal() as session:
+        if conflict := await gift_admin_conflict(session, order_id):
+            raise HTTPException(status_code=409, detail=conflict)
         order = await queries.update_order_status(
             session=session, order_id=order_id, new_status=req.status, admin_id=admin.id, reason=req.reason
         )
@@ -128,6 +131,8 @@ async def refund_order_endpoint(
 ):
     """Issues an idempotent refund with traceable wallet ledger transaction and audit log."""
     async with AsyncSessionLocal() as session:
+        if conflict := await gift_admin_conflict(session, order_id):
+            raise HTTPException(status_code=409, detail=conflict)
         try:
             order = await order_service.transition_order_status(
                 session=session,
@@ -158,6 +163,8 @@ async def retry_fulfillment_endpoint(
 ):
     """Manually retries automated order fulfillment."""
     async with AsyncSessionLocal() as session:
+        if conflict := await gift_admin_conflict(session, order_id, retry=True):
+            raise HTTPException(status_code=409, detail=conflict)
         await queries.log_admin_action(
             session=session,
             admin_id=admin.id,
@@ -176,6 +183,10 @@ async def fulfill_order_fragment_endpoint(
 ):
     from app.services.fragment import fragment_client
 
+    async with AsyncSessionLocal() as session:
+        if conflict := await gift_admin_conflict(session, order_id, retry=True):
+            raise HTTPException(status_code=409, detail=conflict)
+
     res = await fragment_client.fulfill_order(order_id=order_id, bot=get_bot())
     return res
 
@@ -185,6 +196,8 @@ async def mark_order_fulfilled_endpoint(
     order_id: int, admin: User = Depends(require_permission(Permission.ORDERS_UPDATE))
 ):
     async with AsyncSessionLocal() as session:
+        if conflict := await gift_admin_conflict(session, order_id):
+            raise HTTPException(status_code=409, detail=conflict)
         order = await queries.update_order_fulfillment(
             session=session, order_id=order_id, fulfillment_status="fulfilled", status=OrderStatus.COMPLETED
         )

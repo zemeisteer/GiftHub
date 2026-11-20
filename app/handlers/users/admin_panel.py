@@ -21,6 +21,7 @@ from app.keyboards.admin_keyboards import (
     get_admin_orders_keyboard,
 )
 from app.keyboards.shop_keyboards import get_back_to_main_keyboard
+from app.services.gift_jobs import gift_admin_conflict
 from app.state.admin_states import AdminBroadcastState, AdminDeliverServiceState
 from data import config
 from database import queries
@@ -223,6 +224,9 @@ async def cb_admin_order_detail(callback: CallbackQuery):
 async def cb_admin_order_mark_done(callback: CallbackQuery, bot: Bot):
     order_id = int(callback.data.split(":")[2])
     async with AsyncSessionLocal() as session:
+        if conflict := await gift_admin_conflict(session, order_id):
+            await callback.answer(conflict, show_alert=True)
+            return
         order = await queries.update_order_status(session, order_id, "done")
         if order:
             try:
@@ -248,6 +252,9 @@ async def cb_admin_order_mark_done(callback: CallbackQuery, bot: Bot):
 async def cb_admin_order_cancel(callback: CallbackQuery, bot: Bot):
     order_id = int(callback.data.split(":")[2])
     async with AsyncSessionLocal() as session:
+        if conflict := await gift_admin_conflict(session, order_id):
+            await callback.answer(conflict, show_alert=True)
+            return
         order = await queries.update_order_status(session, order_id, "cancel")
         if order:
             try:
