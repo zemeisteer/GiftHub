@@ -136,6 +136,33 @@ def _buyer_reason(exc: Exception, error: str) -> str:
     return "Telegram sovg'ani qabul qilmadi (sovg'a tugagan yoki qabul qiluvchi sovg'a qabul qilmaydi)."
 
 
+async def _notify_refunded(bot, buyer_id: int, code: str, total, exc: Exception, error: str) -> None:
+    amount = f"{float(total):,.0f}".replace(",", " ")
+    await _tell(
+        bot,
+        buyer_id,
+        "❌ <b>Sovg'a yuborilmadi</b>\n\n"
+        f"🧾 Buyurtma: <code>{html.escape(code)}</code>\n"
+        f"❗ Sabab: {_buyer_reason(exc, error)}\n"
+        f"💸 Hamyoningizga qaytarildi: +{amount} so'm",
+    )
+    if _BALANCE_ERROR.search(error):
+        await _alert_admins(
+            bot,
+            "🚨 <b>Botning Stars balansi yetmadi</b>\n\n"
+            f"🧾 Buyurtma: <code>{html.escape(code)}</code> (pul qaytarildi)\n"
+            f"Telegram: {html.escape(error)}\n\n"
+            "Botning Stars balansini to'ldiring.",
+        )
+    else:
+        await _alert_admins(
+            bot,
+            "⚠️ <b>Sovg'a yuborilmadi, pul qaytarildi</b>\n\n"
+            f"🧾 Buyurtma: <code>{html.escape(code)}</code>\n"
+            f"Telegram: {html.escape(error)}",
+        )
+
+
 async def _refund(session: AsyncSession, bot, order_id: int, order_code: str, exc: Exception) -> dict:
     from app.services.orders.service import order_service  # local import: avoid circular import
 
@@ -154,30 +181,13 @@ async def _refund(session: AsyncSession, bot, order_id: int, order_code: str, ex
             session, bot, order_id, order_code, f"Telegram rad etdi ({error}), lekin pul qaytarilmadi: {e}"
         )
 
-    amount = f"{float(order.total_price):,.0f}".replace(",", " ")
-    await _tell(
-        bot,
-        order.user_id,
-        "❌ <b>Sovg'a yuborilmadi</b>\n\n"
-        f"🧾 Buyurtma: <code>{html.escape(order.order_code)}</code>\n"
-        f"❗ Sabab: {_buyer_reason(exc, error)}\n"
-        f"💸 Hamyoningizga qaytarildi: +{amount} so'm",
-    )
-    if _BALANCE_ERROR.search(error):
-        await _alert_admins(
-            bot,
-            "🚨 <b>Botning Stars balansi yetmadi</b>\n\n"
-            f"🧾 Buyurtma: <code>{html.escape(order.order_code)}</code> (pul qaytarildi)\n"
-            f"Telegram: {html.escape(error)}\n\n"
-            "Botning Stars balansini to'ldiring.",
-        )
-    else:
-        await _alert_admins(
-            bot,
-            "⚠️ <b>Sovg'a yuborilmadi, pul qaytarildi</b>\n\n"
-            f"🧾 Buyurtma: <code>{html.escape(order.order_code)}</code>\n"
-            f"Telegram: {html.escape(error)}",
-        )
+    # The refund is committed: from here on nothing may turn this into a manual-review alert.
+    # Plain locals only: a later rollback would expire ``order`` and a lazy load would raise.
+    buyer_id, code, total = order.user_id, order.order_code, order.total_price
+    try:
+        await _notify_refunded(bot, buyer_id, code, total, exc, error)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[GiftDelivery] Qaytarish xabarlari yuborilmadi (order={code}): {e}")
     return _result("refunded", order_id, error=error)
 
 
@@ -204,6 +214,9 @@ async def _complete(session: AsyncSession, bot, order_id: int, order_code: str, 
         res["sent"] = True
         return res
 
+    # COMPLETED is committed: from here on nothing may turn this into a manual-review alert.
+    # Plain locals only: a rollback below expires ``order`` and a lazy load would raise MissingGreenlet.
+    buyer_id, code = order.user_id, order.order_code
     try:
         await gift_catalog.decrement_cached_balance(session, star_count)
         await session.commit()
@@ -214,23 +227,26 @@ async def _complete(session: AsyncSession, bot, order_id: int, order_code: str, 
     try:
         await notification_service.create_notification(
             session=session,
-            user_id=order.user_id,
+            user_id=buyer_id,
             type_="order",
             title="Sovg'angiz yuborildi! 🎁",
-            message=f"Telegram sovg'asi muvaffaqiyatli yuborildi. Buyurtma ID: {order.order_code}",
-            related_entity=f"order:{order.order_code}",
+            message=f"Telegram sovg'asi muvaffaqiyatli yuborildi. Buyurtma ID: {code}",
+            related_entity=f"order:{code}",
         )
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[GiftDelivery] Ilova bildirishnomasi yaratilmadi: {e}")
         await _safe_rollback(session)
 
-    await _tell(
-        bot,
-        order.user_id,
-        "🎁 <b>Sovg'a yuborildi!</b>\n\n"
-        f"🧾 Buyurtma: <code>{html.escape(order.order_code)}</code>\n"
-        "✅ Telegram sovg'asi qabul qiluvchiga muvaffaqiyatli yetkazildi.",
-    )
+    try:
+        await _tell(
+            bot,
+            buyer_id,
+            "🎁 <b>Sovg'a yuborildi!</b>\n\n"
+            f"🧾 Buyurtma: <code>{html.escape(code)}</code>\n"
+            "✅ Telegram sovg'asi qabul qiluvchiga muvaffaqiyatli yetkazildi.",
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[GiftDelivery] Xaridorga xabar yuborilmadi: {e}")
     logger.info(f"[GiftDelivery] order={order_code} yuborildi (gift={gift_id})")
     return _result("sent", order_id)
 

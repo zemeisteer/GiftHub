@@ -353,3 +353,101 @@ async def test_sweep_moves_stale_processing_to_manual_review(db_session, sample_
     assert _to(bot, ADMIN_ID)
     assert bot.sent == []
     assert await gift_delivery.sweep_stale_processing(db_session, bot, now=now) == 0
+
+
+# --- Fix round 1: post-commit failures must never turn sent/refunded into manual_review ---
+
+MANUAL_REVIEW_MARK = "qo'lda tekshirish"
+
+
+def _no_manual_review_alert(bot):
+    return not any(MANUAL_REVIEW_MARK in t for t in _to(bot, ADMIN_ID))
+
+
+async def _query_then_fail(session):
+    from sqlalchemy import text
+
+    await session.execute(text("SELECT 1"))  # opens a transaction, so the rollback expires every instance
+    raise RuntimeError("db down")
+
+
+async def test_inapp_notification_failure_after_send_stays_sent(db_session, sample_user, monkeypatch):
+    from app.services.notifications.service import notification_service
+
+    order = await _paid_order(db_session)
+
+    async def boom(**kw):
+        await _query_then_fail(kw["session"])
+
+    monkeypatch.setattr(notification_service, "create_notification", boom)
+    bot = FakeGiftBot()
+
+    order_id = order.id  # the session's rollback after a failure expires `order`
+    res = await gift_delivery.deliver(db_session, order_id, bot)
+
+    assert res["outcome"] == "sent" and res["fulfilled"] is True
+    assert len(bot.sent) == 1
+    assert any("Sovg'a yuborildi" in t for t in _to(bot, BUYER_ID)), "buyer message still attempted"
+    assert _no_manual_review_alert(bot)
+    o = await _reload(db_session, order_id)
+    assert o.status == OrderStatus.COMPLETED and o.fulfillment_status == "fulfilled"
+
+
+async def test_balance_decrement_failure_after_send_stays_sent(db_session, sample_user, monkeypatch):
+    from app.services import gift_catalog
+
+    order = await _paid_order(db_session)
+
+    async def boom(session, stars):
+        await _query_then_fail(session)
+
+    monkeypatch.setattr(gift_catalog, "decrement_cached_balance", boom)
+    bot = FakeGiftBot()
+
+    order_id = order.id  # the session's rollback after a failure expires `order`
+    res = await gift_delivery.deliver(db_session, order_id, bot)
+
+    assert res["outcome"] == "sent"
+    assert any("Sovg'a yuborildi" in t for t in _to(bot, BUYER_ID))
+    assert _no_manual_review_alert(bot)
+    o = await _reload(db_session, order_id)
+    assert o.status == OrderStatus.COMPLETED and o.fulfillment_status == "fulfilled"
+
+
+async def test_buyer_message_crash_after_send_stays_sent(db_session, sample_user, monkeypatch):
+    order = await _paid_order(db_session)
+
+    async def boom(*a, **kw):
+        raise RuntimeError("tell crashed")
+
+    monkeypatch.setattr(gift_delivery, "_tell", boom)
+    bot = FakeGiftBot()
+
+    order_id = order.id  # the session's rollback after a failure expires `order`
+    res = await gift_delivery.deliver(db_session, order_id, bot)
+
+    assert res["outcome"] == "sent"
+    assert _no_manual_review_alert(bot)
+    o = await _reload(db_session, order_id)
+    assert o.status == OrderStatus.COMPLETED
+
+
+async def test_failing_buyer_notification_after_refund_stays_refunded(db_session, sample_user, monkeypatch):
+    order = await _paid_order(db_session)
+    paid = await _wallet(db_session)
+
+    async def boom(*a, **kw):
+        await _query_then_fail(db_session)
+
+    monkeypatch.setattr(gift_delivery, "_tell", boom)
+    bot = FakeGiftBot()
+    bot.send_errors = [_bad("Bad Request: STARGIFT_INVALID")]
+
+    order_id = order.id  # the session's rollback after a failure expires `order`
+    res = await gift_delivery.deliver(db_session, order_id, bot)
+
+    assert res["outcome"] == "refunded" and res["fulfilled"] is False
+    assert _no_manual_review_alert(bot)
+    o = await _reload(db_session, order_id)
+    assert o.status == OrderStatus.REFUNDED and o.fulfillment_status == "failed"
+    assert await _wallet(db_session) == paid + Decimal(str(o.total_price))
