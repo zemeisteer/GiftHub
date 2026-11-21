@@ -17,7 +17,7 @@ Branch: `feat/webapp-redesign`. Hamma bosqichlar va yakuniy review tugagan; quyi
 - Sovg'a: kanal/guruhga yuborish yo'q (`sendGift` `chat_id`), faqat shaxsga. Stars/Premium ham faqat foydalanuvchi `@username`iga ketadi.
 - Sovg'a: stiker/animatsiya rasmi katalogda yo'q (faqat emoji), sovg'a bilan matn (`text`) yuborilmaydi.
 - Premium'ni `giftPremiumSubscription` (Bot API) orqali yetkazish ko'rib chiqilmagan.
-- **Stars/Premium hamon yolg'on "bajarildi" bo'lib belgilanadi:** `app/services/fragment.py` dagi Fragment/TON yetkazish simulyatsiya (soxta); haqiqiy yetkazish yo'q.
+- ~~**Stars/Premium yolg'on "bajarildi" bo'lib belgilanadi.**~~ YOPILDI (fix/manual-fulfillment): soxta tx id olib tashlandi; Stars/Premium/xizmat buyurtmalari `manual_review` ga tushadi, xaridor «qabul qilindi», adminlar «qo'lda bajarish kerak» xabarini oladi. **Hali yo'q:** haqiqiy avtomatik TON yuborish (`send_ton_transaction` `manual=True` qaytaradi).
 - ~~Qayta buyurtma ikki marta yechishi mumkin: `orders.py` `create_order` + `debit_balance`.~~ YOPILDI (fix wave): ortiqcha `debit_balance` va `transition_order_status` olib tashlandi; `create_order` yagona yechim.
 - ~~`last_sync_error` xom exception matnini saqlashi mumkin.~~ YOPILDI (fix wave): `bot<id>:<token>` ko'rinishlari `bot<redacted>` bilan almashtiriladi (boshqa xom matn hamon saqlanadi).
 - ~~Botdagi do'kon: `cb_recipient_self` eskirgan `recipient_id`ni tozalamaydi.~~ YOPILDI (fix wave): "O'zimga" o'z raqamli ID'ni yozadi, yangi sovg'a tanlovi qabul qiluvchini tozalaydi.

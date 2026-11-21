@@ -217,30 +217,19 @@ class FragmentService:
     ) -> dict[str, Any]:
         """
         TON tranzaksiyasini botning hamyonidan Fragment smart kontraktiga yuboradi.
-        Agar mnemonic to'ldirilmagan bo'lsa yoki simulation rejimida bo'lsa, xavfsiz simulyatsiya qiladi.
+        Haqiqiy avtomatik yuborish hali ulanmagan: hech qachon soxta tx id qaytarmaydi (manual=True).
         """
-        if setting.simulation_mode or not setting.ton_wallet_mnemonic:
-            # Simulyatsiya / Demo rejim
-            tx_id = f"sim_{int(datetime.utcnow().timestamp())}_{abs(hash(comment)) % 1000000:06d}"
-            logger.info(
-                f"[Fragment Auto-Fulfill Simulyatsiya] {to_address} ga {ton_amount} TON ({comment}) yuborildi. TX: {tx_id}"
-            )
-            return {
-                "success": True,
-                "mode": "simulation",
-                "tx_hash": tx_id,
-                "tonscan_url": f"https://tonscan.org/tx/{tx_id}",
-            }
-
-        try:
-            # Real TON transfer (TonAPI / Toncenter broadcast or Pytoniq)
-            # Standart TonAPI / Toncenter orqali yuborish
-            # Hozirgi integratsiya asosida tranzaksiya yuboriladi
-            tx_id = f"tx_{int(datetime.utcnow().timestamp())}_{abs(hash(comment)) % 1000000:06d}"
-            return {"success": True, "mode": "live", "tx_hash": tx_id, "tonscan_url": f"https://tonscan.org/tx/{tx_id}"}
-        except Exception as e:
-            logger.error(f"TON tranzaksiyasini yuborishda xatolik: {e}")
-            return {"success": False, "error": str(e)}
+        # No real TON transfer is implemented. Never fabricate a transaction id or report success:
+        # the order must be fulfilled by hand (admin pays via the Tonkeeper link / Fragment).
+        logger.warning(
+            f"[Fragment] Avtomatik TON to'lov ulanmagan: {to_address} ga {ton_amount} TON ({comment}) yuborilmadi; "
+            "buyurtma qo'lda bajarilishi kerak."
+        )
+        return {
+            "success": False,
+            "manual": True,
+            "error": "Avtomatik TON to'lov ulanmagan: buyurtmani qo'lda bajaring",
+        }
 
     async def fulfill_order(self, order_id: int, bot=None) -> dict[str, Any]:
         """
@@ -269,8 +258,13 @@ class FragmentService:
             elif order.product_type == "premium":
                 invoice = await self.create_premium_invoice(recipient, order.amount)
             else:
-                # Sovg'alar uchun
-                invoice = await self.create_stars_invoice(recipient, 50)
+                # Boshqa mahsulotlar (xizmatlar) uchun Fragment invoice yo'q: qo'lda bajariladi.
+                await queries.update_order_fulfillment(
+                    session=session,
+                    order_id=order.id,
+                    fulfillment_status="waiting_payment",
+                )
+                return {"success": True, "fulfilled": False, "manual": True, "mode": "manual", "invoice": {}}
 
             # 2. Avtomatik xarid yoqilganmi?
             if setting.is_auto_buy:
@@ -316,6 +310,15 @@ class FragmentService:
                             logger.warning(f"Foydalanuvchiga muvaffaqiyat xabari yuborilmadi: {e}")
 
                     return {"success": True, "fulfilled": True, "tx_hash": tx_hash, "invoice": invoice}
+                elif pay_res.get("manual"):
+                    # Avtomatik TON yuborish ulanmagan: admin Tonkeeper havolasi orqali qo'lda to'laydi.
+                    await queries.update_order_fulfillment(
+                        session=session,
+                        order_id=order.id,
+                        fulfillment_status="waiting_payment",
+                        fragment_payload=invoice.get("tonkeeper_link"),
+                    )
+                    return {"success": True, "fulfilled": False, "manual": True, "mode": "manual", "invoice": invoice}
                 else:
                     await queries.update_order_fulfillment(
                         session=session,
@@ -332,7 +335,13 @@ class FragmentService:
                     fulfillment_status="waiting_payment",
                     fragment_payload=invoice.get("tonkeeper_link"),
                 )
-                return {"success": True, "fulfilled": False, "mode": "waiting_payment", "invoice": invoice}
+                return {
+                    "success": True,
+                    "fulfilled": False,
+                    "manual": True,
+                    "mode": "waiting_payment",
+                    "invoice": invoice,
+                }
 
 
 fragment_client = FragmentService()

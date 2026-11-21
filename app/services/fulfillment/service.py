@@ -19,6 +19,39 @@ MAX_FULFILLMENT_RETRIES = 3
 
 
 class FulfillmentService:
+    @staticmethod
+    async def _announce_manual(order: Order, result: dict[str, Any], bot) -> None:
+        """Tell the buyer the order was accepted and ask admins to fulfill it by hand. Never raises."""
+        if not bot:
+            return
+        from app.utils.notifications import notify_admins_text
+
+        code = order.order_code
+        buyer_id = order.user_id
+        invoice = result.get("invoice") or {}
+        link = invoice.get("tonkeeper_link") or invoice.get("fragment_url") or ""
+        try:
+            await bot.send_message(
+                chat_id=buyer_id,
+                text=(
+                    "✅ Buyurtmangiz qabul qilindi va bajarilmoqda.\n"
+                    f"🧾 Buyurtma ID: {code}\n"
+                    "Tez orada yetkazib beramiz."
+                ),
+            )
+        except Exception as e:  # noqa: BLE001 - notification must never break fulfillment
+            logger.warning(f"Xaridorga xabar yuborilmadi: {e}")
+        lines = [
+            "🛠 Qo'lda bajarish kerak",
+            f"Buyurtma: {code}",
+            f"Mahsulot: {order.item_title} (x{order.amount})",
+            f"Qabul qiluvchi: {order.recipient_username or order.user_id}",
+        ]
+        if link:
+            lines.append(f"To'lov havolasi: {link}")
+        lines.append("Bajarib bo'lgach admin paneldan «bajarildi» deb belgilang.")
+        await notify_admins_text(bot, "\n".join(lines))
+
     @classmethod
     async def fulfill_order_automated(cls, session: AsyncSession, order_id: int, bot=None) -> dict[str, Any]:
         """
@@ -115,6 +148,15 @@ class FulfillmentService:
 
                 logger.info(f"[Fulfillment Succeeded] order={order.order_code}, tx={tx_hash}")
                 return {"success": True, "fulfilled": True, "tx_hash": tx_hash}
+            elif result.get("success") and result.get("manual"):
+                # No automatic delivery exists: park the order for a human. Not a provider failure,
+                # so no circuit-breaker hit, no retries and no DLQ entry.
+                order.fulfillment_status = "manual_review"
+                order.fulfillment_error = "Qo'lda bajarish kerak (avtomatik yetkazib berish ulanmagan)"
+                await session.commit()
+                await cls._announce_manual(order, result, bot)
+                logger.info(f"[Fulfillment Manual] order={order.order_code} needs manual fulfillment")
+                return {"success": True, "fulfilled": False, "manual": True}
             else:
                 err_msg = result.get("error", "Yetkazib berishda xatolik")
                 circuit_breaker.record_failure("fragment", err_msg)
